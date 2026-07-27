@@ -1,0 +1,64 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <div class="row" style="justify-content: space-between;">
+    <div>
+      <h3 style="margin:0 0 6px;">Tracked Options</h3>
+      <p class="muted" style="margin:0;">Your live options list appears first. Use Quick Actions for manual entry and filtering.</p>
+    </div>
+    <div class="row" style="margin:0;">
+      <a class="btn secondary" href="#quick-actions">Quick Actions</a>
+      <a class="btn secondary" href="/options/?sync=legacy">Sync Legacy Telegram</a>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Time</th><th>Symbol</th><th>Security ID</th><th>Dir</th><th>Style</th><th>Entry</th><th>SL</th><th>T1</th><th>T2</th><th>T3</th><th>Score</th><th>Reco</th><th>Status</th><th>Source</th><th>Source Ref</th></tr></thead>
+    <tbody>
+      {% for x in items %}
+      <tr>
+        <td>{{ x.tip_time|date:"Y-m-d H:i" }}</td><td>{{ x.option_symbol }}</td><td>{{ x.security_id }}</td><td>{{ x.direction }}</td><td>{{ x.trade_style }}</td>
+        <td>{{ x.entry_price }}</td><td>{{ x.stop_loss }}</td><td>{{ x.target_1 }}</td><td>{{ x.target_2 }}</td><td>{{ x.target_3 }}</td>
+        <td>{{ x.score }}</td><td>{{ x.recommendation }}</td><td>{{ x.status }}</td><td>{{ x.source_name }}</td><td>{{ x.source_ref }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="15">No options loaded yet. Use Sync Legacy Telegram to import tips, or add one from Quick Actions.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" id="quick-actions">
+  <details {% if open_trade_panel %}open{% endif %}>
+    <summary style="cursor:pointer; font-weight:700;">Log New Trade &amp; Filters</summary>
+    <p class="muted" style="margin-top:8px;">Keep this collapsed while tracking options. Open only when adding or narrowing results.</p>
+
+    <div class="grid" style="margin-top:12px; align-items:start;">
+      <div class="card" style="margin-bottom:0;">
+        <h4 style="margin-top:0;">Add Manual Tip</h4>
+        <form method="post" class="grid">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <div><button class="btn" type="submit">Add Tip</button></div>
+        </form>
+      </div>
+
+      <div class="card" style="margin-bottom:0;">
+        <h4 style="margin-top:0;">Filter Options</h4>
+        <form method="get" class="grid">
+          {{ filter_form.status.label_tag }} {{ filter_form.status }}
+          {{ filter_form.source.label_tag }} {{ filter_form.source }}
+          {{ filter_form.style.label_tag }} {{ filter_form.style }}
+          {{ filter_form.q.label_tag }} {{ filter_form.q }}
+          <label>Min Score</label><input name="score_min" value="{{ score_min }}" />
+          <label>Max Score</label><input name="score_max" value="{{ score_max }}" />
+          <div class="row" style="margin:0;">
+            <button class="btn" type="submit">Apply Filters</button>
+            <a class="btn secondary" href="/options/">Reset</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </details>
+</div>
+{% endblock %}

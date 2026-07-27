@@ -1,0 +1,45 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Recommendations</h2>
+  <p class="muted">Single 0-100 style-aware score. Direction-only suggestions with entry/SL/targets.</p>
+  <form method="get" class="grid">
+    <label>Direction</label>
+    <select name="direction">
+      <option value="" {% if not direction %}selected{% endif %}>All</option>
+      <option value="CE" {% if direction == 'CE' %}selected{% endif %}>CE</option>
+      <option value="PE" {% if direction == 'PE' %}selected{% endif %}>PE</option>
+    </select>
+    <label>Style</label>
+    <select name="style">
+      <option value="" {% if not style %}selected{% endif %}>All</option>
+      <option value="INTRADAY" {% if style == 'INTRADAY' %}selected{% endif %}>INTRADAY</option>
+      <option value="SWING" {% if style == 'SWING' %}selected{% endif %}>SWING</option>
+    </select>
+    <label>Status</label>
+    <select name="status">
+      <option value="" {% if not status %}selected{% endif %}>All</option>
+      <option value="NEW" {% if status == 'NEW' %}selected{% endif %}>NEW</option>
+      <option value="CANDIDATE" {% if status == 'CANDIDATE' %}selected{% endif %}>CANDIDATE</option>
+      <option value="ACTIVE" {% if status == 'ACTIVE' %}selected{% endif %}>ACTIVE</option>
+    </select>
+    <label>Min Score</label><input name="min_score" value="{{ min_score }}" />
+    <label>Max Score</label><input name="max_score" value="{{ max_score }}" />
+    <div><button class="btn" type="submit">Apply Filters</button></div>
+  </form>
+  <table>
+    <thead><tr><th>Score</th><th>Symbol</th><th>Dir</th><th>Style</th><th>Entry</th><th>SL</th><th>T1</th><th>T2</th><th>T3</th><th>Reco</th><th>Tags</th></tr></thead>
+    <tbody>
+      {% for x in items %}
+      <tr>
+        <td>{{ x.score }}</td><td>{{ x.option_symbol }}</td><td>{{ x.direction }}</td><td>{{ x.trade_style }}</td>
+        <td>{{ x.entry_price }}</td><td>{{ x.stop_loss }}</td><td>{{ x.target_1 }}</td><td>{{ x.target_2 }}</td><td>{{ x.target_3 }}</td>
+        <td>{{ x.recommendation }}</td><td>{{ x.reason_tags }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="11">No candidates yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

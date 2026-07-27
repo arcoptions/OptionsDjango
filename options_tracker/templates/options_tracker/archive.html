@@ -1,0 +1,43 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Archive</h2>
+  <p class="muted">Archives previous months by both expiry month and close month.</p>
+  <a class="btn" href="?run=1" style="text-decoration:none; display:inline-block;">Run Archive</a>
+  <form method="get" class="row" style="margin-top:10px;">
+    <label>Month</label>
+    <select name="month">
+      <option value="">All</option>
+      {% for m in '123456789101112' %}{% endfor %}
+      <option value="1" {% if month == '1' %}selected{% endif %}>1</option>
+      <option value="2" {% if month == '2' %}selected{% endif %}>2</option>
+      <option value="3" {% if month == '3' %}selected{% endif %}>3</option>
+      <option value="4" {% if month == '4' %}selected{% endif %}>4</option>
+      <option value="5" {% if month == '5' %}selected{% endif %}>5</option>
+      <option value="6" {% if month == '6' %}selected{% endif %}>6</option>
+      <option value="7" {% if month == '7' %}selected{% endif %}>7</option>
+      <option value="8" {% if month == '8' %}selected{% endif %}>8</option>
+      <option value="9" {% if month == '9' %}selected{% endif %}>9</option>
+      <option value="10" {% if month == '10' %}selected{% endif %}>10</option>
+      <option value="11" {% if month == '11' %}selected{% endif %}>11</option>
+      <option value="12" {% if month == '12' %}selected{% endif %}>12</option>
+    </select>
+    <label>Source</label><input name="source" value="{{ source }}" />
+    <label>Symbol/Text</label><input name="q" value="{{ q }}" />
+    <button class="btn" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th>Time</th><th>Symbol</th><th>Dir</th><th>Style</th><th>Expiry</th><th>Status</th><th>Source</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr><td>{{ r.tip_time|date:"Y-m-d H:i" }}</td><td>{{ r.option_symbol }}</td><td>{{ r.direction }}</td><td>{{ r.trade_style }}</td><td>{{ r.expiry_date }}</td><td>{{ r.status }}</td><td>{{ r.source_name }}</td></tr>
+      {% empty %}
+      <tr><td colspan="7">No archived rows yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

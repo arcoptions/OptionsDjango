@@ -1,0 +1,48 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Scanners (Chartink Triggers)</h2>
+  <p class="muted">Use promote to move trigger rows into options tracker candidates.</p>
+  <div class="row"><a class="btn" href="?sync=1" style="text-decoration:none; display:inline-block;">Sync From Legacy Scanners</a></div>
+  <form method="get" class="grid">
+    <label>Scanner</label><input name="scanner" value="{{ scanner_filter }}" />
+    <label>Status</label>
+    <select name="status">
+      <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+      <option value="MONITORING" {% if status_filter == 'MONITORING' %}selected{% endif %}>MONITORING</option>
+      <option value="MOVED" {% if status_filter == 'MOVED' %}selected{% endif %}>MOVED</option>
+      <option value="DISCARDED" {% if status_filter == 'DISCARDED' %}selected{% endif %}>DISCARDED</option>
+    </select>
+    <label>Symbol/Notes</label><input name="q" value="{{ q }}" />
+    <div><button class="btn" type="submit">Apply Filters</button></div>
+  </form>
+  <table>
+    <thead><tr><th>Time</th><th>Scanner</th><th>Symbol</th><th>Trigger</th><th>Live</th><th>Status</th><th>Promote</th></tr></thead>
+    <tbody>
+      {% for t in triggers %}
+      <tr>
+        <td>{{ t.trigger_time|date:"Y-m-d H:i" }}</td>
+        <td>{{ t.scanner_name }}</td>
+        <td>{{ t.symbol }}</td>
+        <td>{{ t.trigger_price }}</td>
+        <td>{{ t.live_price }}</td>
+        <td>{{ t.status }}</td>
+        <td>
+          {% if not t.promoted_signal_id %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="trigger_id" value="{{ t.id }}" />
+            <select name="direction"><option value="CE">CE</option><option value="PE">PE</option></select>
+            <select name="trade_style"><option value="INTRADAY">INTRADAY</option><option value="SWING">SWING</option></select>
+            <button class="btn" type="submit">Promote</button>
+          </form>
+          {% else %}Done{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7">No scanner rows yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Index OI</h2>
+  <form method="post" class="row">
+    {% csrf_token %}
+    <label>Polling Interval</label>
+    <select name="interval_seconds">
+      <option value="60" {% if selected_interval == 60 %}selected{% endif %}>60 seconds</option>
+      <option value="120" {% if selected_interval == 120 %}selected{% endif %}>120 seconds</option>
+    </select>
+    <button class="btn" type="submit">Save</button>
+    <a class="btn" href="?mock=1" style="text-decoration:none; display:inline-block;">Insert Mock Snapshot</a>
+    <a class="btn" href="?sync=1" style="text-decoration:none; display:inline-block;">Sync From Legacy OI</a>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Nifty/Sensex OI History</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Underlying</th><th>Call OI</th><th>Put OI</th><th>PCR</th><th>Regime</th><th>Interval</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr><td>{{ r.created_at|date:"Y-m-d H:i:s" }}</td><td>{{ r.underlying }}</td><td>{{ r.call_oi }}</td><td>{{ r.put_oi }}</td><td>{{ r.pcr }}</td><td>{{ r.regime }}</td><td>{{ r.interval_seconds }}</td></tr>
+      {% empty %}
+      <tr><td colspan="7">No OI snapshots yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

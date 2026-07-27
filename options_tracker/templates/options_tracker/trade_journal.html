@@ -1,0 +1,43 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Trade Journal</h2>
+  <p class="muted">Every trade requires a reason. Close action preserves journal and marks signal closed.</p>
+  <form method="get" class="grid">
+    <label>State</label>
+    <select name="state">
+      <option value="" {% if not state %}selected{% endif %}>All</option>
+      <option value="OPEN" {% if state == 'OPEN' %}selected{% endif %}>OPEN</option>
+      <option value="CLOSED" {% if state == 'CLOSED' %}selected{% endif %}>CLOSED</option>
+      <option value="CANCELLED" {% if state == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
+    </select>
+    <label>Symbol</label><input name="q" value="{{ q }}" />
+    <div><button class="btn" type="submit">Apply Filters</button></div>
+  </form>
+  <table>
+    <thead><tr><th>Opened</th><th>Symbol</th><th>State</th><th>Journal</th><th>Close</th></tr></thead>
+    <tbody>
+      {% for t in rows %}
+      <tr>
+        <td>{{ t.opened_at|date:"Y-m-d H:i" }}</td>
+        <td>{{ t.signal.option_symbol }}</td>
+        <td>{{ t.state }}</td>
+        <td>{{ t.journal_reason }}</td>
+        <td>
+          {% if t.state == 'OPEN' %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="trade_id" value="{{ t.id }}" />
+            <input type="hidden" name="action" value="close" />
+            <button class="btn" type="submit">Close Trade</button>
+          </form>
+          {% else %}Closed{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No trade journal rows yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Dhan Positions / Orders</h2>
+  <p class="muted">Policy A: Super Order for Entry + SL + T1. T2/T3 remain app-tracked.</p>
+  <p><strong>Open trades:</strong> {{ open_count }} / 5 (hard blocked at 5)</p>
+  <p><strong>Trades today:</strong> {{ today_count }} / 5 (hard blocked at 5)</p>
+</div>
+
+<div class="card">
+  <h3>Place Trade</h3>
+  <form method="post" class="grid">
+    {% csrf_token %}
+    <label>Signal</label>
+    <select name="signal_id">
+      {% for s in ideas %}
+      <option value="{{ s.id }}">{{ s.option_symbol }} | {{ s.direction }} | Score {{ s.score }} | SL {{ s.stop_loss }} | SecID {{ s.security_id }}</option>
+      {% endfor %}
+    </select>
+    {{ form.as_p }}
+    <div><button class="btn" type="submit">Place Super Order</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Executions</h3>
+  <table>
+    <thead><tr><th>Opened</th><th>Symbol</th><th>State</th><th>Qty</th><th>SL</th><th>T1</th><th>T2</th><th>T3</th><th>Dhan Order</th></tr></thead>
+    <tbody>
+      {% for t in executions %}
+      <tr><td>{{ t.opened_at|date:"Y-m-d H:i" }}</td><td>{{ t.signal.option_symbol }}</td><td>{{ t.state }}</td><td>{{ t.quantity }}</td><td>{{ t.stop_loss }}</td><td>{{ t.target_1 }}</td><td>{{ t.target_2 }}</td><td>{{ t.target_3 }}</td><td>{{ t.dhan_order_id }}</td></tr>
+      {% empty %}
+      <tr><td colspan="9">No executions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Dhan Order Events</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Order</th><th>Status</th><th>Correlation</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+      <tr><td>{{ e.created_at|date:"Y-m-d H:i:s" }}</td><td>{{ e.order_id }}</td><td>{{ e.status }}</td><td>{{ e.correlation_id }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4">No order events yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
