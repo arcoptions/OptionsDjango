@@ -373,14 +373,15 @@ def option_live_prices(request):
     options = tracked_tips.filter(direction__in=["CE", "PE"])
     tracker_tab = request.GET.get("tab", "options").strip().lower()
     selected_tips = tracked_tips.filter(direction=Direction.EQ) if tracker_tab == "equities" else options
-    refresh_result = refresh_dhan_option_prices(options)
-    rows = list(options.values(
+    refresh_result = refresh_dhan_option_prices(selected_tips)
+    rows = list(selected_tips.values(
         "id", "live_price", "entry_price", "outcome_status", "quote_updated_at", "security_id", "exchange_segment",
         "dhan_display_name", "expiry_date",
     ))
     return JsonResponse({
         "ok": not bool(refresh_result["error"]),
         "error": refresh_result["error"],
+        "market_closed": bool(refresh_result.get("market_closed")),
         "rows": rows,
         "counts": {
             "tracked": selected_tips.count(),
@@ -612,12 +613,23 @@ def index_oi(request):
     underlying = request.GET.get("underlying", "SENSEX").upper()
     if underlying not in {"NIFTY", "SENSEX"}:
         underlying = "SENSEX"
-    latest = IndexOISnapshot.objects.filter(underlying=underlying).prefetch_related("strikes").first()
+    available_dates = list(
+        IndexOISnapshot.objects.filter(underlying=underlying)
+        .order_by("-created_at__date")
+        .values_list("created_at__date", flat=True)
+        .distinct()[:30]
+    )
+    try:
+        selected_date = datetime.strptime(request.GET.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        selected_date = available_dates[0] if available_dates else timezone.localdate()
+    selected_snapshots = IndexOISnapshot.objects.filter(
+        underlying=underlying,
+        created_at__date=selected_date,
+    )
+    latest = selected_snapshots.prefetch_related("strikes").first()
     history_rows = list(
-        IndexOISnapshot.objects.filter(
-            underlying=underlying,
-            created_at__date=timezone.localdate(),
-        ).order_by("-created_at")[:240]
+        selected_snapshots.order_by("-created_at")[:240]
     )
     history_rows.reverse()
     opening_call_oi = history_rows[0].call_oi if history_rows else 0
@@ -701,6 +713,8 @@ def index_oi(request):
         {
             "title": "Index OI Intelligence",
             "underlying": underlying,
+            "available_dates": available_dates,
+            "selected_date": selected_date,
             "latest": latest,
             "history_rows": history_rows,
             "history_data": history_data,

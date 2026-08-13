@@ -13,7 +13,7 @@ from django.utils import timezone
 from .index_oi_services import _buildup, _market_prices
 from .jump_detector import historical_jump_report
 from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeStyle
-from .services import _expiry_month_hint, get_dhan_credentials, refresh_dhan_option_prices, resolve_dhan_instruments, parse_tip_text
+from .services import _expiry_month_hint, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.track_telegram import Command as TrackTelegramCommand
 
@@ -245,7 +245,7 @@ class DhanOptionTrackingTests(TestCase):
 	def test_refresh_resolves_initially_unresolved_signals(self, resolve_instruments):
 		signal = self.make_signal()
 
-		result = refresh_dhan_option_prices([signal])
+		result = refresh_dhan_option_prices([signal], force=True)
 
 		resolve_instruments.assert_called_once_with([signal])
 		self.assertEqual(result["error"], "Dhan credentials are not configured.")
@@ -258,7 +258,7 @@ class DhanOptionTrackingTests(TestCase):
 			quote_updated_at=timezone.now(),
 		)
 
-		refresh_dhan_option_prices([signal])
+		refresh_dhan_option_prices([signal], force=True)
 
 		resolve_instruments.assert_called_once_with([signal])
 
@@ -311,7 +311,60 @@ class DhanOptionTrackingTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()["counts"]["tracked"], 1)
-		self.assertEqual(response.json()["rows"], [])
+		self.assertEqual(response.json()["rows"][0]["live_price"], None)
+
+	@patch("options_tracker.services._load_dhan_contracts")
+	def test_equity_resolution_prefers_nse_cash_contract(self, load_contracts):
+		signal = self.make_signal(option_symbol="VARROC", direction=Direction.EQ)
+		load_contracts.return_value = {
+			("VARROC", None, Direction.EQ): [
+				{"security_id": "bse", "exchange_segment": "BSE_EQ", "expiry": None, "display_name": "Varroc"},
+				{"security_id": "nse", "exchange_segment": "NSE_EQ", "expiry": None, "display_name": "Varroc Engineering"},
+			],
+		}
+
+		resolve_dhan_instruments([signal])
+
+		signal.refresh_from_db()
+		self.assertEqual(signal.security_id, "nse")
+		self.assertEqual(signal.exchange_segment, "NSE_EQ")
+
+	def test_dhan_market_hours_are_weekdays_from_nine_to_fifteen_forty(self):
+		zone = timezone.get_current_timezone()
+		self.assertTrue(is_dhan_market_open(timezone.make_aware(datetime(2026, 8, 13, 9, 0), zone)))
+		self.assertTrue(is_dhan_market_open(timezone.make_aware(datetime(2026, 8, 13, 15, 40), zone)))
+		self.assertFalse(is_dhan_market_open(timezone.make_aware(datetime(2026, 8, 13, 15, 41), zone)))
+		self.assertFalse(is_dhan_market_open(timezone.make_aware(datetime(2026, 8, 15, 10, 0), zone)))
+
+	@patch("options_tracker.services.requests.get")
+	@patch("options_tracker.services.requests.post")
+	def test_refresh_makes_no_dhan_calls_outside_market_hours(self, post, get):
+		signal = self.make_signal()
+
+		with patch("options_tracker.services.is_dhan_market_open", return_value=False):
+			result = refresh_dhan_option_prices([signal])
+
+		self.assertTrue(result["market_closed"])
+		get.assert_not_called()
+		post.assert_not_called()
+
+	@patch("options_tracker.services.requests.post")
+	def test_refresh_updates_equity_live_price(self, post):
+		signal = self.make_signal(
+			option_symbol="VARROC",
+			direction=Direction.EQ,
+			security_id="123",
+			exchange_segment="NSE_EQ",
+		)
+		post.return_value.raise_for_status.return_value = None
+		post.return_value.json.return_value = {"data": {"NSE_EQ": {"123": {"last_price": 725.5}}}}
+
+		with patch.dict(os.environ, {"DHAN_ACCESS_TOKEN": "token", "DHAN_CLIENT_ID": "client"}):
+			result = refresh_dhan_option_prices([signal], force=True)
+
+		signal.refresh_from_db()
+		self.assertEqual(result["updated"], 1)
+		self.assertEqual(signal.live_price, Decimal("725.50"))
 
 	def test_edit_clears_stale_dhan_resolution(self):
 		signal = self.make_signal(security_id="123", exchange_segment="NSE_FNO", live_price=Decimal("55"))
@@ -411,6 +464,30 @@ class IndexOIIntelligenceTests(TestCase):
 		self.assertEqual(response.context["strike_chart_data"][0]["call_oi"], 1000)
 		self.assertEqual(response.context["strike_chart_data"][0]["call_change"], 750)
 		self.assertEqual(response.context["latest_changes"]["call_oi_change"], 750)
+
+	@patch("options_tracker.views.historical_jump_report")
+	def test_dashboard_can_select_historical_session(self, jump_report):
+		jump_report.return_value = {"patterns": [], "segments": [], "latest_candidates": []}
+		yesterday = date(2026, 8, 13)
+		current = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=date(2026, 8, 20), underlying_price=Decimal("78000"),
+		)
+		historical = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=yesterday, underlying_price=Decimal("77500"),
+		)
+		IndexOISnapshot.objects.filter(id=current.id).update(
+			created_at=timezone.make_aware(datetime(2026, 8, 14, 10, 0)),
+		)
+		IndexOISnapshot.objects.filter(id=historical.id).update(
+			created_at=timezone.make_aware(datetime(2026, 8, 13, 15, 30)),
+		)
+
+		response = self.client.get("/index-oi/?underlying=SENSEX&date=2026-08-13")
+
+		self.assertEqual(response.context["selected_date"], yesterday)
+		self.assertEqual(response.context["latest"].id, historical.id)
+		self.assertContains(response, "13 Aug 2026")
+		self.assertContains(response, "77500")
 
 	@patch("options_tracker.views.historical_jump_report")
 	def test_dashboard_uses_bounded_aggregate_history(self, jump_report):

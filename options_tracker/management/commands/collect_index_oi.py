@@ -1,6 +1,5 @@
 import json
 import time
-from datetime import time as clock_time
 
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
@@ -8,7 +7,7 @@ from django.utils import timezone
 
 from options_tracker.index_oi_services import collect_all_index_option_chains
 from options_tracker.models import AppSetting
-from options_tracker.services import get_oi_interval_seconds
+from options_tracker.services import get_oi_interval_seconds, is_dhan_market_open
 
 
 class Command(BaseCommand):
@@ -18,11 +17,9 @@ class Command(BaseCommand):
         parser.add_argument("--once", action="store_true", help="Collect one snapshot for each index and exit.")
 
     def handle(self, *args, **options):
-        first_run = True
         while True:
-            now = timezone.localtime()
-            market_open = now.weekday() < 5 and clock_time(9, 15) <= now.time() <= clock_time(15, 35)
-            if options["once"] or market_open or first_run:
+            market_open = is_dhan_market_open()
+            if market_open:
                 try:
                     snapshots = collect_all_index_option_chains()
                     status = {
@@ -40,7 +37,8 @@ class Command(BaseCommand):
                     key="index_oi_collector_status", defaults={"value": json.dumps(status)}
                 )
                 close_old_connections()
-                if options["once"]:
-                    break
-                first_run = False
+            if options["once"]:
+                if not market_open:
+                    self.stdout.write("Dhan market is closed; no live snapshot collected.")
+                break
             time.sleep(get_oi_interval_seconds() if market_open else 60)

@@ -6,7 +6,7 @@ import csv
 import io
 from pathlib import Path
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, time as clock_time, timedelta
 
 import requests
 from django.db.models import Q
@@ -18,7 +18,10 @@ from .models import AppSetting, DhanOrderEvent, Direction, OptionOutcome, Signal
 DHAN_INSTRUMENT_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master-detailed.csv"
 DHAN_LTP_URL = "https://api.dhan.co/v2/marketfeed/ltp"
 DHAN_SYMBOL_ALIASES = {"NG": "NATURALGAS", "UNITSDSPR": "UNITDSPR"}
-DHAN_SEGMENTS = {("NSE", "D"): "NSE_FNO", ("BSE", "D"): "BSE_FNO", ("MCX", "M"): "MCX_COMM"}
+DHAN_SEGMENTS = {
+    ("NSE", "D"): "NSE_FNO", ("BSE", "D"): "BSE_FNO", ("MCX", "M"): "MCX_COMM",
+    ("NSE", "E"): "NSE_EQ", ("BSE", "E"): "BSE_EQ",
+}
 MONTH_NUMBERS = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUNE": 6,
     "JUL": 7, "JULY": 7, "AUG": 8, "AUGUST": 8, "SEP": 9, "SEPT": 9,
@@ -233,6 +236,11 @@ def _dhan_headers(access_token, client_id=None):
     return headers
 
 
+def is_dhan_market_open(at=None):
+    now = timezone.localtime(at) if at else timezone.localtime()
+    return now.weekday() < 5 and clock_time(9, 0) <= now.time() <= clock_time(15, 40)
+
+
 def _load_dhan_contracts():
     loaded_at = _dhan_master_cache["loaded_at"]
     if loaded_at and timezone.now() - loaded_at < timedelta(hours=12):
@@ -244,14 +252,25 @@ def _load_dhan_contracts():
     for row in csv.DictReader(io.StringIO(response.text.lstrip("\ufeff"))):
         segment = DHAN_SEGMENTS.get((row.get("EXCH_ID"), row.get("SEGMENT")))
         option_type = row.get("OPTION_TYPE")
-        if not segment or option_type not in {Direction.CE, Direction.PE}:
+        underlying = row.get("UNDERLYING_SYMBOL", "").upper()
+        if not segment or not underlying:
+            continue
+        if row.get("INSTRUMENT") == "EQUITY" and segment in {"NSE_EQ", "BSE_EQ"}:
+            contracts.setdefault((underlying, None, Direction.EQ), []).append({
+                "security_id": row.get("SECURITY_ID", ""),
+                "exchange_segment": segment,
+                "expiry": None,
+                "display_name": row.get("DISPLAY_NAME", "") or underlying,
+            })
+            continue
+        if option_type not in {Direction.CE, Direction.PE}:
             continue
         try:
             strike = Decimal(row["STRIKE_PRICE"]).normalize()
             expiry = datetime.strptime(row["SM_EXPIRY_DATE"], "%Y-%m-%d").date()
         except (KeyError, ValueError):
             continue
-        key = (row.get("UNDERLYING_SYMBOL", "").upper(), strike, option_type)
+        key = (underlying, strike, option_type)
         contracts.setdefault(key, []).append(
             {
                 "security_id": row.get("SECURITY_ID", ""),
@@ -274,7 +293,9 @@ def _expiry_month_hint(raw_text):
     return min(matches)[1] if matches else None
 
 
-def _expected_dhan_segment(option_symbol):
+def _expected_dhan_segment(option_symbol, direction=None):
+    if direction == Direction.EQ:
+        return "NSE_EQ"
     match = re.fullmatch(r"(.+)\s+\d+(?:\.\d+)?\s+(?:CE|PE)", str(option_symbol or "").upper())
     if not match:
         return "NSE_FNO"
@@ -287,6 +308,28 @@ def resolve_dhan_instruments(signals):
     today = timezone.localdate()
     resolved = 0
     for signal in signals:
+        if signal.direction == Direction.EQ:
+            symbol = DHAN_SYMBOL_ALIASES.get(signal.option_symbol.upper(), signal.option_symbol.upper())
+            choices = sorted(
+                contracts.get((symbol, None, Direction.EQ), []),
+                key=lambda item: item["exchange_segment"] != "NSE_EQ",
+            )
+            if choices:
+                contract = choices[0]
+                signal.security_id = contract["security_id"]
+                signal.exchange_segment = contract["exchange_segment"]
+                signal.dhan_display_name = contract["display_name"]
+                signal.live_price = None
+                signal.quote_updated_at = None
+                if signal.outcome_status == OptionOutcome.UNRESOLVED:
+                    signal.outcome_status = OptionOutcome.TRACKING
+                    signal.outcome_at = None
+                signal.save(update_fields=[
+                    "security_id", "exchange_segment", "dhan_display_name", "live_price",
+                    "quote_updated_at", "outcome_status", "outcome_at",
+                ])
+                resolved += 1
+            continue
         match = re.fullmatch(r"(.+)\s+(\d+(?:\.\d+)?)\s+(CE|PE)", signal.option_symbol.upper())
         if not match:
             continue
@@ -340,11 +383,21 @@ def refresh_dhan_option_prices(signals, force=False):
     signals = list(signals)
     if not signals:
         return {"updated": 0, "error": ""}
+    if not force and not is_dhan_market_open():
+        return {"updated": 0, "error": "", "market_closed": True}
 
     unresolved = [
         signal
         for signal in signals
-        if not signal.security_id or signal.exchange_segment != _expected_dhan_segment(signal.option_symbol)
+        if not signal.security_id
+        or (
+            signal.direction == Direction.EQ
+            and signal.exchange_segment not in {"NSE_EQ", "BSE_EQ"}
+        )
+        or (
+            signal.direction != Direction.EQ
+            and signal.exchange_segment != _expected_dhan_segment(signal.option_symbol, signal.direction)
+        )
     ]
     if unresolved:
         try:
