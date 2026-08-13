@@ -1,0 +1,43 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: azure-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+      url: https://arc-options-2fa45de1.azurewebsites.net
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate Django application
+        run: |
+          python manage.py check
+          python manage.py test
+
+      - name: Deploy to Azure
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: arc-options-2fa45de1
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_172421B9B3E44B41926521A0B99D0EAE }}
+          package: .
