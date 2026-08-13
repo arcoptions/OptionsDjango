@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   test-and-deploy:
@@ -35,9 +36,15 @@ jobs:
           python manage.py check
           python manage.py test
 
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Deploy to Azure
         uses: azure/webapps-deploy@v3
         with:
           app-name: arc-options-2fa45de1
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_172421B9B3E44B41926521A0B99D0EAE }}
           package: .
