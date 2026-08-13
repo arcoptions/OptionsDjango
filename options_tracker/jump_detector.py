@@ -12,6 +12,8 @@ from .models import AppSetting, IndexOISnapshot, IndexOptionCandle
 
 EXPIRY_WEEKDAYS = {"NIFTY": 1, "SENSEX": 3}
 SIGNAL_TIMES = (time(14, 30), time(14, 55), time(15, 0))
+OPENING_START = time(9, 25)
+OPENING_END = time(10, 0)
 
 
 def _empty_report():
@@ -122,30 +124,155 @@ def _row_features(current, prior_rows, signal_time):
     }
 
 
-def _historical_events(underlying, days=45):
+def _trade_levels(reference_price, recent_support=None):
+    entry = round(reference_price * 1.005, 2)
+    stop = round(entry * 0.92, 2)
+    risk = entry - stop
+    return {
+        "entry": entry,
+        "stop_loss": stop,
+        "target_1": round(entry + (risk * 2), 2),
+        "target_2": round(entry + (risk * 3), 2),
+        "risk_percent": round((risk / entry) * 100, 1),
+    }
+
+
+def _opening_breakout_report(underlying, days=45, session_date=None):
+    cutoff = timezone.localdate() - timedelta(days=days)
+    query = IndexOptionCandle.objects.filter(
+        underlying=underlying, interval_minutes=1, timestamp__date__gte=cutoff,
+    ).values(
+        "timestamp", "strike", "option_type", "open", "high", "low", "close", "volume", "spot",
+    ).order_by("timestamp")
+    if session_date:
+        query = query.filter(timestamp__date=session_date)
+
+    contracts = defaultdict(list)
+    for row in query:
+        row["local_timestamp"] = timezone.localtime(row["timestamp"])
+        contracts[(row["local_timestamp"].date(), row["strike"], row["option_type"])].append(row)
+
+    signals = []
+    for (trade_date, strike, option_type), rows in contracts.items():
+        for index in range(5, len(rows) - 1):
+            current = rows[index]
+            clock = current["local_timestamp"].time()
+            premium, spot = _number(current["close"]), _number(current["spot"])
+            if not (OPENING_START <= clock <= OPENING_END) or not (10 <= premium <= 200) or not spot:
+                continue
+            prior = rows[index - 5:index]
+            prior_high = max(_number(row["high"]) for row in prior)
+            volumes = [_number(row["volume"]) for row in prior if _number(row["volume"]) > 0]
+            volume_baseline = median(volumes) if volumes else 0
+            volume_ratio = (_number(current["volume"]) / volume_baseline) if volume_baseline else 0
+            spot_start = _number(prior[0]["spot"]) or spot
+            aligned = spot > spot_start if option_type == "CALL" else spot < spot_start
+            if premium <= prior_high * 1.002 or volume_ratio < 1.5 or not aligned:
+                continue
+
+            next_row = rows[index + 1]
+            levels = _trade_levels(max(_number(next_row["open"]), premium))
+            outcome, exit_price, exit_at = "TIME_EXIT", None, None
+            for future in rows[index + 1:]:
+                if future["local_timestamp"].time() > time(15, 20):
+                    break
+                if _number(future["low"]) <= levels["stop_loss"]:
+                    outcome, exit_price, exit_at = "STOP", levels["stop_loss"], future["local_timestamp"]
+                    break
+                if _number(future["high"]) >= levels["target_1"]:
+                    outcome, exit_price, exit_at = "TARGET_1", levels["target_1"], future["local_timestamp"]
+                    break
+            if exit_price is None:
+                future_rows = [row for row in rows[index + 1:] if row["local_timestamp"].time() <= time(15, 20)]
+                if not future_rows:
+                    continue
+                exit_price = _number(future_rows[-1]["close"]) * 0.995
+                exit_at = future_rows[-1]["local_timestamp"]
+            risk = levels["entry"] - levels["stop_loss"]
+            signals.append({
+                "date": trade_date.isoformat(), "signal_at": current["local_timestamp"].isoformat(),
+                "exit_at": exit_at.isoformat(),
+                "strike": _number(strike), "option_type": option_type, "volume_ratio": round(volume_ratio, 1),
+                "outcome": outcome, "realized_r": round((exit_price - levels["entry"]) / risk, 2), **levels,
+            })
+
+    trades = []
+    for trade_date in sorted({signal["date"] for signal in signals}):
+        daily = [signal for signal in signals if signal["date"] == trade_date]
+        first_at = min(signal["signal_at"] for signal in daily)
+        trades.append(max(
+            (signal for signal in daily if signal["signal_at"] == first_at),
+            key=lambda signal: signal["volume_ratio"],
+        ))
+    wins = [trade for trade in trades if trade["outcome"] == "TARGET_1"]
+    return {
+        "sample_days": len(trades), "wins": len(wins),
+        "win_rate": round(len(wins) / len(trades) * 100, 1) if trades else 0,
+        "total_r": round(sum(trade["realized_r"] for trade in trades), 2),
+        "average_r": round(sum(trade["realized_r"] for trade in trades) / len(trades), 2) if trades else 0,
+        "validated": len(trades) >= 20 and len(wins) / len(trades) >= 0.45,
+        "trades": trades,
+    }
+
+
+def _historical_trade_outcome(current, prior_rows, future_rows):
+    reference = max(_number(current["high"]), _number(current["close"]))
+    recent_support = min(_number(row["low"]) for row in prior_rows if _number(row["low"]) > 0)
+    levels = _trade_levels(reference, recent_support)
+    entered = False
+    outcome = "NO_ENTRY"
+    exit_price = None
+    for row in future_rows:
+        high, low = _number(row["high"]), _number(row["low"])
+        if not entered:
+            if high < levels["entry"]:
+                continue
+            entered = True
+        if low <= levels["stop_loss"]:
+            outcome, exit_price = "STOP", levels["stop_loss"]
+            break
+        if high >= levels["target_2"]:
+            outcome, exit_price = "TARGET_2", levels["target_2"]
+            break
+        if high >= levels["target_1"]:
+            outcome, exit_price = "TARGET_1", levels["target_1"]
+            break
+    if entered and exit_price is None:
+        outcome = "TIME_EXIT"
+        exit_price = _number(future_rows[-1]["close"])
+    risk = levels["entry"] - levels["stop_loss"]
+    return {
+        **levels,
+        "trade_outcome": outcome,
+        "return_percent": round(((exit_price / levels["entry"]) - 1) * 100, 1) if exit_price else 0,
+        "realized_r": round((exit_price - levels["entry"]) / risk, 2) if exit_price and risk else 0,
+    }
+
+
+def _historical_events(underlying, days=45, session_date=None):
     cutoff = timezone.localdate() - timedelta(days=days)
     rows = IndexOptionCandle.objects.filter(
         underlying=underlying,
         interval_minutes=1,
         timestamp__date__gte=cutoff,
-        timestamp__time__gte=time(14, 15),
-        timestamp__time__lte=time(15, 30),
-    ).values(
+    )
+    if session_date:
+        rows = rows.filter(timestamp__date=session_date)
+    rows = rows.values(
         "timestamp", "relative_strike", "option_type", "strike", "spot",
-        "close", "high", "volume", "oi", "implied_volatility",
+        "close", "high", "low", "volume", "oi", "implied_volatility",
     ).order_by("timestamp")
 
     contracts = defaultdict(list)
-    expiry_weekday = EXPIRY_WEEKDAYS[underlying]
     for row in rows:
         local_timestamp = timezone.localtime(row["timestamp"])
-        if local_timestamp.weekday() != expiry_weekday:
+        if local_timestamp.weekday() >= 5:
             continue
         row["local_timestamp"] = local_timestamp
-        contracts[(local_timestamp.date(), row["relative_strike"], row["option_type"])].append(row)
+        contracts[(local_timestamp.date(), row["strike"], row["option_type"])].append(row)
 
     events = []
-    for (session_date, relative_strike, option_type), contract_rows in contracts.items():
+    for (event_date, strike, option_type), contract_rows in contracts.items():
         for signal_time in SIGNAL_TIMES:
             current = next(
                 (row for row in contract_rows if row["local_timestamp"].time().replace(second=0, microsecond=0) == signal_time),
@@ -161,16 +288,18 @@ def _historical_events(underlying, days=45):
             features = _row_features(current, prior_rows, signal_time)
             score, evidence = _feature_score(features, underlying)
             future_high = max(_number(row["high"]) for row in future_rows)
+            trade_outcome = _historical_trade_outcome(current, prior_rows, future_rows)
             events.append({
-                "date": session_date.isoformat(),
+                "date": event_date.isoformat(),
                 "signal_time": signal_time.strftime("%H:%M"),
-                "relative_strike": relative_strike,
+                "relative_strike": current["relative_strike"],
                 "option_type": option_type,
-                "strike": _number(current["strike"]),
+                "strike": _number(strike),
                 "premium": features["premium"],
                 "score": score,
                 "evidence": evidence,
                 "max_multiple": round(future_high / features["premium"], 2),
+                **trade_outcome,
                 **{key: round(value, 4) for key, value in features.items() if key not in {"premium", "signal_time", "option_type"}},
             })
     return events
@@ -210,9 +339,11 @@ def _segment_report(events):
     return sorted(segments, key=lambda row: (row["hit_rate_3x"], row["samples"]), reverse=True)
 
 
-def historical_jump_report(underlying, days=45, use_cache=True):
+def historical_jump_report(underlying, days=45, use_cache=True, session_date=None):
     underlying = underlying.upper()
-    cache_key = f"jump-report:{underlying}:{days}:v1"
+    if session_date:
+        use_cache = False
+    cache_key = f"jump-report:{underlying}:{days}:v2"
     if use_cache:
         cached = cache.get(cache_key)
         if cached:
@@ -227,7 +358,7 @@ def historical_jump_report(underlying, days=45, use_cache=True):
                 cache.set(cache_key, report, 3600)
                 return report
         return _empty_report()
-    events = _historical_events(underlying, days=days)
+    events = _historical_events(underlying, days=days, session_date=session_date)
     patterns = []
     for signal_time in (value.strftime("%H:%M") for value in SIGNAL_TIMES):
         slot = [event for event in events if event["signal_time"] == signal_time]
@@ -244,6 +375,9 @@ def historical_jump_report(underlying, days=45, use_cache=True):
     scored = [event for event in events if event["score"] >= 55]
     scored_hits = sum(event["max_multiple"] >= 3 for event in scored)
     all_hits = sum(event["max_multiple"] >= 3 for event in events)
+    entered = [event for event in scored if event["trade_outcome"] != "NO_ENTRY"]
+    target_hits = [event for event in entered if event["trade_outcome"].startswith("TARGET")]
+    stopped = [event for event in entered if event["trade_outcome"] == "STOP"]
     latest_date = max((event["date"] for event in events), default=None)
     report = {
         "patterns": patterns,
@@ -253,6 +387,13 @@ def historical_jump_report(underlying, days=45, use_cache=True):
         "scored_count": len(scored),
         "scored_hit_rate_3x": round((scored_hits / len(scored)) * 100, 1) if scored else 0,
         "scored_lift": round(((scored_hits / len(scored)) - (all_hits / len(events))) * 100, 1) if scored and events else 0,
+        "trade_plan": {
+            "signals": len(scored), "entries": len(entered), "targets": len(target_hits), "stops": len(stopped),
+            "target_before_stop_rate": round((len(target_hits) / len(entered)) * 100, 1) if entered else 0,
+            "average_return_percent": round(sum(event["return_percent"] for event in entered) / len(entered), 1) if entered else 0,
+            "average_realized_r": round(sum(event["realized_r"] for event in entered) / len(entered), 2) if entered else 0,
+        },
+        "opening_breakout": _opening_breakout_report(underlying, days=days, session_date=session_date),
         "latest_candidates": sorted(
             (event for event in events if event["date"] == latest_date),
             key=lambda event: (event["score"], event["max_multiple"]),
@@ -270,23 +411,23 @@ def refresh_historical_jump_report(underlying, days=45):
         key=f"jump_report_{underlying.lower()}_{days}",
         defaults={"value": json.dumps(report)},
     )
-    cache.set(f"jump-report:{underlying.upper()}:{days}:v1", report, 3600)
+    cache.set(f"jump-report:{underlying.upper()}:{days}:v2", report, 3600)
     return report
 
 
 def jump_detector_state(underlying):
     latest = IndexOISnapshot.objects.filter(underlying=underlying).first()
     now = timezone.localtime()
-    expiry_day = now.weekday() == EXPIRY_WEEKDAYS[underlying]
-    in_window = time(14, 25) <= now.time() <= time(15, 10)
+    trading_day = now.weekday() < 5
+    in_window = time(9, 0) <= now.time() <= time(15, 40)
     fresh = bool(latest and timezone.localtime(latest.created_at) >= now - timedelta(minutes=3))
-    active = expiry_day and in_window and fresh
+    active = trading_day and in_window and fresh
     if active:
-        label = "ACTIVE EXPIRY WINDOW"
-    elif not expiry_day:
-        label = "OFF EXPIRY DAY"
+        label = "ACTIVE MARKET HOURS"
+    elif not trading_day:
+        label = "MARKET CLOSED"
     elif not in_window:
-        label = "OUTSIDE 14:25–15:10"
+        label = "OUTSIDE 09:00–15:40"
     else:
         label = "WAITING FOR FRESH SNAPSHOT"
     return {"active": active, "label": label}
@@ -296,10 +437,18 @@ def live_jump_candidates(underlying, limit=8):
     latest = IndexOISnapshot.objects.filter(underlying=underlying).prefetch_related("strikes").first()
     if not latest or latest.atm_strike is None:
         return []
-    previous = IndexOISnapshot.objects.filter(
+    recent_snapshots = list(IndexOISnapshot.objects.filter(
         underlying=underlying, expiry_date=latest.expiry_date, created_at__lt=latest.created_at,
-    ).prefetch_related("strikes").first()
+        created_at__date=timezone.localdate(latest.created_at),
+    ).prefetch_related("strikes")[:5])
+    previous = recent_snapshots[0] if recent_snapshots else None
     previous_rows = {(row.strike, row.option_type): row for row in previous.strikes.all()} if previous else {}
+    recent_prices = defaultdict(list)
+    recent_volumes = defaultdict(list)
+    for snapshot in recent_snapshots:
+        for strike_row in snapshot.strikes.all():
+            recent_prices[(strike_row.strike, strike_row.option_type)].append(strike_row.last_price)
+            recent_volumes[(strike_row.strike, strike_row.option_type)].append(strike_row.volume)
     strike_step = Decimal("50" if underlying == "NIFTY" else "100")
     candidate_features = []
     for row in latest.strikes.all():
@@ -324,13 +473,50 @@ def live_jump_candidates(underlying, limit=8):
         volume_delta = max(row.volume - prior.volume, 0) if prior else 0
         candidate_features.append((row, features, volume_delta))
 
-    volume_deltas = [volume_delta for _, _, volume_delta in candidate_features if volume_delta > 0]
-    volume_baseline = median(volume_deltas) if volume_deltas else 0
     candidates = []
     for row, features, volume_delta in candidate_features:
-        features["volume_surge"] = (volume_delta / volume_baseline) if volume_baseline else 0
+        contract_volumes = recent_volumes[(row.strike, row.option_type)]
+        prior_volume_delta = max(contract_volumes[0] - contract_volumes[1], 0) if len(contract_volumes) >= 2 else 0
+        features["volume_surge"] = (volume_delta / prior_volume_delta) if prior_volume_delta else 0
         score, evidence = _feature_score(features, underlying)
         relative_steps = int((row.strike - latest.atm_strike) / strike_step)
+        bid, ask = _number(row.top_bid_price), _number(row.top_ask_price)
+        spread_percent = ((ask - bid) / ask * 100) if ask > 0 and bid > 0 and ask >= bid else 100
+        history = [_number(price) for price in recent_prices[(row.strike, row.option_type)] if _number(price) > 0]
+        reference = max([ask, _number(row.last_price), *history])
+        support = min([_number(row.last_price), *history])
+        levels = _trade_levels(reference, support)
+        total_depth = row.buy_quantity + row.sell_quantity
+        depth_imbalance = ((row.buy_quantity - row.sell_quantity) / total_depth) if total_depth else 0
+        delta_ok = 0.15 <= abs(row.delta) <= 0.70
+        rejection_reasons = []
+        if bid <= 0 or ask <= 0:
+            rejection_reasons.append("missing two-sided quote")
+        elif spread_percent > 4:
+            rejection_reasons.append("spread above 4%")
+        if row.top_bid_quantity <= 0 or row.top_ask_quantity <= 0:
+            rejection_reasons.append("insufficient top-level depth")
+        if total_depth and depth_imbalance < -0.35:
+            rejection_reasons.append("sell depth dominates")
+        if not delta_ok:
+            rejection_reasons.append("delta outside 0.15–0.70")
+        if features["favorable_spot_move"] <= 0:
+            rejection_reasons.append("spot direction unconfirmed")
+        if features["volume_surge"] < 1.5:
+            rejection_reasons.append("volume confirmation missing")
+        signal_clock = timezone.localtime(latest.created_at).time()
+        breakout_confirmed = bool(history and _number(row.last_price) > max(history) * 1.002)
+        if not (OPENING_START <= signal_clock <= OPENING_END):
+            rejection_reasons.append("outside validated 09:25–10:00 window")
+        if not breakout_confirmed:
+            rejection_reasons.append("five-snapshot high not broken")
+        trade_ready = not rejection_reasons and len(history) >= 2
+        if spread_percent <= 2:
+            score = min(score + 5, 100)
+            evidence.append("tight spread")
+        if depth_imbalance >= 0.20:
+            score = min(score + 5, 100)
+            evidence.append("buy depth leads")
         candidates.append({
             "strike": row.strike,
             "option_type": row.option_type,
@@ -341,5 +527,24 @@ def live_jump_candidates(underlying, limit=8):
             "oi_change": row.oi_change,
             "iv": row.implied_volatility,
             "volume": row.volume,
+            "bid": row.top_bid_price,
+            "ask": row.top_ask_price,
+            "spread_percent": round(spread_percent, 1),
+            "delta": row.delta,
+            "gamma": row.gamma,
+            "theta": row.theta,
+            "vega": row.vega,
+            "depth_imbalance": round(depth_imbalance * 100, 1),
+            "trade_ready": trade_ready,
+            "rejection_reasons": rejection_reasons,
+            "entry_rule": "Buy only at or above trigger; use a limit order near the ask.",
+            "exit_time": "15:20",
+            **levels,
         })
-    return sorted(candidates, key=lambda candidate: candidate["score"], reverse=True)[:limit]
+    ranked = sorted(candidates, key=lambda candidate: (candidate["trade_ready"], candidate["score"]), reverse=True)
+    selected = []
+    for option_type in ("CE", "PE"):
+        best = next((candidate for candidate in ranked if candidate["option_type"] == option_type), None)
+        if best:
+            selected.append(best)
+    return sorted(selected, key=lambda candidate: (candidate["trade_ready"], candidate["score"]), reverse=True)[:limit]

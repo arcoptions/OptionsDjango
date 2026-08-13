@@ -24,6 +24,7 @@ from .models import (
     DhanOrderEvent,
     Direction,
     IndexOISnapshot,
+    IndexOptionCandle,
     OptionOutcome,
     SignalStatus,
     TipSignal,
@@ -613,12 +614,19 @@ def index_oi(request):
     underlying = request.GET.get("underlying", "SENSEX").upper()
     if underlying not in {"NIFTY", "SENSEX"}:
         underlying = "SENSEX"
-    available_dates = list(
+    snapshot_dates = list(
         IndexOISnapshot.objects.filter(underlying=underlying)
         .order_by("-created_at__date")
         .values_list("created_at__date", flat=True)
         .distinct()[:30]
     )
+    candle_dates = list(
+        IndexOptionCandle.objects.filter(underlying=underlying)
+        .order_by("-timestamp__date")
+        .values_list("timestamp__date", flat=True)
+        .distinct()[:30]
+    )
+    available_dates = sorted(set(snapshot_dates + candle_dates), reverse=True)[:30]
     try:
         selected_date = datetime.strptime(request.GET.get("date", ""), "%Y-%m-%d").date()
     except ValueError:
@@ -628,6 +636,19 @@ def index_oi(request):
         created_at__date=selected_date,
     )
     latest = selected_snapshots.prefetch_related("strikes").first()
+    selected_candles = IndexOptionCandle.objects.filter(
+        underlying=underlying,
+        timestamp__date=selected_date,
+    )
+    closing_candle = selected_candles.filter(
+        spot__isnull=False,
+    ).order_by("-timestamp").first()
+    has_historical_candles = closing_candle is not None
+    session_spot = closing_candle.spot if closing_candle else (latest.underlying_price if latest else None)
+    candle_summary = selected_candles.aggregate(
+        candles=Count("id"), contracts=Count("strike", distinct=True),
+        spot_low=Min("spot"), spot_high=Max("spot"),
+    )
     history_rows = list(
         selected_snapshots.order_by("-created_at")[:240]
     )
@@ -671,7 +692,7 @@ def index_oi(request):
             "put_oi_change": sum(row.oi - row.previous_oi for row in dashboard_strikes if row.option_type == "PE"),
             "pcr_change": latest.pcr - latest_opening_pcr if latest_opening_pcr else 0,
         }
-        max_oi = max((row.oi for row in all_strikes if row.strike in nearest_strikes), default=1)
+        max_oi = max((row.oi for row in all_strikes if row.strike in nearest_strikes), default=0) or 1
         for strike in sorted(nearest_strikes):
             call = by_contract.get((strike, "CE"))
             put = by_contract.get((strike, "PE"))
@@ -704,9 +725,13 @@ def index_oi(request):
         collector_status = json.loads(status_value) if status_value else {"state": "STARTING"}
     except json.JSONDecodeError:
         collector_status = {"state": "UNKNOWN"}
-    jump_report = historical_jump_report(underlying)
-    jump_candidates = live_jump_candidates(underlying)
+    jump_report = historical_jump_report(underlying, session_date=selected_date)
+    jump_candidates = live_jump_candidates(underlying) if selected_date == timezone.localdate() else []
     detector_state = jump_detector_state(underlying)
+    suggested_option = next(
+        (candidate for candidate in jump_candidates if candidate["score"] >= 55 and candidate.get("trade_ready")),
+        None,
+    )
     return render(
         request,
         "options_tracker/index_oi.html",
@@ -715,7 +740,11 @@ def index_oi(request):
             "underlying": underlying,
             "available_dates": available_dates,
             "selected_date": selected_date,
+            "is_historical": selected_date < timezone.localdate(),
             "latest": latest,
+            "has_historical_candles": has_historical_candles,
+            "session_spot": session_spot,
+            "candle_summary": candle_summary,
             "history_rows": history_rows,
             "history_data": history_data,
             "strike_chart_data": strike_chart_data,
@@ -726,6 +755,7 @@ def index_oi(request):
             "collector_status": collector_status,
             "jump_report": jump_report,
             "jump_candidates": jump_candidates,
+            "suggested_option": suggested_option,
             "detector_state": detector_state,
             "latest_changes": latest_changes,
         },

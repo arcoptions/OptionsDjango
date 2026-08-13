@@ -15,6 +15,7 @@ DHAN_OPTION_CHAIN_URL = "https://api.dhan.co/v2/optionchain"
 DHAN_EXPIRY_LIST_URL = "https://api.dhan.co/v2/optionchain/expirylist"
 DHAN_QUOTE_URL = "https://api.dhan.co/v2/marketfeed/quote"
 DHAN_ROLLING_OPTION_URL = "https://api.dhan.co/v2/charts/rollingoption"
+DHAN_INTRADAY_URL = "https://api.dhan.co/v2/charts/intraday"
 INDEX_CONFIG = {
     "NIFTY": {"security_id": 13, "option_segment": "NSE_FNO", "strike_step": 50},
     "SENSEX": {"security_id": 51, "option_segment": "BSE_FNO", "strike_step": 100},
@@ -289,13 +290,20 @@ def backfill_rolling_option_history(underlying, from_date, to_date, interval=1, 
                 "toDate": to_date.isoformat(),
             }
             response = requests.post(DHAN_ROLLING_OPTION_URL, json=payload, headers=_headers(), timeout=60)
-            response.raise_for_status()
-            time.sleep(0.25)
+            if not response.ok:
+                raise RuntimeError(
+                    f"Dhan rolling-option request failed ({response.status_code}): {response.text[:500]}"
+                )
+            time.sleep(3.1)
             side = (response.json().get("data") or {}).get("ce" if option_type == "CALL" else "pe") or {}
             timestamps = side.get("timestamp") or []
             fields = {name: side.get(name) or [] for name in ("strike", "spot", "open", "high", "low", "close", "volume", "oi", "iv")}
             rows = []
+            seen_timestamps = set()
             for index, epoch in enumerate(timestamps):
+                if epoch in seen_timestamps:
+                    continue
+                seen_timestamps.add(epoch)
                 value = lambda name: fields[name][index] if index < len(fields[name]) else None
                 rows.append(IndexOptionCandle(
                     underlying=underlying,
@@ -310,4 +318,66 @@ def backfill_rolling_option_history(underlying, from_date, to_date, interval=1, 
                 ))
             IndexOptionCandle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=1000)
             created += len(rows)
+    return created
+
+
+def backfill_fixed_option_history(underlying, session_date, interval=1):
+    underlying = underlying.upper()
+    config = INDEX_CONFIG[underlying]
+    snapshot = IndexOISnapshot.objects.filter(
+        underlying=underlying,
+        created_at__date=session_date,
+    ).prefetch_related("strikes").first()
+    if not snapshot:
+        raise RuntimeError(f"No saved {underlying} option-chain snapshot for {session_date}.")
+
+    contracts = {}
+    for row in snapshot.strikes.all():
+        if row.security_id:
+            contracts[(row.strike, row.option_type)] = row.security_id
+    if not contracts:
+        raise RuntimeError(f"No saved Dhan contract IDs for {underlying} on {session_date}.")
+
+    created = 0
+    for (strike, option_type), security_id in contracts.items():
+        payload = {
+            "securityId": security_id,
+            "exchangeSegment": config["option_segment"],
+            "instrument": "OPTIDX",
+            "interval": str(interval),
+            "oi": True,
+            "fromDate": f"{session_date.isoformat()} 09:15:00",
+            "toDate": f"{session_date.isoformat()} 15:30:00",
+        }
+        response = requests.post(DHAN_INTRADAY_URL, json=payload, headers=_headers(), timeout=60)
+        if not response.ok:
+            raise RuntimeError(
+                f"Dhan intraday request failed ({response.status_code}): {response.text[:500]}"
+            )
+        data = response.json()
+        timestamps = data.get("timestamp") or []
+        fields = {
+            name: data.get(name) or []
+            for name in ("open", "high", "low", "close", "volume", "open_interest")
+        }
+        relative_index = int((strike - snapshot.atm_strike) / config["strike_step"]) if snapshot.atm_strike else 0
+        relative_strike = "ATM" if relative_index == 0 else f"ATM{relative_index:+d}"
+        rows = []
+        for index, epoch in enumerate(timestamps):
+            value = lambda name: fields[name][index] if index < len(fields[name]) else None
+            rows.append(IndexOptionCandle(
+                underlying=underlying,
+                relative_strike=relative_strike,
+                option_type="CALL" if option_type == "CE" else "PUT",
+                interval_minutes=interval,
+                timestamp=datetime.fromtimestamp(epoch, tz=timezone.get_current_timezone()),
+                strike=strike,
+                spot=None,
+                open=value("open"), high=value("high"), low=value("low"), close=value("close"),
+                volume=value("volume") or 0, oi=value("open_interest") or 0,
+                implied_volatility=0,
+            ))
+        IndexOptionCandle.objects.bulk_create(rows, ignore_conflicts=True, batch_size=1000)
+        created += len(rows)
+        time.sleep(0.25)
     return created

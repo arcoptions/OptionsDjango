@@ -6,16 +6,58 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.management import call_command
 from django.test import TestCase
 from django.db import connection
 from django.utils import timezone
 
-from .index_oi_services import _buildup, _market_prices
-from .jump_detector import historical_jump_report
+from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
+from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeStyle
 from .services import _expiry_month_hint, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.track_telegram import Command as TrackTelegramCommand
+
+
+class IndexOIBackfillCommandTests(TestCase):
+	@patch("options_tracker.management.commands.backfill_index_oi_history.backfill_rolling_option_history")
+	def test_defaults_to_near_expiry(self, backfill):
+		backfill.return_value = 0
+
+		call_command("backfill_index_oi_history", days=2, underlying=["SENSEX"])
+
+		self.assertEqual(backfill.call_args.kwargs["expiry_code"], 1)
+
+	@patch("options_tracker.index_oi_services.time.sleep")
+	@patch("options_tracker.index_oi_services.requests.post")
+	@patch("options_tracker.index_oi_services._headers", return_value={})
+	def test_fixed_contract_backfill_uses_intraday_history(self, headers, post, sleep):
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=date(2026, 8, 13),
+			underlying_price=Decimal("78000"), atm_strike=Decimal("78000"),
+		)
+		IndexOISnapshot.objects.filter(id=snapshot.id).update(
+			created_at=timezone.make_aware(datetime(2026, 8, 13, 10, 0)),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=snapshot, strike=Decimal("77900"), option_type="CE", security_id="expired-77900",
+		)
+		post.return_value.ok = True
+		post.return_value.json.return_value = {
+			"timestamp": [1786605300], "open": [10], "high": [180], "low": [10],
+			"close": [170], "volume": [1000], "open_interest": [12000],
+		}
+
+		created = backfill_fixed_option_history("SENSEX", date(2026, 8, 13))
+
+		self.assertEqual(created, 1)
+		self.assertEqual(post.call_args.kwargs["json"]["securityId"], "expired-77900")
+		self.assertEqual(post.call_args.kwargs["json"]["instrument"], "OPTIDX")
+		self.assertTrue(post.call_args.kwargs["json"]["oi"])
+		candle = IndexOptionCandle.objects.get()
+		self.assertEqual(candle.strike, Decimal("77900"))
+		self.assertEqual(candle.relative_strike, "ATM-1")
+		self.assertEqual(candle.high, Decimal("180"))
 
 
 class TelegramTipParserTests(TestCase):
@@ -400,6 +442,79 @@ class DhanOptionTrackingTests(TestCase):
 
 
 class IndexOIIntelligenceTests(TestCase):
+	def _create_live_candidate_snapshots(self, spread=Decimal("0.40")):
+		trade_date = timezone.localdate()
+		previous = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=trade_date + timedelta(days=6),
+			underlying_price=Decimal("77880"), atm_strike=Decimal("77900"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=previous, strike=Decimal("77900"), option_type="CE", last_price=Decimal("20"),
+			oi=1000, volume=100, implied_volatility=10, delta=.4,
+		)
+		latest = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=trade_date + timedelta(days=6),
+			underlying_price=Decimal("77920"), atm_strike=Decimal("77900"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=latest, strike=Decimal("77900"), option_type="CE", last_price=Decimal("24"),
+			oi=1100, volume=300, implied_volatility=11, delta=.4,
+			top_bid_price=Decimal("24"), top_ask_price=Decimal("24") + spread,
+			top_bid_quantity=100, top_ask_quantity=80, buy_quantity=1200, sell_quantity=800,
+		)
+		IndexOISnapshot.objects.filter(id=previous.id).update(
+			created_at=timezone.make_aware(datetime.combine(trade_date, time(9, 27))),
+		)
+		IndexOISnapshot.objects.filter(id=latest.id).update(
+			created_at=timezone.make_aware(datetime.combine(trade_date, time(9, 28))),
+		)
+		return previous, latest
+
+	def test_live_candidate_has_bounded_trade_plan_when_execution_gates_pass(self):
+		oldest, previous = self._create_live_candidate_snapshots()
+		latest = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=timezone.localdate() + timedelta(days=6),
+			underlying_price=Decimal("77940"), atm_strike=Decimal("77900"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=latest, strike=Decimal("77900"), option_type="CE", last_price=Decimal("25"),
+			oi=1200, volume=600, implied_volatility=12, delta=.4,
+			top_bid_price=Decimal("25"), top_ask_price=Decimal("25.40"),
+			top_bid_quantity=100, top_ask_quantity=80, buy_quantity=1200, sell_quantity=800,
+		)
+		IndexOISnapshot.objects.filter(id=latest.id).update(
+			created_at=timezone.make_aware(datetime.combine(timezone.localdate(), time(9, 29))),
+		)
+
+		candidate = live_jump_candidates("SENSEX")[0]
+
+		self.assertTrue(candidate["trade_ready"])
+		self.assertLess(candidate["stop_loss"], candidate["entry"])
+		self.assertEqual(candidate["target_1"], round(candidate["entry"] + 2 * (candidate["entry"] - candidate["stop_loss"]), 2))
+		self.assertLessEqual(candidate["risk_percent"], 18)
+
+	def test_live_candidate_rejects_wide_spread(self):
+		self._create_live_candidate_snapshots(spread=Decimal("2"))
+
+		candidate = live_jump_candidates("SENSEX")[0]
+
+		self.assertFalse(candidate["trade_ready"])
+		self.assertIn("spread above 4%", candidate["rejection_reasons"])
+
+	@patch("options_tracker.jump_detector.timezone.localtime")
+	def test_detector_is_active_during_market_hours_on_non_expiry_weekday(self, localtime):
+		now = timezone.make_aware(datetime(2026, 8, 14, 11, 0))
+		localtime.return_value = now
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=date(2026, 8, 20), underlying_price=Decimal("77900"),
+		)
+		IndexOISnapshot.objects.filter(id=snapshot.id).update(created_at=now)
+
+		state = jump_detector_state("SENSEX")
+
+		self.assertTrue(state["active"])
+		self.assertEqual(state["label"], "ACTIVE MARKET HOURS")
+
 	def tearDown(self):
 		cache.clear()
 		super().tearDown()
@@ -413,6 +528,13 @@ class IndexOIIntelligenceTests(TestCase):
 
 		self.assertEqual(result, report)
 		historical_events.assert_not_called()
+
+	def test_refreshed_report_with_opening_trades_is_json_serializable(self):
+		from options_tracker.jump_detector import refresh_historical_jump_report
+
+		report = refresh_historical_jump_report("SENSEX")
+
+		self.assertIsInstance(json.dumps(report), str)
 
 	def test_classifies_price_and_oi_movement(self):
 		self.assertEqual(_buildup(Decimal("10"), 100), "LONG_BUILDUP")
@@ -458,12 +580,40 @@ class IndexOIIntelligenceTests(TestCase):
 		self.assertContains(response, "SENSEX OI Analysis")
 		self.assertContains(response, "OI vs price today")
 		self.assertContains(response, "ATM market depth")
-		self.assertContains(response, "Late-session jump detector")
+		self.assertContains(response, "Opening breakout setup")
 		self.assertContains(response, 'id="oi-strike-data"')
 		self.assertContains(response, "OI Change")
 		self.assertEqual(response.context["strike_chart_data"][0]["call_oi"], 1000)
 		self.assertEqual(response.context["strike_chart_data"][0]["call_change"], 750)
 		self.assertEqual(response.context["latest_changes"]["call_oi_change"], 750)
+
+	@patch("options_tracker.views.jump_detector_state", return_value={"active": False, "label": "MARKET CLOSED"})
+	@patch("options_tracker.views.live_jump_candidates")
+	def test_current_session_promotes_top_qualifying_option(self, candidates, detector_state):
+		candidates.return_value = [
+			{"strike": Decimal("77900"), "option_type": "CE", "relative_strike": "ATM",
+			 "premium": Decimal("24.35"), "score": 65, "evidence": ["IV compressed"],
+			 "oi_change": 100, "iv": 6.23, "trade_ready": True,
+			 "bid": Decimal("24.20"), "ask": Decimal("24.40"), "entry": 24.52,
+			 "stop_loss": 22.56, "target_1": 27.46, "target_2": 28.44,
+			 "risk_percent": 8.0, "exit_time": "15:20", "entry_rule": "Buy above trigger."},
+		]
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=timezone.localdate() + timedelta(days=6),
+			underlying_price=Decimal("77900"), atm_strike=Decimal("77900"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=snapshot, strike=Decimal("77900"), option_type="CE", last_price=Decimal("24.35"),
+		)
+
+		response = self.client.get("/index-oi/?underlying=SENSEX")
+
+		self.assertEqual(response.context["suggested_option"]["score"], 65)
+		self.assertContains(response, "Conditional setup")
+		self.assertContains(response, "77900 CE")
+		self.assertContains(response, "Trigger")
+		self.assertContains(response, "65")
+		self.assertContains(response, "Monitor only")
 
 	@patch("options_tracker.views.historical_jump_report")
 	def test_dashboard_can_select_historical_session(self, jump_report):
@@ -527,6 +677,101 @@ class IndexOIIntelligenceTests(TestCase):
 		self.assertEqual(first["score"], second["score"])
 		self.assertEqual(first["max_multiple"], 3)
 		self.assertEqual(second["max_multiple"], 10)
+
+	def test_sensex_detector_tracks_absolute_strike_across_moving_atm_labels(self):
+		expiry_day = date(2026, 8, 13)
+		contracts = (
+			(77900, 10, 180, ("ATM", "ATM", "ATM-1", "ATM-1")),
+			(78000, 4, 80, ("ATM+1", "ATM+1", "ATM", "ATM")),
+		)
+		for strike, start, finish, relative_strikes in contracts:
+			for (minute, premium), relative_strike in zip((
+				(time(14, 50), start),
+				(time(14, 55), start),
+				(time(15, 0), start * 2),
+				(time(15, 10), finish),
+			), relative_strikes):
+				IndexOptionCandle.objects.create(
+					underlying="SENSEX",
+					relative_strike=relative_strike,
+					option_type="CALL",
+					timestamp=timezone.make_aware(datetime.combine(expiry_day, minute)),
+					strike=Decimal(str(strike)),
+					spot=Decimal("78079"),
+					open=Decimal(str(premium)),
+					high=Decimal(str(premium)),
+					low=Decimal(str(premium)),
+					close=Decimal(str(premium)),
+					volume=1000,
+					oi=10000,
+					implied_volatility=20,
+				)
+
+		report = historical_jump_report("SENSEX", use_cache=False, session_date=expiry_day)
+		candidates = {row["strike"]: row for row in report["latest_candidates"]}
+
+		self.assertGreaterEqual(candidates[77900.0]["max_multiple"], 18)
+		self.assertGreaterEqual(candidates[78000.0]["max_multiple"], 20)
+		self.assertEqual(report["latest_date"], "2026-08-13")
+
+	def test_selected_session_report_excludes_other_expiry_dates(self):
+		for expiry_day, strike in ((date(2026, 8, 6), 77000), (date(2026, 8, 13), 78000)):
+			for minute, premium in ((time(14, 50), 10), (time(14, 55), 10), (time(15, 5), 40)):
+				IndexOptionCandle.objects.create(
+					underlying="SENSEX", relative_strike="ATM", option_type="CALL",
+					timestamp=timezone.make_aware(datetime.combine(expiry_day, minute)),
+					strike=Decimal(str(strike)), spot=Decimal(str(strike)), open=premium,
+					high=premium, low=premium, close=premium, volume=100, oi=1000,
+					implied_volatility=20,
+				)
+
+		report = historical_jump_report(
+			"SENSEX", use_cache=False, session_date=date(2026, 8, 13),
+		)
+
+		self.assertEqual(report["latest_date"], "2026-08-13")
+		self.assertEqual({row["strike"] for row in report["latest_candidates"]}, {78000.0})
+
+	@patch("options_tracker.views.historical_jump_report")
+	def test_historical_session_uses_final_rolling_candle_spot(self, jump_report):
+		jump_report.return_value = {"patterns": [], "segments": [], "latest_candidates": []}
+		expiry_day = date(2026, 8, 13)
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="SENSEX", expiry_date=expiry_day, underlying_price=Decimal("77716.48"),
+		)
+		IndexOISnapshot.objects.filter(id=snapshot.id).update(
+			created_at=timezone.make_aware(datetime(2026, 8, 13, 10, 29)),
+		)
+		IndexOptionCandle.objects.create(
+			underlying="SENSEX", relative_strike="ATM", option_type="CALL",
+			timestamp=timezone.make_aware(datetime(2026, 8, 13, 15, 29)),
+			strike=Decimal("78000"), spot=Decimal("78079.96"), open=10, high=180,
+			low=4, close=180, volume=1000, oi=10000, implied_volatility=20,
+		)
+
+		response = self.client.get("/index-oi/?underlying=SENSEX&date=2026-08-13")
+
+		self.assertEqual(response.context["session_spot"], Decimal("78079.96"))
+		self.assertContains(response, "78079.96")
+
+	@patch("options_tracker.views.historical_jump_report")
+	def test_candle_only_session_is_available_for_replay(self, jump_report):
+		jump_report.return_value = {"patterns": [], "segments": [], "latest_candidates": []}
+		IndexOptionCandle.objects.create(
+			underlying="SENSEX", relative_strike="ATM", option_type="CALL",
+			timestamp=timezone.make_aware(datetime(2026, 8, 6, 15, 29)),
+			strike=Decimal("78900"), spot=Decimal("78954.76"), open=10, high=100,
+			low=10, close=100, volume=1000, oi=10000, implied_volatility=20,
+		)
+
+		response = self.client.get("/index-oi/?underlying=SENSEX&date=2026-08-06")
+
+		self.assertContains(response, "06 Aug 2026")
+		self.assertContains(response, "78954.76")
+		self.assertContains(response, "Opening breakout setup")
+		self.assertContains(response, "Expired-options replay")
+		self.assertNotContains(response, "Current strike ranking")
+		self.assertNotContains(response, "OI vs price today")
 
 
 class TelegramWebhookTests(TestCase):
