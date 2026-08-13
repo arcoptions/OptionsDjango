@@ -1,23 +1,29 @@
 import re
 import json
 import os
+import secrets
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
-from django.db.models import Q
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models.deletion import ProtectedError
+from django.db.models import Count, Max, Min, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
-from .forms import SignalFilterForm, TelegramBulkForm, TipSignalForm, TradeExecutionForm, TriggerPromoteForm
+from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
+from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .models import (
     AppSetting,
     ChartinkTrigger,
     ChatMessage,
     DhanOrderEvent,
     IndexOISnapshot,
+    OptionOutcome,
     SignalStatus,
     TipSignal,
     TradeExecution,
@@ -27,14 +33,18 @@ from .models import (
 from .services import (
     archive_old_signals,
     classify_regime,
+    get_oi_interval_seconds,
+    get_dhan_credentials,
     parse_tip_text,
     place_super_order,
+    refresh_dhan_option_prices,
     risk_guard,
     score_signal,
     set_oi_interval_seconds,
     sync_chartink_from_legacy,
     sync_index_oi_from_legacy,
     sync_telegram_from_legacy,
+    validate_dhan_credentials,
 )
 
 
@@ -42,18 +52,86 @@ def home(request):
     return redirect("options_tracker")
 
 
-def _ingest_single_telegram_message(source_name, raw_text, trade_style):
+def market_ticker_api(request):
+    snapshot = IndexOISnapshot.objects.filter(underlying="NIFTY").order_by("-created_at").first()
+    if not snapshot or snapshot.underlying_price is None:
+        return JsonResponse({"ok": False, "error": "No NIFTY snapshot is available."}, status=503)
+    age_seconds = max(0, int((timezone.now() - snapshot.created_at).total_seconds()))
+    price = float(snapshot.underlying_price)
+    change = float(snapshot.underlying_change or 0)
+    previous = price - change
+    return JsonResponse({
+        "ok": True,
+        "symbol": "NIFTY50",
+        "price": price,
+        "change": change,
+        "change_percent": round(change / previous * 100, 2) if previous else 0,
+        "updated_at": timezone.localtime(snapshot.created_at).isoformat(),
+        "stale": age_seconds > 300,
+    })
+
+
+@staff_member_required(login_url="admin:login")
+@require_http_methods(["GET", "POST"])
+def dhan_settings(request):
+    token_setting = AppSetting.objects.filter(key="dhan_access_token").first()
+    access_token, configured_client_id = get_dhan_credentials()
+    form = DhanCredentialsForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        client_id = form.cleaned_data["client_id"] or configured_client_id
+        if not client_id:
+            form.add_error("client_id", "A Dhan client ID is required.")
+        else:
+            try:
+                validate_dhan_credentials(form.cleaned_data["access_token"], client_id)
+            except Exception as exc:
+                form.add_error("access_token", f"Dhan validation failed: {exc}")
+            else:
+                AppSetting.objects.update_or_create(
+                    key="dhan_access_token", defaults={"value": form.cleaned_data["access_token"]}
+                )
+                if form.cleaned_data["client_id"]:
+                    AppSetting.objects.update_or_create(key="dhan_client_id", defaults={"value": client_id})
+                messages.success(request, "Dhan access token validated and updated. Live feeds now use it.")
+                return redirect("dhan_settings")
+    return render(request, "options_tracker/dhan_settings.html", {
+        "title": "Dhan API Setup",
+        "form": form,
+        "dhan_configured": bool(access_token and configured_client_id),
+        "dhan_token_source": "Dashboard override" if token_setting else "Azure App Setting",
+        "dhan_token_updated_at": token_setting.updated_at if token_setting else None,
+        "dhan_token_expires_at": token_setting.updated_at + timedelta(hours=24) if token_setting else None,
+    })
+
+
+def _ingest_single_telegram_message(
+    source_name,
+    raw_text,
+    trade_style,
+    *,
+    source_category="",
+    telegram_chat_id=None,
+    telegram_message_id=None,
+    telegram_message_at=None,
+    raw_payload="",
+):
     source = str(source_name or "Telegram").strip() or "Telegram"
     text = str(raw_text or "").strip()
-    if not text:
+    if not text and (telegram_chat_id is None or telegram_message_id is None):
         return {"status": "empty"}
 
     normalized = " ".join(text.split())
-    if ChatMessage.objects.filter(source_name=source, normalized_text=normalized).exists():
+    if telegram_chat_id is not None and telegram_message_id is not None:
+        if ChatMessage.objects.filter(
+            telegram_chat_id=telegram_chat_id,
+            telegram_message_id=telegram_message_id,
+        ).exists():
+            return {"status": "duplicate"}
+    elif ChatMessage.objects.filter(source_name=source, normalized_text=normalized).exists():
         return {"status": "duplicate"}
 
-    parsed = parse_tip_text(text)
-    is_tip = bool(parsed["symbol"] and parsed["direction"] and parsed["sl"])
+    parsed = parse_tip_text(text) if source_category == "TIPS" else {}
+    is_tip = bool(parsed.get("symbol") and parsed.get("direction") and parsed.get("sl") and parsed.get("t1"))
     linked_signal = None
     tip_created = False
 
@@ -81,7 +159,12 @@ def _ingest_single_telegram_message(source_name, raw_text, trade_style):
 
     row = ChatMessage.objects.create(
         source_name=source,
+        source_category=source_category,
+        telegram_chat_id=telegram_chat_id,
+        telegram_message_id=telegram_message_id,
+        telegram_message_at=telegram_message_at,
         raw_text=text,
+        raw_payload=raw_payload,
         normalized_text=normalized,
         is_tip_candidate=is_tip,
         linked_signal=linked_signal,
@@ -101,7 +184,11 @@ def telegram_ingest_api(request):
     expected_token = str(AppSetting.objects.filter(key="telegram_ingest_token").values_list("value", flat=True).first() or "").strip()
     if not expected_token:
         expected_token = str(os.environ.get("TELEGRAM_INGEST_TOKEN", "") or "").strip()
-    incoming_token = str(request.headers.get("X-Telegram-Ingest-Token", "") or "").strip()
+    incoming_token = str(
+        request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        or request.headers.get("X-Telegram-Ingest-Token")
+        or ""
+    ).strip()
     if expected_token and incoming_token != expected_token:
         return JsonResponse({"ok": False, "error": "Unauthorized"}, status=401)
 
@@ -109,6 +196,21 @@ def telegram_ingest_api(request):
         payload = json.loads((request.body or b"{}").decode("utf-8"))
     except Exception:
         return JsonResponse({"ok": False, "error": "Invalid JSON body"}, status=400)
+
+    telegram_message = next(
+        (
+            payload.get(key)
+            for key in ("message", "channel_post", "edited_message", "edited_channel_post")
+            if isinstance(payload.get(key), dict)
+        ),
+        None,
+    )
+    if telegram_message:
+        chat = telegram_message.get("chat") if isinstance(telegram_message.get("chat"), dict) else {}
+        source_name = chat.get("title") or chat.get("username") or chat.get("first_name") or "Telegram"
+        raw_text = telegram_message.get("text") or telegram_message.get("caption") or ""
+        result = _ingest_single_telegram_message(source_name, raw_text, TradeStyle.INTRADAY)
+        return JsonResponse({"ok": True, **result})
 
     source_name = payload.get("source_name") or payload.get("source") or "Telegram"
     trade_style = str(payload.get("trade_style") or TradeStyle.INTRADAY).strip().upper()
@@ -150,6 +252,41 @@ def telegram_ingest_api(request):
     return JsonResponse({"ok": True, **result})
 
 
+@require_http_methods(["GET"])
+def telegram_tracker_status_api(request):
+    expected_token = os.environ.get("TELEGRAM_DIAGNOSTICS_TOKEN", "")
+    incoming_token = request.headers.get("X-Telegram-Diagnostics-Token", "")
+    if not expected_token or not secrets.compare_digest(incoming_token, expected_token):
+        return JsonResponse({"ok": False, "error": "Unauthorized"}, status=401)
+
+    catchup_days = int(os.environ.get("TELEGRAM_CATCHUP_DAYS", "7"))
+    cutoff_date = timezone.localdate() - timedelta(days=catchup_days - 1)
+    cutoff = timezone.make_aware(datetime.combine(cutoff_date, time.min))
+    rows = ChatMessage.objects.filter(telegram_message_at__gte=cutoff)
+    status_value = AppSetting.objects.filter(key="telegram_tracker_status").values_list("value", flat=True).first()
+    try:
+        tracker_status = json.loads(status_value) if status_value else None
+    except json.JSONDecodeError:
+        tracker_status = {"state": "INVALID_STATUS"}
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "cutoff": cutoff.isoformat(),
+            "tracker": tracker_status,
+            "total": rows.count(),
+            "by_category": list(
+                rows.values("source_category").annotate(count=Count("id")).order_by("source_category")
+            ),
+            "by_source": list(
+                rows.values("source_name", "source_category")
+                .annotate(count=Count("id"), first=Min("telegram_message_at"), last=Max("telegram_message_at"))
+                .order_by("source_category", "source_name")
+            ),
+        }
+    )
+
+
 @require_http_methods(["GET", "POST"])
 def options_tracker(request):
     if request.method == "GET" and request.GET.get("sync") == "legacy":
@@ -175,7 +312,8 @@ def options_tracker(request):
 
     panel = request.GET.get("panel", "").strip().lower()
     f = SignalFilterForm(request.GET)
-    items = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).order_by("-tip_time", "-id")
+    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).filter(direction__in=["CE", "PE"])
+    items = options.order_by("-tip_time", "-id")
     if f.is_valid():
         status = f.cleaned_data.get("status")
         source = f.cleaned_data.get("source")
@@ -186,7 +324,7 @@ def options_tracker(request):
         if status:
             items = items.filter(status=status)
         if source:
-            items = items.filter(source_name__icontains=source)
+            items = items.filter(source_name=source)
         if style:
             items = items.filter(trade_style=style)
         if q:
@@ -196,6 +334,10 @@ def options_tracker(request):
         if score_max.isdigit():
             items = items.filter(score__lte=int(score_max))
 
+    outcome = request.GET.get("outcome", "").strip()
+    if outcome in OptionOutcome.values:
+        items = items.filter(outcome_status=outcome)
+
     ctx = {
         "title": "Options Tracker",
         "items": items[:300],
@@ -204,8 +346,68 @@ def options_tracker(request):
         "score_min": request.GET.get("score_min", ""),
         "score_max": request.GET.get("score_max", ""),
         "open_trade_panel": panel in {"trade", "new"},
+        "sources": options.order_by("source_name").values_list("source_name", flat=True).distinct(),
+        "selected_source": request.GET.get("source", ""),
+        "selected_outcome": outcome,
+        "outcomes": OptionOutcome.choices,
+        "tracked_count": options.count(),
+        "target_count": options.filter(outcome_status=OptionOutcome.TARGET_1).count(),
+        "stop_loss_count": options.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
     }
     return render(request, "options_tracker/options_tracker.html", ctx)
+
+
+@require_http_methods(["POST"])
+def option_live_prices(request):
+    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).filter(direction__in=["CE", "PE"])
+    refresh_result = refresh_dhan_option_prices(options)
+    rows = list(options.values(
+        "id", "live_price", "entry_price", "outcome_status", "quote_updated_at", "security_id", "exchange_segment",
+        "dhan_display_name", "expiry_date",
+    ))
+    return JsonResponse({
+        "ok": not bool(refresh_result["error"]),
+        "error": refresh_result["error"],
+        "rows": rows,
+        "counts": {
+            "tracked": options.count(),
+            "target": options.filter(outcome_status=OptionOutcome.TARGET_1).count(),
+            "stop_loss": options.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
+        },
+    })
+
+
+@require_http_methods(["POST"])
+def option_edit(request, signal_id):
+    signal = get_object_or_404(TipSignal, id=signal_id, direction__in=["CE", "PE"])
+    form = TrackedOptionEditForm(request.POST, instance=signal)
+    if form.is_valid():
+        signal = form.save(commit=False)
+        signal.score, signal.recommendation, signal.reason_tags = score_signal(signal)
+        signal.security_id = ""
+        signal.exchange_segment = ""
+        signal.dhan_display_name = ""
+        signal.live_price = None
+        signal.quote_updated_at = None
+        signal.save()
+        messages.success(request, f"Updated {signal.option_symbol}.")
+    else:
+        messages.error(request, "Could not update option: " + "; ".join(
+            error for errors in form.errors.values() for error in errors
+        ))
+    return redirect("options_tracker")
+
+
+@require_http_methods(["POST"])
+def option_delete(request, signal_id):
+    signal = get_object_or_404(TipSignal, id=signal_id, direction__in=["CE", "PE"])
+    symbol = signal.option_symbol
+    try:
+        signal.delete()
+        messages.success(request, f"Deleted {symbol} from tracked options.")
+    except ProtectedError:
+        messages.error(request, f"Cannot delete {symbol} because it has trade executions.")
+    return redirect("options_tracker")
 
 
 @require_http_methods(["GET", "POST"])
@@ -294,74 +496,19 @@ def telegram_feed(request):
         created_tips = 0
         tracked_messages = 0
         skipped_messages = 0
-        created_message_ids = []
         for block in blocks:
-            normalized = " ".join(block.split())
-            exists = ChatMessage.objects.filter(source_name=source, normalized_text=normalized).exists()
-            if exists:
+            result = _ingest_single_telegram_message(
+                source,
+                block,
+                style,
+                source_category="TIPS",
+            )
+            if result["status"] == "duplicate":
                 skipped_messages += 1
                 continue
-
-            parsed = parse_tip_text(block)
-            is_tip = bool(parsed["symbol"] and parsed["direction"] and parsed["sl"])
-            linked_signal = None
-            if is_tip:
-                linked_signal = TipSignal.objects.filter(source_type="TELEGRAM", source_name=source, raw_text=block).first()
-                if not linked_signal:
-                    linked_signal = TipSignal(
-                        source_type="TELEGRAM",
-                        source_name=source,
-                        raw_text=block,
-                        option_symbol=parsed["symbol"],
-                        direction=parsed["direction"],
-                        trade_style=style,
-                        entry_price=parsed["entry"],
-                        stop_loss=parsed["sl"],
-                        target_1=parsed["t1"],
-                        target_2=parsed["t2"],
-                        target_3=parsed["t3"],
-                        status=SignalStatus.CANDIDATE,
-                    )
-                    linked_signal.score, linked_signal.recommendation, linked_signal.reason_tags = score_signal(linked_signal)
-                    linked_signal.save()
-                    created_tips += 1
-
-            row = ChatMessage.objects.create(
-                source_name=source,
-                raw_text=block,
-                normalized_text=normalized,
-                is_tip_candidate=is_tip,
-                linked_signal=linked_signal,
-            )
-            created_message_ids.append(row.id)
-            tracked_messages += 1
-
-        if created_tips == 0 and tracked_messages > 0:
-            aggregate_parsed = parse_tip_text(raw_bulk)
-            aggregate_is_tip = bool(aggregate_parsed["symbol"] and aggregate_parsed["direction"] and aggregate_parsed["sl"])
-            if aggregate_is_tip:
-                aggregate_signal = TipSignal.objects.filter(source_type="TELEGRAM", source_name=source, raw_text=raw_bulk).first()
-                if not aggregate_signal:
-                    aggregate_signal = TipSignal(
-                        source_type="TELEGRAM",
-                        source_name=source,
-                        raw_text=raw_bulk,
-                        option_symbol=aggregate_parsed["symbol"],
-                        direction=aggregate_parsed["direction"],
-                        trade_style=style,
-                        entry_price=aggregate_parsed["entry"],
-                        stop_loss=aggregate_parsed["sl"],
-                        target_1=aggregate_parsed["t1"],
-                        target_2=aggregate_parsed["t2"],
-                        target_3=aggregate_parsed["t3"],
-                        status=SignalStatus.CANDIDATE,
-                    )
-                    aggregate_signal.score, aggregate_signal.recommendation, aggregate_signal.reason_tags = score_signal(aggregate_signal)
-                    aggregate_signal.save()
-                    created_tips += 1
-
-                if created_message_ids:
-                    ChatMessage.objects.filter(id__in=created_message_ids).update(is_tip_candidate=True, linked_signal=aggregate_signal)
+            if result["status"] == "saved":
+                tracked_messages += 1
+                created_tips += int(result["tip_created"])
 
         messages.success(
             request,
@@ -443,42 +590,118 @@ def recommendations(request):
 @require_http_methods(["GET", "POST"])
 def index_oi(request):
     if request.method == "POST":
-        interval = int(request.POST.get("interval_seconds", "60"))
+        interval = int(request.POST.get("interval_seconds", "30"))
         set_oi_interval_seconds(interval)
         messages.success(request, f"OI polling interval set to {interval} seconds.")
         return redirect("index_oi")
 
-    interval_setting = AppSetting.objects.filter(key="oi_interval_seconds").first()
-    selected_interval = int(interval_setting.value) if interval_setting else 60
+    selected_interval = get_oi_interval_seconds()
+    underlying = request.GET.get("underlying", "SENSEX").upper()
+    if underlying not in {"NIFTY", "SENSEX"}:
+        underlying = "SENSEX"
+    latest = IndexOISnapshot.objects.filter(underlying=underlying).prefetch_related("strikes").first()
+    history_rows = list(
+        IndexOISnapshot.objects.filter(
+            underlying=underlying,
+            created_at__date=timezone.localdate(),
+        ).order_by("-created_at")[:240]
+    )
+    history_rows.reverse()
+    opening_call_oi = history_rows[0].call_oi if history_rows else 0
+    opening_put_oi = history_rows[0].put_oi if history_rows else 0
+    opening_pcr = opening_put_oi / opening_call_oi if opening_call_oi else 0
+    history_data = []
+    for row in history_rows:
+        history_data.append({
+            "time": timezone.localtime(row.created_at).strftime("%H:%M:%S"),
+            "price": float(row.underlying_price or 0),
+            "price_change": float(row.underlying_change or 0),
+            "call_oi": row.call_oi,
+            "put_oi": row.put_oi,
+            "call_oi_change": row.call_oi - opening_call_oi,
+            "put_oi_change": row.put_oi - opening_put_oi,
+            "pcr": row.pcr,
+            "pcr_change": row.pcr - opening_pcr if opening_pcr else 0,
+        })
+    strike_profile = []
+    strike_chart_data = []
+    depth_rows = []
+    movement_rows = []
+    latest_changes = history_data[-1] if history_data else {
+        "call_oi_change": 0, "put_oi_change": 0, "pcr_change": 0,
+    }
+    if latest and latest.atm_strike is not None:
+        all_strikes = list(latest.strikes.all())
+        nearest_strikes = sorted(
+            {row.strike for row in all_strikes},
+            key=lambda strike: abs(strike - latest.atm_strike),
+        )[:11]
+        by_contract = {(row.strike, row.option_type): row for row in all_strikes}
+        dashboard_strikes = [row for row in all_strikes if row.strike in nearest_strikes]
+        latest_opening_call_oi = sum(row.previous_oi for row in dashboard_strikes if row.option_type == "CE")
+        latest_opening_put_oi = sum(row.previous_oi for row in dashboard_strikes if row.option_type == "PE")
+        latest_opening_pcr = latest_opening_put_oi / latest_opening_call_oi if latest_opening_call_oi else 0
+        latest_changes = {
+            "call_oi_change": sum(row.oi - row.previous_oi for row in dashboard_strikes if row.option_type == "CE"),
+            "put_oi_change": sum(row.oi - row.previous_oi for row in dashboard_strikes if row.option_type == "PE"),
+            "pcr_change": latest.pcr - latest_opening_pcr if latest_opening_pcr else 0,
+        }
+        max_oi = max((row.oi for row in all_strikes if row.strike in nearest_strikes), default=1)
+        for strike in sorted(nearest_strikes):
+            call = by_contract.get((strike, "CE"))
+            put = by_contract.get((strike, "PE"))
+            strike_profile.append({
+                "strike": strike,
+                "call": call,
+                "put": put,
+                "call_width": round((call.oi / max_oi) * 100, 1) if call else 0,
+                "put_width": round((put.oi / max_oi) * 100, 1) if put else 0,
+            })
+            strike_chart_data.append({
+                "strike": float(strike),
+                "call_oi": call.oi if call else 0,
+                "put_oi": put.oi if put else 0,
+                "call_change": call.oi - call.previous_oi if call else 0,
+                "put_change": put.oi - put.previous_oi if put else 0,
+                "atm": strike == latest.atm_strike,
+            })
+        for row in (strike for strike in all_strikes if strike.is_atm):
+            buy_depth = (row.depth or {}).get("buy", [])
+            sell_depth = (row.depth or {}).get("sell", [])
+            for level in range(max(len(buy_depth), len(sell_depth), 5)):
+                bid = buy_depth[level] if level < len(buy_depth) else {}
+                ask = sell_depth[level] if level < len(sell_depth) else {}
+                depth_rows.append({"contract": row.option_type, "level": level + 1, "bid": bid, "ask": ask})
+        movement_rows = sorted(all_strikes, key=lambda row: abs(row.price_change), reverse=True)[:8]
 
-    if request.GET.get("mock") == "1":
-        for underlying, put_oi, call_oi in (("NIFTY", 1540000, 1320000), ("SENSEX", 940000, 1010000)):
-            regime = classify_regime(put_oi, call_oi)
-            pcr = round((put_oi / call_oi), 3) if call_oi else 0.0
-            IndexOISnapshot.objects.create(
-                underlying=underlying,
-                put_oi=put_oi,
-                call_oi=call_oi,
-                pcr=pcr,
-                regime=regime,
-                interval_seconds=selected_interval,
-            )
-        messages.info(request, "Mock OI snapshots inserted.")
-        return redirect("index_oi")
-
-    if request.GET.get("sync") == "1":
-        inserted, status_msg = sync_index_oi_from_legacy()
-        if status_msg == "OK":
-            messages.success(request, f"Synced {inserted} index OI snapshots from legacy DB.")
-        else:
-            messages.warning(request, f"Sync partial: {inserted}. {status_msg}")
-        return redirect("index_oi")
-
-    rows = IndexOISnapshot.objects.all()[:200]
+    status_value = AppSetting.objects.filter(key="index_oi_collector_status").values_list("value", flat=True).first()
+    try:
+        collector_status = json.loads(status_value) if status_value else {"state": "STARTING"}
+    except json.JSONDecodeError:
+        collector_status = {"state": "UNKNOWN"}
+    jump_report = historical_jump_report(underlying)
+    jump_candidates = live_jump_candidates(underlying)
+    detector_state = jump_detector_state(underlying)
     return render(
         request,
         "options_tracker/index_oi.html",
-        {"title": "Index OI", "rows": rows, "selected_interval": selected_interval},
+        {
+            "title": "Index OI Intelligence",
+            "underlying": underlying,
+            "latest": latest,
+            "history_rows": history_rows,
+            "history_data": history_data,
+            "strike_chart_data": strike_chart_data,
+            "strike_profile": strike_profile,
+            "depth_rows": depth_rows,
+            "movement_rows": movement_rows,
+            "selected_interval": selected_interval,
+            "collector_status": collector_status,
+            "jump_report": jump_report,
+            "jump_candidates": jump_candidates,
+            "detector_state": detector_state,
+            "latest_changes": latest_changes,
+        },
     )
 
 

@@ -185,7 +185,7 @@
         <div class="brand-text">TRADING JOURNAL</div>
       </div>
       <a class="side-button side-primary" href="/options/?panel=trade#quick-actions">Log New Trade</a>
-      <a class="side-button side-link" href="/options/?sync=legacy">API &amp; Sync Setup</a>
+      <a class="side-button side-link" href="{% url 'dhan_settings' %}">Dhan API Setup</a>
       <div class="side-nav">
         {% for label, url in shell_nav_items %}
           <a class="nav-item {% if request.path == url %}active{% endif %}" href="{{ url }}">{{ label }}</a>
@@ -208,12 +208,15 @@
           {% for label, url in shell_nav_items %}
             <a href="{{ url }}">{{ label }}</a>
           {% endfor %}
+          <a href="{% url 'dhan_settings' %}">Dhan API Setup</a>
         </div>
       </div>
 
       <div class="top-strip">
-        <div class="market-pill">
-          NIFTY50 23869.60 <span class="down">-126.65 (-0.53%) ▼</span>
+        <div class="market-pill" id="market-ticker" title="{% if shell_nifty_ticker %}Dhan snapshot {{ shell_nifty_ticker.created_at|date:'d M Y h:i:s A' }}{% endif %}">
+          NIFTY50 <strong id="ticker-price">{% if shell_nifty_ticker.underlying_price %}{{ shell_nifty_ticker.underlying_price }}{% else %}-{% endif %}</strong>
+          <span id="ticker-change" class="{% if shell_nifty_ticker.underlying_change >= 0 %}up{% else %}down{% endif %}">{% if shell_nifty_ticker %}{{ shell_nifty_ticker.underlying_change|default:0 }}{% endif %}</span>
+          <small id="ticker-status">{% if shell_nifty_stale %}STALE{% else %}LIVE{% endif %}</small>
         </div>
         <div class="row" style="margin-left:auto;">
           <a class="btn secondary" href="/options/">UI Reset</a>
@@ -245,5 +248,29 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+  <script>
+    (() => {
+      const ticker = document.getElementById("market-ticker");
+      if (!ticker) return;
+      const refreshTicker = async () => {
+        try {
+          const response = await fetch("{% url 'market_ticker_api' %}", {headers: {"Accept": "application/json"}});
+          const data = await response.json();
+          if (!response.ok || !data.ok) throw new Error(data.error || "Ticker unavailable");
+          document.getElementById("ticker-price").textContent = Number(data.price).toFixed(2);
+          const change = document.getElementById("ticker-change");
+          const sign = data.change >= 0 ? "+" : "";
+          change.textContent = `${sign}${Number(data.change).toFixed(2)} (${sign}${Number(data.change_percent).toFixed(2)}%)`;
+          change.className = data.change >= 0 ? "up" : "down";
+          document.getElementById("ticker-status").textContent = data.stale ? "STALE" : "LIVE";
+          ticker.title = `Dhan snapshot ${new Date(data.updated_at).toLocaleString()}`;
+        } catch (error) {
+          document.getElementById("ticker-status").textContent = "UNAVAILABLE";
+        }
+      };
+      refreshTicker();
+      window.setInterval(refreshTicker, 30000);
+    })();
+  </script>
 </body>
 </html>

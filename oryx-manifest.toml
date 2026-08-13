@@ -1,0 +1,6 @@
+PythonVersion="3.13.13"
+virtualEnvName="antenv"
+OperationId="performance-recovery-20260804"
+SourceDirectoryInBuildContainer="/tmp/performance-recovery-20260804"
+PlatformName="python"
+CompressDestinationDir="true"

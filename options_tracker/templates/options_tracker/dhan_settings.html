@@ -1,0 +1,24 @@
+{% extends "options_tracker/base.html" %}
+{% block content %}
+<section class="card dhan-settings">
+  <div class="settings-head">
+    <div><h2>Dhan API connection</h2><p class="muted">Replace the access token after its daily expiry. The new token is validated before activation.</p></div>
+    <span class="connection-state {% if dhan_configured %}connected{% endif %}">{% if dhan_configured %}CONFIGURED{% else %}NOT CONFIGURED{% endif %}</span>
+  </div>
+  <dl class="credential-status">
+    <div><dt>Active source</dt><dd>{{ dhan_token_source }}</dd></div>
+    <div><dt>Updated</dt><dd>{% if dhan_token_updated_at %}{{ dhan_token_updated_at|date:"d M Y h:i A" }}{% else %}Managed in Azure{% endif %}</dd></div>
+    <div><dt>Expected expiry</dt><dd>{% if dhan_token_expires_at %}{{ dhan_token_expires_at|date:"d M Y h:i A" }}{% else %}Update when Dhan returns 401{% endif %}</dd></div>
+  </dl>
+  <form method="post" class="token-form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <label>New access token{{ form.access_token }}{{ form.access_token.errors }}<small>{{ form.access_token.help_text }}</small></label>
+    <label>Client ID{{ form.client_id }}{{ form.client_id.errors }}<small>{{ form.client_id.help_text }}</small></label>
+    <button class="btn" type="submit">Validate &amp; Update Token</button>
+  </form>
+</section>
+<style>
+  .dhan-settings{max-width:820px}.settings-head{align-items:start;display:flex;justify-content:space-between;gap:16px}.settings-head h2{margin:0 0 5px}.connection-state{border:1px solid #d6dce4;color:#64748b;font-size:11px;font-weight:800;padding:7px 9px}.connection-state.connected{background:#ecfdf5;border-color:#86efac;color:#166534}.credential-status{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e5e7eb;margin:20px 0}.credential-status div{background:#f8fafc;padding:14px}.credential-status dt{color:#64748b;font-size:11px}.credential-status dd{font-weight:700;margin:5px 0 0}.token-form{display:grid;gap:14px}.token-form label{color:#475569;font-size:12px}.token-form input{display:block;margin-top:5px}.token-form small{display:block;margin-top:4px}.token-form .errorlist{color:#dc2626;margin:5px 0;padding-left:18px}.token-form .btn{justify-self:start}@media(max-width:700px){.credential-status{grid-template-columns:1fr}.settings-head{flex-direction:column}}
+</style>
+{% endblock %}

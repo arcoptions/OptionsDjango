@@ -1,47 +1,56 @@
 {% extends "options_tracker/base.html" %}
 {% block content %}
 <div class="card">
-  <h2>Telegram Feed</h2>
-  <p class="muted">Paste copied chat blocks from Telegram Web. Every block is stored as a discussion, and tip-like blocks are auto-added to Options Tracker.</p>
-  <div class="row"><a class="btn" href="?sync=1" style="text-decoration:none; display:inline-block;">Sync From Legacy Telegram</a></div>
-  <form method="post">
+  <div class="row" style="justify-content: space-between; align-items: center;">
+    <div>
+      <h2>Telegram Feed</h2>
+      <p class="muted">Tips are extracted only from configured tips channels. All incoming messages remain available in Raw Chat.</p>
+    </div>
+    <button class="btn" type="button" id="toggle-raw-form" aria-expanded="{% if form.errors %}true{% else %}false{% endif %}" aria-controls="raw-telegram-form">Add Raw Telegram Text</button>
+  </div>
+  <form method="post" id="raw-telegram-form" {% if not form.errors %}hidden{% endif %}>
     {% csrf_token %}
     {{ form.as_p }}
-    <button class="btn" type="submit">Track Discussions + Parse Tips</button>
+    <button class="btn" type="submit">Add Telegram Text</button>
   </form>
 </div>
 
 <div class="card">
+  <div class="telegram-tabs" role="tablist" aria-label="Telegram feed views">
+    <button type="button" class="telegram-tab active" role="tab" aria-selected="true" aria-controls="parsed-panel" id="parsed-tab">Parsed Telegram</button>
+    <button type="button" class="telegram-tab" role="tab" aria-selected="false" aria-controls="chat-panel" id="chat-tab">Chat</button>
+  </div>
+
+  <section id="parsed-panel" role="tabpanel" aria-labelledby="parsed-tab">
   <h3>Parsed Telegram Tips</h3>
   <form method="get" class="grid">
     <label>Source</label><input name="source" value="{{ source }}" />
-    <label>Style</label>
-    <select name="style">
-      <option value="" {% if not style %}selected{% endif %}>All</option>
-      <option value="INTRADAY" {% if style == 'INTRADAY' %}selected{% endif %}>INTRADAY</option>
-      <option value="SWING" {% if style == 'SWING' %}selected{% endif %}>SWING</option>
-    </select>
-    <label>Symbol/Text</label><input name="q" value="{{ q }}" />
+    <label>Stock/Text</label><input name="q" value="{{ q }}" />
     <div><button class="btn" type="submit">Apply Filters</button></div>
   </form>
   <table>
-    <thead><tr><th>Time</th><th>Source</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>SL</th><th>T1</th><th>T2</th><th>T3</th><th>Score</th></tr></thead>
+    <thead><tr><th>Time</th><th>Source</th><th>Stock</th><th>SL</th><th>Targets</th><th>Raw</th></tr></thead>
     <tbody>
       {% for x in feed %}
       <tr>
-        <td>{{ x.tip_time|date:"Y-m-d H:i" }}</td><td>{{ x.source_name }}</td><td>{{ x.option_symbol }}</td><td>{{ x.direction }}</td>
-        <td>{{ x.entry_price }}</td><td>{{ x.stop_loss }}</td><td>{{ x.target_1 }}</td><td>{{ x.target_2 }}</td><td>{{ x.target_3 }}</td><td>{{ x.score }}</td>
+        <td>{{ x.tip_time|date:"Y-m-d H:i" }}</td>
+        <td>{{ x.source_name }}</td>
+        <td><strong>{{ x.option_symbol }}</strong></td>
+        <td>{{ x.stop_loss }}</td>
+        <td>{{ x.target_1|default:"-" }}{% if x.target_2 %} / {{ x.target_2 }}{% endif %}{% if x.target_3 %} / {{ x.target_3 }}{% endif %}</td>
+        <td><details><summary class="raw-summary">View</summary><div class="raw-message">{{ x.raw_text }}</div></details></td>
       </tr>
       {% empty %}
-      <tr><td colspan="10">No telegram tips yet.</td></tr>
+      <tr><td colspan="6">No parsed tips yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
-</div>
+  </section>
 
-<div class="card">
+  <section id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden>
   <h3>Tracked Chat Discussions</h3>
   <form method="get" class="grid">
+    <input type="hidden" name="tab" value="chat" />
     <label>Source</label><input name="source" value="{{ source }}" />
     <label>Text Contains</label><input name="discussion_q" value="{{ discussion_q }}" />
     <div><button class="btn" type="submit">Apply Filters</button></div>
@@ -62,5 +71,37 @@
       {% endfor %}
     </tbody>
   </table>
+  </section>
 </div>
+
+<style>
+  .telegram-tabs { display: flex; gap: 6px; border-bottom: 1px solid #dfe5ef; margin-bottom: 20px; }
+  .telegram-tab { appearance: none; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #52627a; cursor: pointer; font: inherit; font-weight: 700; padding: 11px 16px; }
+  .telegram-tab.active { border-bottom-color: #d8a83e; color: #10182b; }
+  .raw-summary { color: #805d09; cursor: pointer; font-weight: 700; }
+  .raw-message { margin-top: 8px; min-width: 280px; max-width: 520px; white-space: normal; }
+</style>
+<script>
+  (() => {
+    const rawButton = document.getElementById("toggle-raw-form");
+    const rawForm = document.getElementById("raw-telegram-form");
+    rawButton.addEventListener("click", () => {
+      rawForm.hidden = !rawForm.hidden;
+      rawButton.setAttribute("aria-expanded", String(!rawForm.hidden));
+    });
+
+    const tabs = document.querySelectorAll(".telegram-tab");
+    const panels = document.querySelectorAll("[role='tabpanel']");
+    const activateTab = (tab) => {
+      tabs.forEach((item) => {
+        const active = item === tab;
+        item.classList.toggle("active", active);
+        item.setAttribute("aria-selected", String(active));
+      });
+      panels.forEach((panel) => { panel.hidden = panel.id !== tab.getAttribute("aria-controls"); });
+    };
+    tabs.forEach((tab) => tab.addEventListener("click", () => activateTab(tab)));
+    if (new URLSearchParams(window.location.search).get("tab") === "chat") activateTab(document.getElementById("chat-tab"));
+  })();
+</script>
 {% endblock %}

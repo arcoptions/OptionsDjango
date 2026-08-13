@@ -1,6 +1,7 @@
 from django import forms
 
 from .models import ChartinkTrigger, SignalStatus, TipSignal, TradeExecution, TradeStyle
+from .telegram_sources import SOURCES
 
 
 class TipSignalForm(forms.ModelForm):
@@ -23,8 +24,24 @@ class TipSignalForm(forms.ModelForm):
         ]
 
 
+class TrackedOptionEditForm(forms.ModelForm):
+    class Meta:
+        model = TipSignal
+        fields = [
+            "source_name",
+            "option_symbol",
+            "entry_price",
+            "stop_loss",
+            "target_1",
+            "target_2",
+            "target_3",
+            "expiry_date",
+            "outcome_status",
+        ]
+
+
 class TelegramBulkForm(forms.Form):
-    source_name = forms.CharField(max_length=120)
+    source_name = forms.ChoiceField(choices=[(source.name, source.name) for source in SOURCES if source.category == "TIPS"])
     trade_style = forms.ChoiceField(choices=TradeStyle.choices)
     raw_bulk_text = forms.CharField(widget=forms.Textarea)
 
@@ -52,3 +69,16 @@ class SignalFilterForm(forms.Form):
     source = forms.CharField(required=False)
     style = forms.ChoiceField(required=False, choices=[("", "All")] + list(TradeStyle.choices))
     q = forms.CharField(required=False)
+
+
+class DhanCredentialsForm(forms.Form):
+    access_token = forms.CharField(
+        strip=True,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}, render_value=False),
+        help_text="Generate a fresh access token in Dhan Web and paste it here.",
+    )
+    client_id = forms.CharField(
+        required=False,
+        strip=True,
+        help_text="Leave blank to keep the configured Dhan client ID.",
+    )

@@ -1,64 +1,158 @@
 {% extends "options_tracker/base.html" %}
 {% block content %}
+<div class="tracking-stats">
+  <div class="tracking-stat"><span>Options Tracked</span><strong id="tracked-count">{{ tracked_count }}</strong></div>
+  <div class="tracking-stat target"><span>Target 1 Hit</span><strong id="target-count">{{ target_count }}</strong></div>
+  <div class="tracking-stat stop"><span>Stop Loss Hit</span><strong id="stop-loss-count">{{ stop_loss_count }}</strong></div>
+  <div class="tracking-stat"><span>Dhan Feed</span><strong class="feed-state" id="feed-state">Connecting</strong></div>
+</div>
+
 <div class="card">
-  <div class="row" style="justify-content: space-between;">
+  <div class="tracker-head">
     <div>
-      <h3 style="margin:0 0 6px;">Tracked Options</h3>
-      <p class="muted" style="margin:0;">Your live options list appears first. Use Quick Actions for manual entry and filtering.</p>
+      <h3>Tracked Options</h3>
+      <p class="muted">Live prices from Dhan. Green is at or above entry; red is below entry.</p>
     </div>
-    <div class="row" style="margin:0;">
-      <a class="btn secondary" href="#quick-actions">Quick Actions</a>
-      <a class="btn secondary" href="/options/?sync=legacy">Sync Legacy Telegram</a>
+    <div class="tracker-actions">
+      <label class="refresh-setting">Refresh
+        <select id="refresh-interval">
+          <option value="30">30 seconds</option>
+          <option value="60">60 seconds</option>
+          <option value="90">90 seconds</option>
+          <option value="120">120 seconds</option>
+        </select>
+      </label>
+      <details>
+        <summary class="btn secondary">Add Manual Option</summary>
+        <form method="post" class="grid manual-form">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <div><button class="btn" type="submit">Add Option</button></div>
+        </form>
+      </details>
     </div>
   </div>
 
-  <table>
-    <thead><tr><th>Time</th><th>Symbol</th><th>Security ID</th><th>Dir</th><th>Style</th><th>Entry</th><th>SL</th><th>T1</th><th>T2</th><th>T3</th><th>Score</th><th>Reco</th><th>Status</th><th>Source</th><th>Source Ref</th></tr></thead>
-    <tbody>
-      {% for x in items %}
-      <tr>
-        <td>{{ x.tip_time|date:"Y-m-d H:i" }}</td><td>{{ x.option_symbol }}</td><td>{{ x.security_id }}</td><td>{{ x.direction }}</td><td>{{ x.trade_style }}</td>
-        <td>{{ x.entry_price }}</td><td>{{ x.stop_loss }}</td><td>{{ x.target_1 }}</td><td>{{ x.target_2 }}</td><td>{{ x.target_3 }}</td>
-        <td>{{ x.score }}</td><td>{{ x.recommendation }}</td><td>{{ x.status }}</td><td>{{ x.source_name }}</td><td>{{ x.source_ref }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="15">No options loaded yet. Use Sync Legacy Telegram to import tips, or add one from Quick Actions.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <form method="get" class="tracker-filters">
+    <label>Source
+      <select name="source">
+        <option value="">All sources</option>
+        {% for source in sources %}<option value="{{ source }}" {% if selected_source == source %}selected{% endif %}>{{ source }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Outcome
+      <select name="outcome">
+        <option value="">All outcomes</option>
+        {% for value, label in outcomes %}<option value="{{ value }}" {% if selected_outcome == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Stock / Contract<input name="q" value="{{ request.GET.q }}" /></label>
+    <div class="filter-actions"><button class="btn" type="submit">Apply</button><a class="btn secondary" href="/options/">Reset</a></div>
+  </form>
+
+  <div class="table-wrap">
+    <table class="options-table">
+      <thead><tr><th>Time</th><th>Contract</th><th>Entry</th><th>Live Price</th><th>SL</th><th>Target 1</th><th>Outcome</th><th>Source</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for x in items %}
+        <tr data-signal-id="{{ x.id }}">
+          <td>{{ x.tip_time|date:"d M H:i" }}</td>
+          <td><strong>{{ x.option_symbol }}</strong><div class="contract-name">{% if x.dhan_display_name %}{{ x.dhan_display_name }}{% else %}Resolving Dhan contract{% endif %}</div></td>
+          <td>{{ x.entry_price|default:"-" }}</td>
+          <td class="live-price {% if x.live_price and x.entry_price %}{% if x.live_price >= x.entry_price %}price-good{% else %}price-bad{% endif %}{% endif %}">{{ x.live_price|default:"-" }}</td>
+          <td>{{ x.stop_loss }}</td>
+          <td>{{ x.target_1|default:"-" }}</td>
+          <td><span class="outcome outcome-{{ x.outcome_status|lower }}">{{ x.get_outcome_status_display }}</span></td>
+          <td>{{ x.source_name|default:"Manual" }}</td>
+          <td>
+            <details class="action-menu">
+              <summary>Manage</summary>
+              <form method="post" action="{% url 'option_edit' x.id %}" class="edit-option-form">
+                {% csrf_token %}
+                <label>Source<input name="source_name" value="{{ x.source_name }}" /></label>
+                <label>Contract<input name="option_symbol" value="{{ x.option_symbol }}" required /></label>
+                <label>Entry<input name="entry_price" type="number" step="0.01" value="{{ x.entry_price|default_if_none:'' }}" /></label>
+                <label>Stop Loss<input name="stop_loss" type="number" step="0.01" value="{{ x.stop_loss }}" required /></label>
+                <label>Target 1<input name="target_1" type="number" step="0.01" value="{{ x.target_1|default_if_none:'' }}" /></label>
+                <label>Target 2<input name="target_2" type="number" step="0.01" value="{{ x.target_2|default_if_none:'' }}" /></label>
+                <label>Target 3<input name="target_3" type="number" step="0.01" value="{{ x.target_3|default_if_none:'' }}" /></label>
+                <label>Expiry<input name="expiry_date" type="date" value="{{ x.expiry_date|date:'Y-m-d' }}" /></label>
+                <label>Outcome<select name="outcome_status">{% for value, label in outcomes %}<option value="{{ value }}" {% if x.outcome_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                <button class="btn" type="submit">Save Changes</button>
+              </form>
+              <form method="post" action="{% url 'option_delete' x.id %}" onsubmit="return confirm('Delete {{ x.option_symbol|escapejs }} from tracking?');">
+                {% csrf_token %}<button class="delete-button" type="submit">Delete Option</button>
+              </form>
+            </details>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="9">No tracked options match these filters.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
-<div class="card" id="quick-actions">
-  <details {% if open_trade_panel %}open{% endif %}>
-    <summary style="cursor:pointer; font-weight:700;">Log New Trade &amp; Filters</summary>
-    <p class="muted" style="margin-top:8px;">Keep this collapsed while tracking options. Open only when adding or narrowing results.</p>
+<style>
+  .content { min-width: 0; }
+  .tracking-stats { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tracking-stat { background: #fff; border: 1px solid var(--line); border-left: 4px solid #64748b; border-radius: 8px; padding: 12px 14px; }
+  .tracking-stat.target { border-left-color: var(--green); } .tracking-stat.stop { border-left-color: var(--danger); }
+  .tracking-stat span { color: var(--muted); display: block; font-size: 12px; } .tracking-stat strong { display: block; font-size: 24px; margin-top: 4px; }
+  .tracking-stat .feed-state { font-size: 15px; margin-top: 10px; }
+  .tracker-head { align-items: start; display: flex; justify-content: space-between; gap: 16px; } .tracker-head h3 { margin: 0 0 4px; }
+  .tracker-actions { align-items: end; display: flex; gap: 10px; } .refresh-setting { color: var(--muted); font-size: 12px; } .refresh-setting select { display: block; min-width: 130px; padding: 8px; }
+  .tracker-head summary { list-style: none; } .manual-form { background: #fff; border: 1px solid var(--line); margin-top: 10px; padding: 14px; position: absolute; right: 36px; width: min(760px, calc(100vw - 50px)); z-index: 5; }
+  .tracker-filters { align-items: end; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; margin: 16px 0; }
+  .tracker-filters label { color: var(--muted); font-size: 12px; } .filter-actions { display: flex; gap: 6px; }
+  .table-wrap { overflow-x: auto; } .contract-name { color: var(--muted); font-size: 11px; margin-top: 3px; }
+  .live-price { font-size: 15px; font-weight: 800; } .price-good { color: var(--green); background: #f0fdf4; } .price-bad { color: #dc2626; background: #fef2f2; }
+  .outcome { border-radius: 999px; display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 8px; }
+  .outcome-tracking { background: #eef2ff; color: #4338ca; } .outcome-target_1 { background: #dcfce7; color: #166534; } .outcome-stop_loss { background: #fee2e2; color: #991b1b; } .outcome-unresolved { background: #f1f5f9; color: #475569; }
+  .action-menu { position: relative; } .action-menu > summary { color: var(--gold-ink); cursor: pointer; font-weight: 700; } .action-menu[open] { min-width: 240px; }
+  .edit-option-form { background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 28px rgba(15,23,42,.15); display: grid; gap: 7px; margin-top: 8px; padding: 12px; position: absolute; right: 0; width: 280px; z-index: 6; }
+  .edit-option-form label { color: var(--muted); font-size: 11px; } .edit-option-form input, .edit-option-form select { padding: 7px 8px; }
+  .delete-button { background: none; border: 0; color: #dc2626; cursor: pointer; font-weight: 700; margin-top: 8px; padding: 4px 0; }
+  @media (max-width: 900px) { .tracking-stats { grid-template-columns: repeat(2, 1fr); } .tracker-filters { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .tracking-stats, .tracker-filters { grid-template-columns: 1fr; } }
+</style>
 
-    <div class="grid" style="margin-top:12px; align-items:start;">
-      <div class="card" style="margin-bottom:0;">
-        <h4 style="margin-top:0;">Add Manual Tip</h4>
-        <form method="post" class="grid">
-          {% csrf_token %}
-          {{ form.as_p }}
-          <div><button class="btn" type="submit">Add Tip</button></div>
-        </form>
-      </div>
-
-      <div class="card" style="margin-bottom:0;">
-        <h4 style="margin-top:0;">Filter Options</h4>
-        <form method="get" class="grid">
-          {{ filter_form.status.label_tag }} {{ filter_form.status }}
-          {{ filter_form.source.label_tag }} {{ filter_form.source }}
-          {{ filter_form.style.label_tag }} {{ filter_form.style }}
-          {{ filter_form.q.label_tag }} {{ filter_form.q }}
-          <label>Min Score</label><input name="score_min" value="{{ score_min }}" />
-          <label>Max Score</label><input name="score_max" value="{{ score_max }}" />
-          <div class="row" style="margin:0;">
-            <button class="btn" type="submit">Apply Filters</button>
-            <a class="btn secondary" href="/options/">Reset</a>
-          </div>
-        </form>
-      </div>
-    </div>
-  </details>
-</div>
+<script>
+  (() => {
+    const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]")?.value;
+    const feedState = document.getElementById("feed-state");
+    const refreshInterval = document.getElementById("refresh-interval");
+    const allowedIntervals = [30, 60, 90, 120];
+    const storedInterval = Number(localStorage.getItem("optionsRefreshSeconds"));
+    let refreshSeconds = allowedIntervals.includes(storedInterval) ? storedInterval : 30;
+    let refreshTimer;
+    refreshInterval.value = String(refreshSeconds);
+    const outcomeLabels = {TRACKING: "Tracking", TARGET_1: "Target 1 Hit", STOP_LOSS: "Stop Loss Hit", UNRESOLVED: "Instrument Not Found"};
+    const refreshPrices = async () => {
+      try {
+        const response = await fetch("{% url 'option_live_prices' %}", {method: "POST", headers: {"X-CSRFToken": csrfToken}});
+        const data = await response.json();
+        data.rows.forEach((quote) => {
+          const row = document.querySelector(`[data-signal-id="${quote.id}"]`); if (!row) return;
+          row.querySelector(".contract-name").textContent = quote.dhan_display_name || "Resolving Dhan contract";
+          row.querySelector('[name="expiry_date"]').value = quote.expiry_date || "";
+          const priceCell = row.querySelector(".live-price"); priceCell.textContent = quote.live_price ?? "-"; priceCell.classList.remove("price-good", "price-bad");
+          if (quote.live_price !== null && quote.entry_price !== null) priceCell.classList.add(Number(quote.live_price) >= Number(quote.entry_price) ? "price-good" : "price-bad");
+          const outcome = row.querySelector(".outcome"); outcome.textContent = outcomeLabels[quote.outcome_status] || quote.outcome_status; outcome.className = `outcome outcome-${quote.outcome_status.toLowerCase()}`;
+        });
+        document.getElementById("tracked-count").textContent = data.counts.tracked; document.getElementById("target-count").textContent = data.counts.target; document.getElementById("stop-loss-count").textContent = data.counts.stop_loss;
+        feedState.textContent = data.ok ? "Live" : data.error; feedState.style.color = data.ok ? "var(--green)" : "var(--danger)";
+      } catch (error) { feedState.textContent = "Unavailable"; feedState.style.color = "var(--danger)"; }
+    };
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(async () => { await refreshPrices(); scheduleRefresh(); }, refreshSeconds * 1000);
+    };
+    refreshInterval.addEventListener("change", () => {
+      refreshSeconds = Number(refreshInterval.value);
+      localStorage.setItem("optionsRefreshSeconds", String(refreshSeconds));
+      scheduleRefresh();
+    });
+    refreshPrices(); scheduleRefresh();
+  })();
+</script>
 {% endblock %}
