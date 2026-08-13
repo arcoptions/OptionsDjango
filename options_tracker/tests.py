@@ -282,6 +282,29 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertContains(response, "NIFTY 24000 CE")
 		self.assertNotContains(response, "NIFTY 24100 CE")
 
+	def test_tracker_includes_parsed_equity_tips(self):
+		self.make_signal(
+			option_symbol="SOLARINDS",
+			direction=Direction.EQ,
+			entry_price=Decimal("200"),
+			stop_loss=Decimal("170"),
+			target_1=Decimal("400"),
+		)
+
+		response = self.client.get("/options/")
+
+		self.assertContains(response, "SOLARINDS")
+		self.assertContains(response, "Cash equity")
+
+	def test_live_endpoint_counts_equity_tips_without_quoting_them(self):
+		self.make_signal(option_symbol="SOLARINDS", direction=Direction.EQ)
+
+		response = self.client.post("/api/options/live/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()["counts"]["tracked"], 1)
+		self.assertEqual(response.json()["rows"], [])
+
 	def test_edit_clears_stale_dhan_resolution(self):
 		signal = self.make_signal(security_id="123", exchange_segment="NSE_FNO", live_price=Decimal("55"))
 

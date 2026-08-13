@@ -1,7 +1,7 @@
 {% extends "options_tracker/base.html" %}
 {% block content %}
 <div class="tracking-stats">
-  <div class="tracking-stat"><span>Options Tracked</span><strong id="tracked-count">{{ tracked_count }}</strong></div>
+  <div class="tracking-stat"><span>Tips Tracked</span><strong id="tracked-count">{{ tracked_count }}</strong></div>
   <div class="tracking-stat target"><span>Target 1 Hit</span><strong id="target-count">{{ target_count }}</strong></div>
   <div class="tracking-stat stop"><span>Stop Loss Hit</span><strong id="stop-loss-count">{{ stop_loss_count }}</strong></div>
   <div class="tracking-stat"><span>Dhan Feed</span><strong class="feed-state" id="feed-state">Connecting</strong></div>
@@ -10,8 +10,8 @@
 <div class="card">
   <div class="tracker-head">
     <div>
-      <h3>Tracked Options</h3>
-      <p class="muted">Live prices from Dhan. Green is at or above entry; red is below entry.</p>
+      <h3>Tracked Tips</h3>
+      <p class="muted">Dhan live prices are shown for option contracts. Cash-equity tips remain listed without derivative quotes.</p>
     </div>
     <div class="tracker-actions">
       <label class="refresh-setting">Refresh
@@ -23,11 +23,11 @@
         </select>
       </label>
       <details>
-        <summary class="btn secondary">Add Manual Option</summary>
+        <summary class="btn secondary">Add Manual Tip</summary>
         <form method="post" class="grid manual-form">
           {% csrf_token %}
           {{ form.as_p }}
-          <div><button class="btn" type="submit">Add Option</button></div>
+          <div><button class="btn" type="submit">Add Tip</button></div>
         </form>
       </details>
     </div>
@@ -57,7 +57,7 @@
         {% for x in items %}
         <tr data-signal-id="{{ x.id }}">
           <td>{{ x.tip_time|date:"d M H:i" }}</td>
-          <td><strong>{{ x.option_symbol }}</strong><div class="contract-name">{% if x.dhan_display_name %}{{ x.dhan_display_name }}{% else %}Resolving Dhan contract{% endif %}</div></td>
+          <td><strong>{{ x.option_symbol }}</strong><div class="contract-name">{% if x.direction == "EQ" %}Cash equity{% elif x.dhan_display_name %}{{ x.dhan_display_name }}{% else %}Resolving Dhan contract{% endif %}</div></td>
           <td>{{ x.entry_price|default:"-" }}</td>
           <td class="live-price {% if x.live_price and x.entry_price %}{% if x.live_price >= x.entry_price %}price-good{% else %}price-bad{% endif %}{% endif %}">{{ x.live_price|default:"-" }}</td>
           <td>{{ x.stop_loss }}</td>
@@ -81,7 +81,7 @@
                 <button class="btn" type="submit">Save Changes</button>
               </form>
               <form method="post" action="{% url 'option_delete' x.id %}" onsubmit="return confirm('Delete {{ x.option_symbol|escapejs }} from tracking?');">
-                {% csrf_token %}<button class="delete-button" type="submit">Delete Option</button>
+                {% csrf_token %}<button class="delete-button" type="submit">Delete Tip</button>
               </form>
             </details>
           </td>

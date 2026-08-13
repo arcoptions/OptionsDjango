@@ -312,7 +312,7 @@ def options_tracker(request):
 
     panel = request.GET.get("panel", "").strip().lower()
     f = SignalFilterForm(request.GET)
-    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).filter(direction__in=["CE", "PE"])
+    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
     items = options.order_by("-tip_time", "-id")
     if f.is_valid():
         status = f.cleaned_data.get("status")
@@ -359,7 +359,8 @@ def options_tracker(request):
 
 @require_http_methods(["POST"])
 def option_live_prices(request):
-    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).filter(direction__in=["CE", "PE"])
+    tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
+    options = tracked_tips.filter(direction__in=["CE", "PE"])
     refresh_result = refresh_dhan_option_prices(options)
     rows = list(options.values(
         "id", "live_price", "entry_price", "outcome_status", "quote_updated_at", "security_id", "exchange_segment",
@@ -370,16 +371,16 @@ def option_live_prices(request):
         "error": refresh_result["error"],
         "rows": rows,
         "counts": {
-            "tracked": options.count(),
-            "target": options.filter(outcome_status=OptionOutcome.TARGET_1).count(),
-            "stop_loss": options.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
+            "tracked": tracked_tips.count(),
+            "target": tracked_tips.filter(outcome_status=OptionOutcome.TARGET_1).count(),
+            "stop_loss": tracked_tips.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
         },
     })
 
 
 @require_http_methods(["POST"])
 def option_edit(request, signal_id):
-    signal = get_object_or_404(TipSignal, id=signal_id, direction__in=["CE", "PE"])
+    signal = get_object_or_404(TipSignal, id=signal_id)
     form = TrackedOptionEditForm(request.POST, instance=signal)
     if form.is_valid():
         signal = form.save(commit=False)
@@ -400,7 +401,7 @@ def option_edit(request, signal_id):
 
 @require_http_methods(["POST"])
 def option_delete(request, signal_id):
-    signal = get_object_or_404(TipSignal, id=signal_id, direction__in=["CE", "PE"])
+    signal = get_object_or_404(TipSignal, id=signal_id)
     symbol = signal.option_symbol
     try:
         signal.delete()
