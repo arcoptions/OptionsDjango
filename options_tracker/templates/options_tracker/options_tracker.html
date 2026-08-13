@@ -8,10 +8,14 @@
 </div>
 
 <div class="card">
+  <nav class="tracker-tabs" aria-label="Tip type">
+    <a href="?tab=options" class="{% if tracker_tab == 'options' %}active{% endif %}">Options <span>{{ options_count }}</span></a>
+    <a href="?tab=equities" class="{% if tracker_tab == 'equities' %}active{% endif %}">Equities <span>{{ equities_count }}</span></a>
+  </nav>
   <div class="tracker-head">
     <div>
-      <h3>Tracked Tips</h3>
-      <p class="muted">Dhan live prices are shown for option contracts. Cash-equity tips remain listed without derivative quotes.</p>
+      <h3>{% if tracker_tab == "equities" %}Tracked Equities{% else %}Tracked Options{% endif %}</h3>
+      <p class="muted">{% if tracker_tab == "equities" %}Cash-equity calls parsed from Telegram sources.{% else %}Dhan live prices for CE and PE contracts.{% endif %}</p>
     </div>
     <div class="tracker-actions">
       <label class="refresh-setting">Refresh
@@ -34,6 +38,7 @@
   </div>
 
   <form method="get" class="tracker-filters">
+    <input type="hidden" name="tab" value="{{ tracker_tab }}" />
     <label>Source
       <select name="source">
         <option value="">All sources</option>
@@ -47,7 +52,7 @@
       </select>
     </label>
     <label>Stock / Contract<input name="q" value="{{ request.GET.q }}" /></label>
-    <div class="filter-actions"><button class="btn" type="submit">Apply</button><a class="btn secondary" href="/options/">Reset</a></div>
+    <div class="filter-actions"><button class="btn" type="submit">Apply</button><a class="btn secondary" href="/options/?tab={{ tracker_tab }}">Reset</a></div>
   </form>
 
   <div class="table-wrap">
@@ -94,6 +99,10 @@
 
 <style>
   .content { min-width: 0; }
+  .tracker-tabs { border-bottom: 1px solid var(--line); display: flex; gap: 24px; margin: -4px 0 18px; }
+  .tracker-tabs a { border-bottom: 3px solid transparent; color: var(--muted); font-weight: 700; padding: 10px 4px; text-decoration: none; }
+  .tracker-tabs a.active { border-color: #d89b23; color: var(--ink); }
+  .tracker-tabs span { background: #eef2f6; border-radius: 999px; font-size: 11px; margin-left: 4px; padding: 2px 7px; }
   .tracking-stats { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
   .tracking-stat { background: #fff; border: 1px solid var(--line); border-left: 4px solid #64748b; border-radius: 8px; padding: 12px 14px; }
   .tracking-stat.target { border-left-color: var(--green); } .tracking-stat.stop { border-left-color: var(--danger); }
@@ -129,7 +138,7 @@
     const outcomeLabels = {TRACKING: "Tracking", TARGET_1: "Target 1 Hit", STOP_LOSS: "Stop Loss Hit", UNRESOLVED: "Instrument Not Found"};
     const refreshPrices = async () => {
       try {
-        const response = await fetch("{% url 'option_live_prices' %}", {method: "POST", headers: {"X-CSRFToken": csrfToken}});
+        const response = await fetch("{% url 'option_live_prices' %}?tab={{ tracker_tab }}", {method: "POST", headers: {"X-CSRFToken": csrfToken}});
         const data = await response.json();
         data.rows.forEach((quote) => {
           const row = document.querySelector(`[data-signal-id="${quote.id}"]`); if (!row) return;

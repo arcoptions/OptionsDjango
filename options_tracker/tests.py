@@ -26,6 +26,12 @@ class TelegramTipParserTests(TestCase):
 		self.assertEqual(str(parsed["sl"]), "20")
 		self.assertEqual([str(parsed[key]) for key in ("t1", "t2", "t3")], ["150", "220", "300"])
 
+	def test_expands_k_suffix_in_option_strike(self):
+		parsed = parse_tip_text("BUY SOLARINDS 20K CE AT 300 SL 170 TARGET 400-500-600")
+
+		self.assertEqual(parsed["symbol"], "SOLARINDS 20000 CE")
+		self.assertEqual(parsed["direction"], Direction.CE)
+
 	def test_extracts_commodity_and_index_underlyings(self):
 		commodity = parse_tip_text("NEW TRADE BUY NATURALGAS 320CE AT 12-14 STOPLOSS-8 TARGET-18-25-30++")
 		index = parse_tip_text("Buy Sensex 77700 CE at 140...160 SL 70 Target 211...284....377")
@@ -282,24 +288,26 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertContains(response, "NIFTY 24000 CE")
 		self.assertNotContains(response, "NIFTY 24100 CE")
 
-	def test_tracker_includes_parsed_equity_tips(self):
+	def test_tracker_separates_options_and_equity_tabs(self):
 		self.make_signal(
-			option_symbol="SOLARINDS",
+			option_symbol="VARROC",
 			direction=Direction.EQ,
 			entry_price=Decimal("200"),
 			stop_loss=Decimal("170"),
 			target_1=Decimal("400"),
 		)
 
-		response = self.client.get("/options/")
+		options_response = self.client.get("/options/")
+		equities_response = self.client.get("/options/?tab=equities")
 
-		self.assertContains(response, "SOLARINDS")
-		self.assertContains(response, "Cash equity")
+		self.assertNotContains(options_response, "VARROC")
+		self.assertContains(equities_response, "VARROC")
+		self.assertContains(equities_response, "Cash equity")
 
 	def test_live_endpoint_counts_equity_tips_without_quoting_them(self):
 		self.make_signal(option_symbol="SOLARINDS", direction=Direction.EQ)
 
-		response = self.client.post("/api/options/live/")
+		response = self.client.post("/api/options/live/?tab=equities")
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()["counts"]["tracked"], 1)

@@ -22,6 +22,7 @@ from .models import (
     ChartinkTrigger,
     ChatMessage,
     DhanOrderEvent,
+    Direction,
     IndexOISnapshot,
     OptionOutcome,
     SignalStatus,
@@ -311,9 +312,15 @@ def options_tracker(request):
         form = TipSignalForm()
 
     panel = request.GET.get("panel", "").strip().lower()
+    tracker_tab = request.GET.get("tab", "options").strip().lower()
+    if tracker_tab not in {"options", "equities"}:
+        tracker_tab = "options"
     f = SignalFilterForm(request.GET)
-    options = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
-    items = options.order_by("-tip_time", "-id")
+    tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
+    options = tracked_tips.filter(direction__in=[Direction.CE, Direction.PE])
+    equities = tracked_tips.filter(direction=Direction.EQ)
+    tab_tips = equities if tracker_tab == "equities" else options
+    items = tab_tips.order_by("-tip_time", "-id")
     if f.is_valid():
         status = f.cleaned_data.get("status")
         source = f.cleaned_data.get("source")
@@ -346,13 +353,16 @@ def options_tracker(request):
         "score_min": request.GET.get("score_min", ""),
         "score_max": request.GET.get("score_max", ""),
         "open_trade_panel": panel in {"trade", "new"},
-        "sources": options.order_by("source_name").values_list("source_name", flat=True).distinct(),
+        "sources": tab_tips.order_by("source_name").values_list("source_name", flat=True).distinct(),
         "selected_source": request.GET.get("source", ""),
         "selected_outcome": outcome,
+        "tracker_tab": tracker_tab,
         "outcomes": OptionOutcome.choices,
-        "tracked_count": options.count(),
-        "target_count": options.filter(outcome_status=OptionOutcome.TARGET_1).count(),
-        "stop_loss_count": options.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
+        "options_count": options.count(),
+        "equities_count": equities.count(),
+        "tracked_count": tab_tips.count(),
+        "target_count": tab_tips.filter(outcome_status=OptionOutcome.TARGET_1).count(),
+        "stop_loss_count": tab_tips.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
     }
     return render(request, "options_tracker/options_tracker.html", ctx)
 
@@ -361,6 +371,8 @@ def options_tracker(request):
 def option_live_prices(request):
     tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
     options = tracked_tips.filter(direction__in=["CE", "PE"])
+    tracker_tab = request.GET.get("tab", "options").strip().lower()
+    selected_tips = tracked_tips.filter(direction=Direction.EQ) if tracker_tab == "equities" else options
     refresh_result = refresh_dhan_option_prices(options)
     rows = list(options.values(
         "id", "live_price", "entry_price", "outcome_status", "quote_updated_at", "security_id", "exchange_segment",
@@ -371,9 +383,9 @@ def option_live_prices(request):
         "error": refresh_result["error"],
         "rows": rows,
         "counts": {
-            "tracked": tracked_tips.count(),
-            "target": tracked_tips.filter(outcome_status=OptionOutcome.TARGET_1).count(),
-            "stop_loss": tracked_tips.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
+            "tracked": selected_tips.count(),
+            "target": selected_tips.filter(outcome_status=OptionOutcome.TARGET_1).count(),
+            "stop_loss": selected_tips.filter(outcome_status=OptionOutcome.STOP_LOSS).count(),
         },
     })
 

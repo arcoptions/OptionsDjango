@@ -61,9 +61,12 @@ def parse_tip_text(raw_text):
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUNE", "JUL", "JULY", "AUG", "SEP",
         "SEPT", "OCT", "NOV", "DEC", "EXPIRY",
     }
-    contract_match = re.search(r"\b(\d{2,6})\s*(CE|PE)\b", text)
-    direction = contract_match.group(2) if contract_match else None
-    strike = contract_match.group(1) if contract_match else ""
+    contract_match = re.search(r"\b(\d+(?:\.\d+)?)\s*(K)?\s*(CE|PE)\b", text)
+    direction = contract_match.group(3) if contract_match else None
+    strike = ""
+    if contract_match:
+        strike_value = Decimal(contract_match.group(1)) * (1000 if contract_match.group(2) else 1)
+        strike = format(strike_value.normalize(), "f")
     prefix = text[:contract_match.start()] if contract_match else text
     candidates = re.findall(r"\b[A-Z][A-Z0-9&.-]{1,24}\b", prefix)
     candidates = [word.strip(".-") for word in candidates if word.strip(".-") not in ignored_words]
