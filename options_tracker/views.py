@@ -61,23 +61,15 @@ def _session_bounds(session_date):
 
 
 def _latest_session_dates(queryset, field_name, limit=30):
-    latest_timestamp = queryset.order_by(f"-{field_name}").values_list(field_name, flat=True).first()
-    if not latest_timestamp:
-        return []
     dates = []
-    session_date = timezone.localtime(latest_timestamp).date()
-    for _ in range(366):
-        session_start, session_end = _session_bounds(session_date)
-        if queryset.filter(
-            **{
-                f"{field_name}__gte": session_start,
-                f"{field_name}__lt": session_end,
-            }
-        ).exists():
-            dates.append(session_date)
-            if len(dates) >= limit:
-                break
-        session_date -= timedelta(days=1)
+    timestamp = queryset.order_by(f"-{field_name}").values_list(field_name, flat=True).first()
+    while timestamp and len(dates) < limit:
+        session_date = timezone.localtime(timestamp).date()
+        dates.append(session_date)
+        session_start, _ = _session_bounds(session_date)
+        timestamp = queryset.filter(
+            **{f"{field_name}__lt": session_start}
+        ).order_by(f"-{field_name}").values_list(field_name, flat=True).first()
     return dates
 
 
