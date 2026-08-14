@@ -7,7 +7,8 @@ from statistics import median
 from django.core.cache import cache
 from django.utils import timezone
 
-from .models import AppSetting, IndexOISnapshot, IndexOptionCandle
+from .models import AppSetting, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot
+from .strategy_backtest import nifty_put_strategy_config, spot_setup_timestamps
 
 
 EXPIRY_WEEKDAYS = {"NIFTY": 1, "SENSEX": 3}
@@ -33,6 +34,11 @@ def _empty_report():
 
 def _number(value):
     return float(value or 0)
+
+
+def _session_bounds(session_date):
+    start = timezone.make_aware(datetime.combine(session_date, time.min))
+    return start, start + timedelta(days=1)
 
 
 def _change(current, previous):
@@ -139,13 +145,16 @@ def _trade_levels(reference_price, recent_support=None):
 
 def _opening_breakout_report(underlying, days=45, session_date=None):
     cutoff = timezone.localdate() - timedelta(days=days)
+    cutoff_start, _ = _session_bounds(cutoff)
     query = IndexOptionCandle.objects.filter(
-        underlying=underlying, interval_minutes=1, timestamp__date__gte=cutoff,
-    ).values(
+        underlying=underlying, interval_minutes=1, timestamp__gte=cutoff_start,
+    )
+    if session_date:
+        session_start, session_end = _session_bounds(session_date)
+        query = query.filter(timestamp__gte=session_start, timestamp__lt=session_end)
+    query = query.values(
         "timestamp", "strike", "option_type", "open", "high", "low", "close", "volume", "spot",
     ).order_by("timestamp")
-    if session_date:
-        query = query.filter(timestamp__date=session_date)
 
     contracts = defaultdict(list)
     for row in query:
@@ -251,13 +260,15 @@ def _historical_trade_outcome(current, prior_rows, future_rows):
 
 def _historical_events(underlying, days=45, session_date=None):
     cutoff = timezone.localdate() - timedelta(days=days)
+    cutoff_start, _ = _session_bounds(cutoff)
     rows = IndexOptionCandle.objects.filter(
         underlying=underlying,
         interval_minutes=1,
-        timestamp__date__gte=cutoff,
+        timestamp__gte=cutoff_start,
     )
     if session_date:
-        rows = rows.filter(timestamp__date=session_date)
+        session_start, session_end = _session_bounds(session_date)
+        rows = rows.filter(timestamp__gte=session_start, timestamp__lt=session_end)
     rows = rows.values(
         "timestamp", "relative_strike", "option_type", "strike", "spot",
         "close", "high", "low", "volume", "oi", "implied_volatility",
@@ -419,7 +430,15 @@ def jump_detector_state(underlying):
     latest = IndexOISnapshot.objects.filter(underlying=underlying).first()
     now = timezone.localtime()
     trading_day = now.weekday() < 5
-    in_window = time(9, 0) <= now.time() <= time(15, 40)
+    if underlying == "NIFTY":
+        in_window = (
+            time(9, 30) <= now.time() <= time(10, 1)
+            or time(11, 30) <= now.time() <= time(13, 1)
+        )
+        window_label = "OUTSIDE 09:30–10:00 / 11:30–13:00"
+    else:
+        in_window = time(9, 0) <= now.time() <= time(15, 40)
+        window_label = "OUTSIDE 09:00–15:40"
     fresh = bool(latest and timezone.localtime(latest.created_at) >= now - timedelta(minutes=3))
     active = trading_day and in_window and fresh
     if active:
@@ -427,19 +446,204 @@ def jump_detector_state(underlying):
     elif not trading_day:
         label = "MARKET CLOSED"
     elif not in_window:
-        label = "OUTSIDE 09:00–15:40"
+        label = window_label
     else:
         label = "WAITING FOR FRESH SNAPSHOT"
     return {"active": active, "label": label}
 
 
+def _minute_spot_rows(snapshots, completed_before):
+    minute_rows = {}
+    for snapshot in sorted(snapshots, key=lambda row: row.created_at):
+        local_timestamp = timezone.localtime(snapshot.created_at).replace(second=0, microsecond=0)
+        if local_timestamp + timedelta(minutes=1) <= completed_before and snapshot.underlying_price:
+            minute_rows[local_timestamp] = _number(snapshot.underlying_price)
+    return minute_rows
+
+
+def _strategy_now():
+    return timezone.localtime()
+
+
+def _contract_minute_rows(snapshots, strike, option_type):
+    minute_rows = defaultdict(list)
+    rows = IndexOptionStrikeSnapshot.objects.filter(
+        snapshot__in=snapshots,
+        strike=strike,
+        option_type=option_type,
+    ).select_related("snapshot").order_by("snapshot__created_at")
+    for row in rows:
+        timestamp = timezone.localtime(row.snapshot.created_at)
+        minute_rows[timestamp.replace(second=0, microsecond=0)].append({
+            "timestamp": timestamp,
+            "price": _number(row.last_price),
+            "volume": row.volume,
+        })
+    return minute_rows
+
+
+def live_nifty_put_candidate():
+    config = nifty_put_strategy_config()
+    now = _strategy_now()
+    today = now.date()
+    session_start, session_end = _session_bounds(today)
+    snapshots = list(IndexOISnapshot.objects.filter(
+        underlying="NIFTY",
+        created_at__gte=session_start,
+        created_at__lt=session_end,
+    ).order_by("created_at"))
+    if not snapshots:
+        return None
+
+    latest = snapshots[-1]
+    latest_at = timezone.localtime(latest.created_at)
+    if latest_at < now - timedelta(minutes=3):
+        return None
+    spot_rows = _minute_spot_rows(snapshots, now)
+    setups = spot_setup_timestamps(spot_rows, config)
+    setup_times = sorted(
+        timestamp for timestamp, option_types in setups.items()
+        if "PUT" in option_types
+    )[:config.max_trades_per_day]
+    if not setup_times:
+        return None
+
+    setup_at = setup_times[-1]
+    setup_available_at = setup_at + timedelta(minutes=1)
+    if setup_available_at > now or now - setup_available_at > timedelta(minutes=1):
+        return None
+    setup_snapshot = max(
+        (
+            snapshot for snapshot in snapshots
+            if timezone.localtime(snapshot.created_at).replace(second=0, microsecond=0) == setup_at
+        ),
+        key=lambda snapshot: snapshot.created_at,
+        default=None,
+    )
+    if not setup_snapshot or setup_snapshot.atm_strike is None:
+        return None
+    if latest.atm_strike is None or abs(latest.atm_strike - setup_snapshot.atm_strike) > Decimal("50"):
+        return None
+
+    row = latest.strikes.filter(
+        option_type="PE",
+        strike=setup_snapshot.atm_strike,
+    ).first()
+    if not row:
+        return None
+
+    prior_spot = spot_rows.get(setup_at - timedelta(minutes=config.spot_trend_minutes), 0)
+    setup_spot = spot_rows.get(setup_at, 0)
+    spot_move_percent = ((prior_spot - setup_spot) / prior_spot * 100) if prior_spot else 0
+    contract_minutes = _contract_minute_rows(
+        snapshots, setup_snapshot.atm_strike, "PE",
+    )
+    setup_contract_rows = contract_minutes.get(setup_at, [])
+    previous_contract_rows = contract_minutes.get(setup_at - timedelta(minutes=1), [])
+    setup_price = setup_contract_rows[-1]["price"] if setup_contract_rows else 0
+    opening_price = (
+        setup_contract_rows[0]["price"]
+        if len(setup_contract_rows) > 1
+        else previous_contract_rows[-1]["price"] if previous_contract_rows else 0
+    )
+    minute_closes = {
+        timestamp: values[-1]
+        for timestamp, values in contract_minutes.items()
+        if values
+    }
+    minute_volumes = {}
+    for timestamp, values in minute_closes.items():
+        previous = minute_closes.get(timestamp - timedelta(minutes=1))
+        if previous:
+            minute_volumes[timestamp] = max(values["volume"] - previous["volume"], 0)
+    prior_volumes = [
+        minute_volumes.get(setup_at - timedelta(minutes=offset), 0)
+        for offset in range(1, config.lookback + 1)
+    ]
+    positive_prior_volumes = [volume for volume in prior_volumes if volume > 0]
+    baseline_volume = median(positive_prior_volumes) if positive_prior_volumes else 0
+    setup_volume = minute_volumes.get(setup_at, 0)
+    volume_ratio = setup_volume / baseline_volume if baseline_volume else 0
+
+    bid, ask, premium = _number(row.top_bid_price), _number(row.top_ask_price), _number(row.last_price)
+    spread_percent = ((ask - bid) / ask * 100) if ask > 0 and bid > 0 and ask >= bid else 100
+    total_depth = row.buy_quantity + row.sell_quantity
+    depth_imbalance = ((row.buy_quantity - row.sell_quantity) / total_depth) if total_depth else 0
+    rejection_reasons = []
+    if spot_move_percent < config.minimum_spot_move_percent:
+        rejection_reasons.append("five-minute spot decline below 0.10%")
+    if not opening_price or setup_price <= opening_price:
+        rejection_reasons.append("ATM PE premium did not rise on the setup minute")
+    if volume_ratio < config.volume_ratio:
+        rejection_reasons.append("minute volume below recent median")
+    if not (config.premium_min <= premium <= config.premium_max):
+        rejection_reasons.append("premium outside ₹50–₹250")
+    if bid <= 0 or ask <= 0:
+        rejection_reasons.append("missing two-sided quote")
+    elif spread_percent > 4:
+        rejection_reasons.append("spread above 4%")
+    if row.top_bid_quantity <= 0 or row.top_ask_quantity <= 0:
+        rejection_reasons.append("insufficient top-level depth")
+    if total_depth and depth_imbalance < -0.35:
+        rejection_reasons.append("sell depth dominates")
+    if not (0.15 <= abs(row.delta) <= 0.70):
+        rejection_reasons.append("delta outside 0.15–0.70")
+
+    entry = round(max(ask, premium) * 1.005, 2)
+    stop_loss = round(entry * (1 - config.stop_percent), 2)
+    risk = entry - stop_loss
+    target = round(entry + risk * config.reward_risk, 2)
+    return {
+        "strike": row.strike,
+        "option_type": "PE",
+        "relative_strike": "ATM",
+        "premium": row.last_price,
+        "score": 80 if not rejection_reasons else 45,
+        "evidence": [
+            "NIFTY broke the 09:15–09:29 low",
+            "completed 5-minute candle is bearish",
+            "five-minute spot momentum is at least 0.10%",
+            "ATM PE price and minute volume confirm",
+        ],
+        "oi_change": row.oi_change,
+        "iv": row.implied_volatility,
+        "volume": row.volume,
+        "bid": row.top_bid_price,
+        "ask": row.top_ask_price,
+        "spread_percent": round(spread_percent, 1),
+        "delta": row.delta,
+        "gamma": row.gamma,
+        "theta": row.theta,
+        "vega": row.vega,
+        "depth_imbalance": round(depth_imbalance * 100, 1),
+        "trade_ready": not rejection_reasons,
+        "rejection_reasons": rejection_reasons,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "target_1": target,
+        "target_2": target,
+        "risk_percent": round(config.stop_percent * 100, 1),
+        "entry_rule": "Paper signal: enter only near the ask after the completed setup minute.",
+        "exit_time": "15:20",
+        "setup_at": setup_at.strftime("%H:%M"),
+        "setup_number": setup_times.index(setup_at) + 1,
+        "spot_move_percent": round(spot_move_percent, 2),
+        "volume_ratio": round(volume_ratio, 2),
+        "paper_only": True,
+    }
+
+
 def live_jump_candidates(underlying, limit=8):
+    if underlying == "NIFTY":
+        candidate = live_nifty_put_candidate()
+        return [candidate] if candidate else []
     latest = IndexOISnapshot.objects.filter(underlying=underlying).prefetch_related("strikes").first()
     if not latest or latest.atm_strike is None:
         return []
+    session_start, session_end = _session_bounds(timezone.localdate(latest.created_at))
     recent_snapshots = list(IndexOISnapshot.objects.filter(
         underlying=underlying, expiry_date=latest.expiry_date, created_at__lt=latest.created_at,
-        created_at__date=timezone.localdate(latest.created_at),
+        created_at__gte=session_start,
     ).prefetch_related("strikes")[:5])
     previous = recent_snapshots[0] if recent_snapshots else None
     previous_rows = {(row.strike, row.option_type): row for row in previous.strikes.all()} if previous else {}

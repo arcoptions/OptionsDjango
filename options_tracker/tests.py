@@ -442,6 +442,101 @@ class DhanOptionTrackingTests(TestCase):
 
 
 class IndexOIIntelligenceTests(TestCase):
+	def _create_nifty_put_setup(self, bearish_context=True, trade_date=date(2026, 8, 14)):
+		start = timezone.make_aware(datetime.combine(trade_date, time(9, 15)))
+		latest = None
+		for minute in range(20):
+			if minute < 15:
+				spot = Decimal("24500")
+			else:
+				step = minute - 14
+				spot = Decimal("24500") - Decimal(step * 15 if bearish_context else (6 - step) * 15)
+			for second in (5, 35):
+				latest = IndexOISnapshot.objects.create(
+					underlying="NIFTY",
+					expiry_date=trade_date + timedelta(days=4),
+					underlying_price=spot,
+					atm_strike=Decimal("24500"),
+				)
+				IndexOISnapshot.objects.filter(id=latest.id).update(
+					created_at=start + timedelta(minutes=minute, seconds=second),
+				)
+				price = Decimal("80") if minute < 19 else Decimal("90") + Decimal(second == 35)
+				IndexOptionStrikeSnapshot.objects.create(
+					snapshot=latest,
+					strike=Decimal("24500"),
+					option_type="PE",
+					last_price=price,
+					volume=1000 + minute * 100 + (50 if second == 35 else 0),
+					delta=-.45,
+					top_bid_price=Decimal("90.50"),
+					top_ask_price=Decimal("91.00"),
+					top_bid_quantity=100,
+					top_ask_quantity=100,
+					buy_quantity=1200,
+					sell_quantity=800,
+				)
+		return latest
+
+	@patch("options_tracker.jump_detector._strategy_now")
+	def test_live_nifty_candidate_uses_completed_five_minute_context(self, strategy_now):
+		trade_date = date(2026, 8, 14)
+		now = timezone.make_aware(datetime.combine(trade_date, time(9, 35, 20)))
+		strategy_now.return_value = now
+		self._create_nifty_put_setup()
+
+		candidate = live_jump_candidates("NIFTY")[0]
+
+		self.assertTrue(candidate["trade_ready"])
+		self.assertEqual(candidate["option_type"], "PE")
+		self.assertEqual(candidate["strike"], Decimal("24500"))
+		self.assertEqual(candidate["setup_at"], "09:34")
+		self.assertEqual(candidate["setup_number"], 1)
+		self.assertTrue(candidate["paper_only"])
+		self.assertEqual(candidate["risk_percent"], 10)
+		self.assertEqual(candidate["target_1"], round(
+			candidate["entry"] + 1.25 * (candidate["entry"] - candidate["stop_loss"]), 2,
+		))
+
+	@patch("options_tracker.jump_detector._strategy_now")
+	def test_live_nifty_candidate_rejects_bullish_five_minute_context(self, strategy_now):
+		trade_date = date(2026, 8, 14)
+		now = timezone.make_aware(datetime.combine(trade_date, time(9, 35, 20)))
+		strategy_now.return_value = now
+		self._create_nifty_put_setup(bearish_context=False)
+
+		self.assertEqual(live_jump_candidates("NIFTY"), [])
+
+	@patch("options_tracker.jump_detector._strategy_now")
+	def test_live_nifty_candidate_expires_after_three_minutes(self, strategy_now):
+		trade_date = date(2026, 8, 14)
+		now = timezone.make_aware(datetime.combine(trade_date, time(9, 40)))
+		strategy_now.return_value = now
+		self._create_nifty_put_setup()
+
+		self.assertEqual(live_jump_candidates("NIFTY"), [])
+
+	@patch("options_tracker.jump_detector._strategy_now")
+	def test_live_nifty_candidate_waits_for_setup_minute_to_close(self, strategy_now):
+		trade_date = date(2026, 8, 14)
+		strategy_now.return_value = timezone.make_aware(
+			datetime.combine(trade_date, time(9, 34, 50)),
+		)
+		self._create_nifty_put_setup()
+
+		self.assertEqual(live_jump_candidates("NIFTY"), [])
+
+	@patch("options_tracker.jump_detector._strategy_now")
+	def test_live_nifty_candidate_rejects_atm_shift_beyond_one_strike(self, strategy_now):
+		trade_date = date(2026, 8, 14)
+		strategy_now.return_value = timezone.make_aware(
+			datetime.combine(trade_date, time(9, 35, 20)),
+		)
+		latest = self._create_nifty_put_setup()
+		IndexOISnapshot.objects.filter(id=latest.id).update(atm_strike=Decimal("24600"))
+
+		self.assertEqual(live_jump_candidates("NIFTY"), [])
+
 	def _create_live_candidate_snapshots(self, spread=Decimal("0.40")):
 		trade_date = timezone.localdate()
 		previous = IndexOISnapshot.objects.create(
@@ -514,6 +609,20 @@ class IndexOIIntelligenceTests(TestCase):
 
 		self.assertTrue(state["active"])
 		self.assertEqual(state["label"], "ACTIVE MARKET HOURS")
+
+	@patch("options_tracker.jump_detector.timezone.localtime")
+	def test_nifty_detector_is_inactive_between_validated_windows(self, localtime):
+		now = timezone.make_aware(datetime(2026, 8, 14, 10, 30))
+		localtime.return_value = now
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="NIFTY", expiry_date=date(2026, 8, 18), underlying_price=Decimal("24500"),
+		)
+		IndexOISnapshot.objects.filter(id=snapshot.id).update(created_at=now)
+
+		state = jump_detector_state("NIFTY")
+
+		self.assertFalse(state["active"])
+		self.assertEqual(state["label"], "OUTSIDE 09:30–10:00 / 11:30–13:00")
 
 	def tearDown(self):
 		cache.clear()

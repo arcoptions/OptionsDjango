@@ -48,10 +48,37 @@ from .services import (
     sync_telegram_from_legacy,
     validate_dhan_credentials,
 )
+from .strategy_backtest import NIFTY_PUT_RESEARCH_SUMMARY
 
 
 def home(request):
     return redirect("options_tracker")
+
+
+def _session_bounds(session_date):
+    start = timezone.make_aware(datetime.combine(session_date, time.min))
+    return start, start + timedelta(days=1)
+
+
+def _latest_session_dates(queryset, field_name, limit=30):
+    latest_timestamp = queryset.order_by(f"-{field_name}").values_list(field_name, flat=True).first()
+    if not latest_timestamp:
+        return []
+    dates = []
+    session_date = timezone.localtime(latest_timestamp).date()
+    for _ in range(366):
+        session_start, session_end = _session_bounds(session_date)
+        if queryset.filter(
+            **{
+                f"{field_name}__gte": session_start,
+                f"{field_name}__lt": session_end,
+            }
+        ).exists():
+            dates.append(session_date)
+            if len(dates) >= limit:
+                break
+        session_date -= timedelta(days=1)
+    return dates
 
 
 def market_ticker_api(request):
@@ -614,31 +641,30 @@ def index_oi(request):
     underlying = request.GET.get("underlying", "SENSEX").upper()
     if underlying not in {"NIFTY", "SENSEX"}:
         underlying = "SENSEX"
-    snapshot_dates = list(
-        IndexOISnapshot.objects.filter(underlying=underlying)
-        .order_by("-created_at__date")
-        .values_list("created_at__date", flat=True)
-        .distinct()[:30]
+    snapshot_dates = _latest_session_dates(
+        IndexOISnapshot.objects.filter(underlying=underlying),
+        "created_at",
     )
-    candle_dates = list(
-        IndexOptionCandle.objects.filter(underlying=underlying)
-        .order_by("-timestamp__date")
-        .values_list("timestamp__date", flat=True)
-        .distinct()[:30]
+    candle_dates = _latest_session_dates(
+        IndexOptionCandle.objects.filter(underlying=underlying),
+        "timestamp",
     )
     available_dates = sorted(set(snapshot_dates + candle_dates), reverse=True)[:30]
     try:
         selected_date = datetime.strptime(request.GET.get("date", ""), "%Y-%m-%d").date()
     except ValueError:
         selected_date = available_dates[0] if available_dates else timezone.localdate()
+    session_start, session_end = _session_bounds(selected_date)
     selected_snapshots = IndexOISnapshot.objects.filter(
         underlying=underlying,
-        created_at__date=selected_date,
+        created_at__gte=session_start,
+        created_at__lt=session_end,
     )
     latest = selected_snapshots.prefetch_related("strikes").first()
     selected_candles = IndexOptionCandle.objects.filter(
         underlying=underlying,
-        timestamp__date=selected_date,
+        timestamp__gte=session_start,
+        timestamp__lt=session_end,
     )
     closing_candle = selected_candles.filter(
         spot__isnull=False,
@@ -758,6 +784,7 @@ def index_oi(request):
             "suggested_option": suggested_option,
             "detector_state": detector_state,
             "latest_changes": latest_changes,
+            "nifty_strategy_summary": NIFTY_PUT_RESEARCH_SUMMARY if underlying == "NIFTY" else None,
         },
     )
 
