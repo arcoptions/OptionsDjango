@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -15,7 +17,7 @@ from . import live_engine
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeExecution, TradeStyle
-from .services import _expiry_month_hint, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, resolve_dhan_instruments, parse_tip_text
+from .services import _expiry_month_hint, _extract_access_token, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.track_telegram import Command as TrackTelegramCommand
 
@@ -1211,3 +1213,156 @@ class LiveEngineEntryTests(TestCase):
 		# Dhan requires targetPrice, so "no target" is one that cannot be reached.
 		self.assertEqual(float(signal.target_1), 361.8)
 		self.assertEqual(place.call_args.args[1], 65)
+
+
+class _FakeResponse:
+	def __init__(self, status_code, payload):
+		self.status_code = status_code
+		self._payload = payload
+		self.content = b"x"
+
+	def json(self):
+		return self._payload
+
+
+class DhanTokenRenewalTests(TestCase):
+	"""The token lasts 24 hours and only a live one can be renewed.
+
+	Everything downstream needs a token and nothing else in this system can
+	produce one, so the failure modes matter more than the happy path.
+	"""
+
+	def _token_path(self):
+		directory = tempfile.mkdtemp()
+		self.addCleanup(shutil.rmtree, directory, True)
+		return os.path.join(directory, "token.txt")
+
+	def _env(self, **extra):
+		values = {"DHAN_ACCESS_TOKEN": "", "DHAN_CLIENT_ID": "", "DHAN_TOKEN_FILE": ""}
+		values.update(extra)
+		return patch.dict(os.environ, values)
+
+	def test_a_renewed_token_outranks_a_stale_environment_variable(self):
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write("  fresh-token\n")
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_ACCESS_TOKEN="stale-token", DHAN_CLIENT_ID="1111"):
+			access_token, client_id = get_dhan_credentials()
+
+		# A host that renews its own token always has a file fresher than whatever
+		# was pasted into the environment at deploy time.
+		self.assertEqual(access_token, "fresh-token")
+		self.assertEqual(client_id, "1111")
+
+	def test_falls_back_to_the_environment_when_this_host_keeps_no_file(self):
+		with self._env(DHAN_ACCESS_TOKEN="env-token", DHAN_CLIENT_ID="1111"):
+			access_token, _ = get_dhan_credentials()
+
+		self.assertEqual(access_token, "env-token")
+
+	def test_a_hand_pasted_token_beats_a_renewal_file_written_earlier(self):
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write("renewed-two-days-ago")
+		os.utime(path, (0, (timezone.now() - timedelta(days=2)).timestamp()))
+		AppSetting.objects.create(key="dhan_access_token", value="pasted-just-now")
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_CLIENT_ID="1111"):
+			access_token, _ = get_dhan_credentials()
+
+		# If renewal breaks and someone repairs it by hand, a file that always won
+		# would keep serving the dead token.
+		self.assertEqual(access_token, "pasted-just-now")
+
+	def test_refuses_to_renew_when_there_is_nowhere_to_put_the_result(self):
+		with self._env(DHAN_ACCESS_TOKEN="live-token", DHAN_CLIENT_ID="1111"):
+			result = renew_dhan_token()
+
+		# Renewing kills the old token. Doing that without somewhere to persist
+		# the replacement would leave the host holding an invalidated token.
+		self.assertFalse(result["ok"])
+		self.assertIn("DHAN_TOKEN_FILE", result["error"])
+
+	@patch("options_tracker.services.requests.get")
+	def test_persists_the_new_token_without_ever_returning_it(self, get):
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write("old-token")
+		get.side_effect = lambda url, **kwargs: (
+			_FakeResponse(200, {"accessToken": "brand-new-token"}) if "RenewToken" in url
+			else _FakeResponse(200, {"tokenValidity": "18/08/2026 09:00"})
+		)
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_CLIENT_ID="1111"):
+			result = renew_dhan_token()
+			with open(path, encoding="utf-8") as handle:
+				stored = handle.read()
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(stored, "brand-new-token")
+		self.assertEqual(result["validity"], "18/08/2026 09:00")
+		self.assertNotIn("brand-new-token", json.dumps(result))
+
+	@patch("options_tracker.services.requests.get")
+	def test_a_failed_renewal_leaves_the_working_token_alone(self, get):
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write("still-good-token")
+		get.return_value = _FakeResponse(401, {"errorMessage": "Invalid token"})
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_CLIENT_ID="1111"):
+			result = renew_dhan_token()
+			with open(path, encoding="utf-8") as handle:
+				stored = handle.read()
+
+		self.assertFalse(result["ok"])
+		self.assertEqual(result["error"], "Invalid token")
+		self.assertEqual(stored, "still-good-token")
+
+	@patch("options_tracker.services.requests.get")
+	def test_reports_the_shape_when_a_renewal_returns_no_token(self, get):
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write("still-good-token")
+		get.return_value = _FakeResponse(200, {"status": "OK"})
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_CLIENT_ID="1111"):
+			result = renew_dhan_token()
+			with open(path, encoding="utf-8") as handle:
+				stored = handle.read()
+
+		# Dhan documents the endpoint's behaviour but not its response shape, so
+		# an unrecognised body has to name its keys rather than fail blankly.
+		self.assertFalse(result["ok"])
+		self.assertIn("status", result["error"])
+		self.assertEqual(stored, "still-good-token")
+
+	def test_reads_the_token_out_of_every_shape_dhan_uses_elsewhere(self):
+		self.assertEqual(_extract_access_token({"accessToken": "a"}), "a")
+		self.assertEqual(_extract_access_token({"access_token": "b"}), "b")
+		self.assertEqual(_extract_access_token({"data": {"token": "c"}}), "c")
+		self.assertEqual(_extract_access_token("d"), "d")
+		self.assertEqual(_extract_access_token({"status": "OK"}), "")
+
+
+class LiveEngineObserveOnlyTests(TestCase):
+	@patch("options_tracker.management.commands.run_nifty_live.tick")
+	def test_the_environment_can_hold_the_engine_in_observe_only(self, tick):
+		tick.return_value = {"state": "CLOSED"}
+
+		with patch.dict(os.environ, {"NIFTY_LIVE_DRY_RUN": "1"}):
+			call_command("run_nifty_live", "--once")
+
+		self.assertTrue(tick.call_args.kwargs["dry_run"])
+
+	@patch("options_tracker.management.commands.run_nifty_live.tick")
+	def test_an_unset_variable_never_arms_real_money(self, tick):
+		tick.return_value = {"state": "CLOSED"}
+
+		with patch.dict(os.environ, {"NIFTY_LIVE_DRY_RUN": ""}):
+			call_command("run_nifty_live", "--once", "--dry-run")
+
+		# The flag still wins on its own: absence of the variable must mean
+		# "whatever the caller asked for", not "go live".
+		self.assertTrue(tick.call_args.kwargs["dry_run"])

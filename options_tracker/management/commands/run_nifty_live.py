@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 from django.core.management.base import BaseCommand
@@ -25,9 +26,19 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # The daemon is started by startup.sh with no arguments, so observe-only
+        # has to be reachable from the environment too. Defaulting the *flag* to
+        # off and the env var to on would be the wrong way round: an unset
+        # variable must never be the thing that arms real money.
+        dry_run = options["dry_run"] or os.getenv("NIFTY_LIVE_DRY_RUN", "").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+        if dry_run:
+            self.stdout.write("observe-only: signals and quotes are logged, no order is sent")
+
         while True:
             try:
-                status = tick(dry_run=options["dry_run"])
+                status = tick(dry_run=dry_run)
             except Exception as error:  # a bad tick must never kill the loop
                 self.stderr.write(f"tick failed: {error}")
                 status = {"state": "ERROR"}
