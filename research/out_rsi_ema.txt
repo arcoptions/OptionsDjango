@@ -1,0 +1,84 @@
+246 sessions; RSI(14) and a 20-period average on the index, no lookahead
+
+246 sessions loaded; indicators run continuously across them, as a chart would
+
+AS A GATE on the 64 trades we already take.
+Read this first: if the indicators cannot separate winners from losers on entries
+we have already validated, they are unlikely to find better ones from scratch.
+
+  3-minute bars, EMA
+                                      n    win%  pts/trade
+    average with us                  54    74.1       5.17
+    average against us               10    60.0       3.94
+    RSI under 40                      6    66.7       5.41
+    RSI 40-50                         4    50.0       1.74
+    RSI 50-60                        16    68.8       8.63
+    RSI 60-70                        23    69.6       1.16
+    RSI over 70                      15    86.7       7.65
+
+  5-minute bars, EMA
+                                      n    win%  pts/trade
+    average with us                  51    74.5       4.82
+    average against us               13    61.5       5.60
+    RSI under 40                      8    50.0      -0.46
+    RSI 40-50                         7    71.4       8.58
+    RSI 50-60                        18    66.7       5.85
+    RSI 60-70                        20    75.0       2.90
+    RSI over 70                      11    90.9       9.01
+
+  15-minute bars, EMA
+                                      n    win%  pts/trade
+    average with us                  35    80.0       6.48
+    average against us               29    62.1       3.17
+    RSI under 40                     17    58.8       4.03
+    RSI 40-50                        15    73.3       7.03
+    RSI 50-60                        13    69.2      -1.23
+    RSI 60-70                         9    88.9       5.98
+    RSI over 70                      10    80.0      10.70
+
+
+AS THE SIGNAL: RSI and the average generate the entries themselves.
+Same strike, stop, trail, exit time and sizing as the parent, so the entry is the
+only thing that differs. 'vs parent' compares against the shipped strategy's net.
+
+  setup                                 n    win%  pts/trade     net Rs     maxDD  vs parent
+  shipped strategy                     64    68.8       4.98     40,341     8,876         +0
+
+  pullback, 3min, EMA                 563    49.4      -1.43    -61,452    71,491   -101,793
+  pullback, 3min, SMA                 563    47.2      -2.14    -67,344    67,874   -107,685
+  pullback, 5min, EMA                 426    49.8      -0.83    -60,258    64,993   -100,599
+  pullback, 5min, SMA                 456    51.1      -0.30    -52,816    54,398    -93,158
+  pullback, 15min, EMA                239    50.2       0.14    -27,780    29,060    -68,121
+  pullback, 15min, SMA                243    50.2      -0.00    -24,716    31,046    -65,057
+
+  EMA cross, 3min, EMA                641    50.7      -0.84    -66,488    67,449   -106,830
+  EMA cross, 3min, SMA                636    53.0      -0.02    -47,660    63,087    -88,002
+  EMA cross, 5min, EMA                568    56.3       0.16    -12,368   108,883    -52,709
+  EMA cross, 5min, SMA                551    53.7       0.03    -57,433    70,086    -97,774
+  EMA cross, 15min, EMA               369    56.6       0.52     -3,095    44,604    -43,436
+  EMA cross, 15min, SMA               332    53.9      -0.04    -14,792    39,780    -55,133
+
+  RSI reversal, 3min, EMA             465    49.7      -0.41    -61,029    62,296   -101,371
+  RSI reversal, 3min, SMA             465    49.7      -0.41    -61,029    62,296   -101,371
+  RSI reversal, 5min, EMA             382    50.0      -1.12    -67,505    69,611   -107,846
+  RSI reversal, 5min, SMA             382    50.0      -1.12    -67,505    69,611   -107,846
+  RSI reversal, 15min, EMA            209    46.4      -2.14    -49,876    61,090    -90,217
+  RSI reversal, 15min, SMA            209    46.4      -2.14    -49,876    61,090    -90,217
+
+  RSI momentum, 3min, EMA             653    54.1      -0.32    -64,749    90,173   -105,090
+  RSI momentum, 3min, SMA             653    53.6      -0.38    -64,790    78,489   -105,132
+  RSI momentum, 5min, EMA             601    56.1       0.83     -5,647    52,377    -45,988
+  RSI momentum, 5min, SMA             599    56.3       0.89     -3,320    53,715    -43,661
+  RSI momentum, 15min, EMA            402    53.0      -0.51    -46,391    51,481    -86,732
+  RSI momentum, 15min, SMA            400    53.0      -0.46    -46,777    51,868    -87,119
+
+
+ZERO-SKILL CONTROL. Each setup's best variant, against the same number of trades
+taken on the same days at random minutes, 200 draws. A real signal should beat
+almost all of them; anything under about 95% is inside the noise.
+
+  setup                                 real Rs  random median   beats
+  pullback, 15min, SMA                  -24,716        -30,260     61%
+  EMA cross, 15min, EMA                  -3,095        -47,575     96%
+  RSI reversal, 15min, EMA              -49,876        -33,966     12%
+  RSI momentum, 5min, SMA                -3,320        -60,695     98%

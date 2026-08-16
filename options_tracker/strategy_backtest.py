@@ -63,6 +63,9 @@ class StrategyConfig:
     require_confirmation_candle_direction: bool = False
     context_intervals: tuple[int, ...] = ()
     entry_windows: tuple[tuple[time, time], ...] = ()
+    # When set, the fixed reward_risk target is replaced by a stop that trails
+    # this many R behind the running high once the trade is that far in profit.
+    trail_gap_r: float | None = None
 
 
 def nifty_put_strategy_config(max_trades_per_day=2):
@@ -486,8 +489,11 @@ def _simulate(candidate, rows, config):
     risk = entry - stop
     if risk <= 0:
         return None
+    initial_stop = stop
     target = round(entry + risk * config.reward_risk, 2)
     runner_target = round(entry + risk * 3, 2)
+    trailing = config.trail_gap_r
+    high_water = entry
     outcome = "TIME_EXIT"
     exit_price = None
     exit_at = None
@@ -496,11 +502,18 @@ def _simulate(candidate, rows, config):
             break
         low, high = _number(future["low"]), _number(future["high"])
         if low <= stop:
-            outcome, exit_price, exit_at = "STOP", stop, future["local_timestamp"]
+            outcome = "TRAIL_EXIT" if stop > entry else "STOP"
+            exit_price, exit_at = stop, future["local_timestamp"]
             break
-        if high >= target:
+        if not trailing and high >= target:
             outcome, exit_price, exit_at = "TARGET", target, future["local_timestamp"]
             break
+        if trailing:
+            # Give the move room until it is trail_gap_r in profit, then follow
+            # the running high that far behind it.
+            high_water = max(high_water, high)
+            if high_water - entry >= risk * trailing:
+                stop = max(stop, round(high_water - risk * trailing, 2))
     if exit_price is None:
         eligible = [row for row in rows[candidate["next_index"]:] if row["local_timestamp"].time() <= TIME_EXIT]
         if not eligible:
@@ -512,7 +525,8 @@ def _simulate(candidate, rows, config):
         "signal_at": candidate["signal_at"].isoformat(),
         "exit_at": exit_at.isoformat(),
         "entry": entry,
-        "stop_loss": stop,
+        "stop_loss": initial_stop,
+        "exit_stop": stop,
         "target": target,
         "runner_target": runner_target,
         "outcome": outcome,

@@ -1,0 +1,19 @@
+NIFTY, trail 0.7R; every variant sized on its own hard stop, so none of them wins by taking more risk.
+Premium points are sizing-free and comparable across every row; the rupee columns are not,
+because a wider hard stop buys fewer lots and at Rs 1L a third of trades are already a single lot.
+
+  stop rule                        n   win%  pts/trade     Rs 1L    DD 1L      Rs 5L     DD 5L  soft  hard
+  --------------------------------------------------------------------------------------------------------
+  shipped trigger, trail 0.7R     64   68.8       4.98    40,334    8,886    256,690    58,512    18     0
+  close-confirmed stop            64   68.8       4.10    22,099   11,717    198,328    76,797    18     0
+  close-confirmed + hard 15%      58   69.0       4.14    14,738    6,413    121,281    45,263    16     2
+  spot must move 15 pts           58   72.4       4.70    17,537    6,165    144,996    43,035    12     5
+  spot must move 25 pts           58   72.4       4.52    16,464    6,165    138,168    43,182    10     7
+  spot must move 35 pts           42   69.0       4.37     5,867    4,918     90,255    32,898    10     5
+  spot 25 pts + close confirm     58   70.7       3.98    14,986    6,852    119,566    48,043    10     7
+  no stop for 3 bars              58   72.4       4.84    18,929    5,563    153,102    39,568    14     3
+  no stop for 5 bars              58   72.4       4.59    18,080    6,187    145,027    43,002    12     5
+  plain wider stop 15%            53   60.4      -0.34    -1,572   11,376        896    81,040    25     0
+  plain wider stop 20%            40   62.5      -0.43    -1,091    6,996    -13,827    66,128    25     0
+
+  baseline for reference: 4.98 pts/trade, Rs 40,334 at 1L, Rs 256,690 at 5L

@@ -6,3 +6,10 @@ __pycache__/
 .venv/
 venv/
 staticfiles/
+
+# Research artefacts: regenerable, and ~1.8 GB in total.
+# research/cache/ is the 246-session npz option cache; the pickles are
+# candidate/feature pools built from it (entry_pool_wide.pkl alone is 1.1 GB).
+research/cache/
+research/*.pkl
+brief_output.txt

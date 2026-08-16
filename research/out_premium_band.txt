@@ -1,0 +1,48 @@
+64 trades at a 0.7R trail
+
+  split-half: the same premium bands, scored on each half of the sample separately.
+  A real effect survives the cut; a lucky arrangement of trades does not.
+
+  band                          n    win%  pts/trade  pts total
+
+  first half (29 Aug 2025 - 18 Mar 2026)
+    entry Rs 0-100             12    75.0       2.50       30.0
+    entry Rs 100-200           13    92.3      14.67      190.7
+    entry Rs 200+               7    28.6      -6.32      -44.3
+
+  second half (19 Mar 2026 - 05 Aug 2026)
+    entry Rs 0-100              8    62.5       0.57        4.6
+    entry Rs 100-200           18    72.2       5.96      107.3
+    entry Rs 200+               6    83.3       5.08       30.5
+
+
+  what the premium is standing in for: the same buckets, described by IV and expiry.
+
+  entry premium                 n   ATM IV  days to expiry      spot
+  Rs 0-100                     20     14.9             0.0     24683
+  Rs 100-150                   18     11.8             0.0     24709
+  Rs 150-200                   13     17.2             0.0     23958
+  Rs 200+                      13     23.4             0.0     23466
+
+
+  full pipeline, Rs 1,00,000, each band re-run end to end so the cooldown and
+  daily-loss rules get to respond to the trades the filter removes.
+
+  premium band                  n    win%     net Rs     maxDD  Rs/trade  pts/trade
+  Rs 50-250                    64    68.8     40,341     8,876       630       4.98  <- shipped
+  Rs 75-250                    55    67.3     35,813     8,876       651       5.54
+  Rs 100-250                   44    68.2     24,291     5,027       552       6.46
+  Rs 100-200                   32    75.0     31,651     4,719       989       8.69
+  Rs 75-200                    43    72.1     37,944     5,819       882       6.94
+  Rs 50-200                    52    73.1     40,855     5,819       786       6.01
+  Rs 100-175                   24    70.8     25,289     4,041     1,054       8.68
+  Rs 125-250                   33    66.7     12,270     5,900       372       5.75
+
+
+  net at Rs 1,00,000 once a half bid-ask is charged each way. A fixed rupee spread
+  is a far bigger share of a cheap contract's few points than of an expensive one's.
+
+  premium band                    Rs 0.00      Rs 0.25      Rs 0.50      Rs 1.00
+  Rs 50-250                        40,341       33,692       19,970        8,712
+  Rs 100-200                       31,651       30,155       20,782       17,708
+  Rs 100-250                       24,291       21,890       19,490       16,852
