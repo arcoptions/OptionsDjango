@@ -11,9 +11,10 @@ from django.test import TestCase
 from django.db import connection
 from django.utils import timezone
 
+from . import live_engine
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
-from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeStyle
+from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeExecution, TradeStyle
 from .services import _expiry_month_hint, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.track_telegram import Command as TrackTelegramCommand
@@ -987,3 +988,226 @@ class TelegramWebhookTests(TestCase):
 		self.assertEqual(unauthorized.status_code, 401)
 		self.assertEqual(authorized.status_code, 200)
 		self.assertEqual(authorized.json()["total"], 0)
+
+
+class LiveEngineSizingTests(TestCase):
+	def test_takes_the_smaller_of_the_risk_and_cash_limits(self):
+		# Rs 120 entry: risk allows 2 lots (2% of 1L over Rs 12 x 65),
+		# cash allows 5 (40% of 1L over Rs 120 x 65). The risk limit binds.
+		self.assertEqual(live_engine.size_position(100_000, 120), 2)
+
+	def test_skips_when_sizing_rounds_to_zero_lots(self):
+		# A Rs 400 contract risks Rs 2,600 a lot against a Rs 2,000 budget.
+		# STRATEGY.md is explicit that this is a skip, not a rounding up to one.
+		self.assertEqual(live_engine.size_position(100_000, 400), 0)
+
+	@patch.dict(os.environ, {"NIFTY_LIVE_FIXED_LOTS": "1"})
+	def test_the_lot_cap_throttles_but_never_creates_a_trade(self):
+		self.assertEqual(live_engine.size_position(100_000, 120), 1)
+		self.assertEqual(live_engine.size_position(100_000, 400), 0)
+
+
+class LiveEngineTrailTests(TestCase):
+	def _position(self, stop=90.0):
+		return {"entry": 100.0, "initial_stop": 90.0, "stop": stop}
+
+	def test_does_not_arm_below_seven_percent(self):
+		# The 10% stop exists to absorb the early wobble; 72% of stopped
+		# contracts later trade back above entry, so nothing moves until +7%.
+		self.assertEqual(live_engine._trailed_stop(self._position(), 106.9), 90.0)
+
+	def test_follows_the_running_high_once_armed(self):
+		self.assertEqual(live_engine._trailed_stop(self._position(), 107.0), 100.0)
+		self.assertEqual(live_engine._trailed_stop(self._position(), 120.0), 113.0)
+
+	def test_never_moves_down(self):
+		self.assertEqual(live_engine._trailed_stop(self._position(stop=113.0), 110.0), 113.0)
+
+
+class LiveEngineSquareOffTests(TestCase):
+	def _state(self):
+		signal = TipSignal.objects.create(
+			option_symbol="NIFTY 24500 CE", direction=Direction.CE, stop_loss=Decimal("90"),
+		)
+		execution = TradeExecution.objects.create(
+			signal=signal, quantity=65, entry_price=Decimal("100"), stop_loss=Decimal("90"),
+		)
+		return {
+			"date": timezone.localdate().isoformat(), "trades_today": 0, "realized_r": 0.0,
+			"last_exit_at": None,
+			"position": {
+				"order_id": "112233", "signal_id": signal.id, "execution_id": execution.id,
+				"security_id": "44556", "option_type": "CE", "strike": 24500.0,
+				"entry": 100.0, "initial_stop": 90.0, "stop": 90.0, "quantity": 65,
+				"high_water": 108.0, "filled": True,
+				"placed_at": timezone.localtime().isoformat(),
+			},
+		}
+
+	@patch("options_tracker.live_engine.place_market_exit")
+	@patch("options_tracker.live_engine.fetch_super_order")
+	@patch("options_tracker.live_engine.cancel_super_order_leg")
+	def test_refuses_to_sell_while_an_exit_leg_is_still_resting(self, cancel, fetch, sell):
+		cancel.return_value = {"ok": True}
+		fetch.return_value = {"legDetails": [{"legName": "STOP_LOSS_LEG", "orderStatus": "PENDING"}]}
+		state = self._state()
+
+		notes = live_engine.square_off(state, timezone.localtime())
+
+		# Selling into a live stop could fill twice and leave the account short.
+		sell.assert_not_called()
+		self.assertIn("CRITICAL", notes[0])
+		self.assertIsNotNone(state["position"])
+
+	@patch("options_tracker.live_engine.place_market_exit")
+	@patch("options_tracker.live_engine.fetch_super_order")
+	@patch("options_tracker.live_engine.cancel_super_order_leg")
+	def test_cancels_both_legs_before_selling(self, cancel, fetch, sell):
+		cancel.return_value = {"ok": True}
+		fetch.return_value = {"legDetails": [{"legName": "STOP_LOSS_LEG", "orderStatus": "CANCELLED"}]}
+		sell.return_value = {"ok": True}
+		state = self._state()
+
+		live_engine.square_off(state, timezone.localtime())
+
+		self.assertEqual(
+			[call.args[1] for call in cancel.call_args_list], ["STOP_LOSS_LEG", "TARGET_LEG"],
+		)
+		sell.assert_called_once_with("44556", 65)
+		self.assertIsNone(state["position"])
+		self.assertEqual(state["trades_today"], 1)
+
+
+class LiveEngineSignalTests(TestCase):
+	trade_date = date(2026, 8, 17)
+
+	def _spot_rows(self, rising=True):
+		start = timezone.make_aware(datetime.combine(self.trade_date, time(9, 15)))
+		rows = {start + timedelta(minutes=minute): 24500.0 for minute in range(15)}
+		for offset, step in enumerate((5, 20, 40, 60, 80)):
+			rows[start + timedelta(minutes=15 + offset)] = 24500.0 + (step if rising else -step)
+		return rows
+
+	def _snapshot(self, option_type="CE", bid=119.5, ask=120.0, delta=0.45):
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="NIFTY", expiry_date=self.trade_date + timedelta(days=4),
+			underlying_price=Decimal("24580"), atm_strike=Decimal("24500"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=snapshot, strike=Decimal("24500"), option_type=option_type,
+			security_id="44556", last_price=Decimal("120"), delta=delta,
+			top_bid_price=Decimal(str(bid)), top_ask_price=Decimal(str(ask)),
+			top_bid_quantity=250, top_ask_quantity=250, is_atm=True,
+		)
+		return snapshot
+
+	def _option_bars(self, close=120.0, open_price=110.0, volume=3000.0):
+		start = timezone.make_aware(datetime.combine(self.trade_date, time(9, 15)))
+		bars = [
+			{"timestamp": start + timedelta(minutes=minute), "open": 110.0, "high": 112.0,
+			 "low": 108.0, "close": 110.0, "volume": 1000.0}
+			for minute in range(19)
+		]
+		bars.append({
+			"timestamp": start + timedelta(minutes=19), "open": open_price, "high": close,
+			"low": open_price, "close": close, "volume": volume,
+		})
+		return bars
+
+	def _detect(self, rising=True, option_type="CE", bars=None, **snapshot_kwargs):
+		now = timezone.make_aware(datetime.combine(self.trade_date, time(9, 35, 5)))
+		snapshot = self._snapshot(option_type=option_type, **snapshot_kwargs)
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = bars if bars is not None else self._option_bars()
+			return live_engine.detect_signal(
+				now=now, spot_rows=self._spot_rows(rising), snapshot=snapshot,
+			)
+
+	def test_detects_a_call_breakout_on_the_completed_minute(self):
+		candidate, _ = self._detect()
+
+		self.assertIsNotNone(candidate)
+		self.assertEqual(candidate["option_type"], "CE")
+		self.assertEqual(candidate["strike"], 24500.0)
+		self.assertEqual(candidate["signal_at"].strftime("%H:%M"), "09:34")
+		self.assertEqual(candidate["volume_ratio"], 3.0)
+		self.assertEqual(candidate["signal_close"], 120.0)
+
+	def test_detects_a_put_breakdown(self):
+		candidate, _ = self._detect(rising=False, option_type="PE", delta=-0.45)
+
+		self.assertIsNotNone(candidate)
+		self.assertEqual(candidate["option_type"], "PE")
+
+	def test_rejects_a_premium_below_the_hundred_rupee_floor(self):
+		candidate, reasons = self._detect(bars=self._option_bars(close=80.0, open_price=70.0))
+
+		self.assertIsNone(candidate)
+		self.assertTrue(any("premium" in reason for reason in reasons))
+
+	def test_rejects_an_option_bar_that_closed_below_its_open(self):
+		candidate, reasons = self._detect(bars=self._option_bars(close=120.0, open_price=130.0))
+
+		self.assertIsNone(candidate)
+		self.assertTrue(any("close above its open" in reason for reason in reasons))
+
+	def test_rejects_thin_volume(self):
+		candidate, reasons = self._detect(bars=self._option_bars(volume=1200.0))
+
+		self.assertIsNone(candidate)
+		self.assertTrue(any("volume ratio" in reason for reason in reasons))
+
+	def test_rejects_a_wide_spread(self):
+		# The backtest never saw a quote. This gate is the one thing standing
+		# between a signal and paying six percent to get in.
+		candidate, reasons = self._detect(bid=112.0, ask=120.0)
+
+		self.assertIsNone(candidate)
+		self.assertTrue(any("spread" in reason for reason in reasons))
+
+	def test_reports_a_feed_gap_rather_than_a_quiet_market(self):
+		rows = self._spot_rows()
+		start = timezone.make_aware(datetime.combine(self.trade_date, time(9, 15)))
+		for minute in range(4):
+			del rows[start + timedelta(minutes=minute)]
+		now = timezone.make_aware(datetime.combine(self.trade_date, time(9, 35, 5)))
+
+		candidate, reasons = live_engine.detect_signal(
+			now=now, spot_rows=rows, snapshot=self._snapshot(),
+		)
+
+		# Without all fifteen opening minutes no trade can be taken all day.
+		# That must not read like an ordinary session on which nothing set up.
+		self.assertIsNone(candidate)
+		self.assertIn("FEED GAP: 11 of 15", reasons[0])
+
+
+class LiveEngineEntryTests(TestCase):
+	@patch.dict(os.environ, {"NIFTY_LIVE_FIXED_LOTS": "1"})
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_sends_a_ten_percent_stop_and_an_unreachable_target(self, place):
+		place.return_value = {"ok": True, "order_id": "998877", "correlation_id": "arc-test"}
+		now = timezone.localtime()
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="NIFTY", underlying_price=Decimal("24580"), atm_strike=Decimal("24500"),
+		)
+		IndexOptionStrikeSnapshot.objects.create(
+			snapshot=snapshot, strike=Decimal("24500"), option_type="CE", security_id="44556",
+			last_price=Decimal("120"), top_bid_price=Decimal("119.5"),
+			top_ask_price=Decimal("120"), top_bid_quantity=250, top_ask_quantity=250, delta=0.45,
+		)
+		candidate = {
+			"signal_at": now, "option_type": "CE", "direction": Direction.CE, "strike": 24500.0,
+			"security_id": "44556", "signal_close": 120.0, "volume_ratio": 3.0, "spot": 24580.0,
+			"spot_move_percent": 0.33, "expiry_date": None, "quote": {},
+		}
+
+		position, notes = live_engine.open_position(candidate, {"position": None}, now=now)
+
+		signal = TipSignal.objects.get(security_id="44556")
+		self.assertEqual(notes, [])
+		self.assertEqual(position["entry"], 120.6)
+		self.assertEqual(float(signal.stop_loss), 108.54)
+		# Dhan requires targetPrice, so "no target" is one that cannot be reached.
+		self.assertEqual(float(signal.target_1), 361.8)
+		self.assertEqual(place.call_args.args[1], 65)

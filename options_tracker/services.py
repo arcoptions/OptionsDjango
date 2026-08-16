@@ -17,6 +17,8 @@ from .models import AppSetting, DhanOrderEvent, Direction, OptionOutcome, Signal
 
 DHAN_INSTRUMENT_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master-detailed.csv"
 DHAN_LTP_URL = "https://api.dhan.co/v2/marketfeed/ltp"
+DHAN_SUPER_ORDER_URL = "https://api.dhan.co/v2/super/orders"
+DHAN_ORDER_URL = "https://api.dhan.co/v2/orders"
 DHAN_SYMBOL_ALIASES = {"NG": "NATURALGAS", "UNITSDSPR": "UNITDSPR"}
 DHAN_SEGMENTS = {
     ("NSE", "D"): "NSE_FNO", ("BSE", "D"): "BSE_FNO", ("MCX", "M"): "MCX_COMM",
@@ -666,7 +668,7 @@ def place_super_order(signal, quantity):
 
     try:
         response = requests.post(
-            "https://api.dhan.co/v2/super/orders",
+            DHAN_SUPER_ORDER_URL,
             json=payload,
             headers=_dhan_headers(access_token),
             timeout=20,
@@ -699,3 +701,107 @@ def place_super_order(signal, quantity):
         "status": status,
         "correlation_id": correlation_id,
     }
+
+
+def _dhan_request(method, url, correlation_id, json_payload=None, log=True):
+    """Call Dhan and record the attempt, whatever happens, on DhanOrderEvent.
+
+    Every order-lifecycle call goes through here so the audit trail is complete
+    even when the network fails before Dhan sees the request. `log=False` is for
+    polling reads, which run every tick and would otherwise bury the handful of
+    rows that actually matter -- a read that *fails* is still recorded.
+    """
+    access_token, client_id = get_dhan_credentials()
+    if not access_token or not client_id:
+        return {"ok": False, "error": "Missing DHAN_ACCESS_TOKEN or DHAN_CLIENT_ID env vars."}
+
+    try:
+        response = requests.request(
+            method, url, json=json_payload, headers=_dhan_headers(access_token, client_id), timeout=20,
+        )
+        body = response.json() if response.content else {}
+    except Exception as exc:
+        DhanOrderEvent.objects.create(
+            status="FAILED",
+            correlation_id=correlation_id,
+            payload_json={"request": {"method": method, "url": url, "body": json_payload}, "error": str(exc)},
+        )
+        return {"ok": False, "error": str(exc)}
+
+    ok = response.status_code < 300
+    if log or not ok:
+        DhanOrderEvent.objects.create(
+            order_id=str((body or {}).get("orderId", "")),
+            correlation_id=correlation_id,
+            status=str((body or {}).get("orderStatus", "OK" if ok else "FAILED"))[:30],
+            payload_json={
+                "request": {"method": method, "url": url, "body": json_payload},
+                "response": body,
+                "http": response.status_code,
+            },
+        )
+    if not ok:
+        message = (body or {}).get("errorMessage") or f"Dhan API failed with status {response.status_code}"
+        return {"ok": False, "error": message, "http": response.status_code, "response": body}
+    return {"ok": True, "response": body, "http": response.status_code}
+
+
+def modify_super_order_stop(order_id, stop_price, correlation_id=""):
+    """Move the stop-loss leg of a live super order to `stop_price`.
+
+    `trailingJump` is deliberately sent as 0. The strategy's 0.7R trail is
+    managed here, one minute at a time; Dhan's own trail would start tightening
+    from the first favourable tick, during exactly the early wobble the fixed
+    10% stop exists to absorb.
+    """
+    _, client_id = get_dhan_credentials()
+    payload = {
+        "dhanClientId": client_id,
+        "orderId": str(order_id),
+        "legName": "STOP_LOSS_LEG",
+        "stopLossPrice": round(float(stop_price), 2),
+        "trailingJump": 0,
+    }
+    return _dhan_request("PUT", f"{DHAN_SUPER_ORDER_URL}/{order_id}", correlation_id, payload)
+
+
+def cancel_super_order_leg(order_id, leg_name, correlation_id=""):
+    """Cancel one leg of a super order. Dhan cannot re-add a cancelled leg."""
+    return _dhan_request("DELETE", f"{DHAN_SUPER_ORDER_URL}/{order_id}/{leg_name}", correlation_id)
+
+
+def fetch_super_order(order_id):
+    """Return the live book entry for one super order, or None."""
+    result = _dhan_request("GET", DHAN_SUPER_ORDER_URL, f"read-{order_id}", log=False)
+    if not result["ok"]:
+        return None
+    orders = result["response"]
+    if isinstance(orders, dict):
+        orders = orders.get("data") or []
+    for order in orders or []:
+        if str(order.get("orderId")) == str(order_id):
+            return order
+    return None
+
+
+def place_market_exit(security_id, quantity, correlation_id=""):
+    """Square off a long option position at market.
+
+    Only ever called after the resting exit legs are confirmed cancelled --
+    selling while a stop-loss leg is still live could fill twice and leave the
+    account short.
+    """
+    _, client_id = get_dhan_credentials()
+    payload = {
+        "dhanClientId": client_id,
+        "correlationId": correlation_id or f"arc-{uuid.uuid4().hex[:12]}",
+        "transactionType": "SELL",
+        "exchangeSegment": "NSE_FNO",
+        "productType": "INTRADAY",
+        "orderType": "MARKET",
+        "validity": "DAY",
+        "securityId": str(security_id),
+        "quantity": int(quantity),
+        "price": 0,
+    }
+    return _dhan_request("POST", DHAN_ORDER_URL, payload["correlationId"], payload)

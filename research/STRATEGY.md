@@ -162,12 +162,16 @@ ever breached. **If `lots` is zero, skip the trade** — do not round up to one.
 
 ## 7. Placing it on Dhan
 
-`options_tracker/services.py::place_super_order` already posts to
-`https://api.dhan.co/v2/super/orders` with an entry, a stop and a target in one
-call. Two things need care before it is pointed at this strategy.
+`options_tracker/live_engine.py` runs this strategy live, driven once every 15
+seconds by `python manage.py run_nifty_live`. Three things about the broker
+needed care.
 
-**The target field must not be used.** This strategy has no target. Sending a
-`targetPrice` would cap the winners that pay for the losers.
+**`targetPrice` is required and cannot be omitted.** This strategy has no
+target, but Dhan's `POST /v2/super/orders` marks every price field mandatory. So
+the target is sent as an unreachable one: `round(entry * 3, 2)`. The largest
+single-trade premium gain in 246 sessions was roughly +18%, and the 15:20
+square-off would close the trade long before 3× could print. A real target would
+cap the winners that pay for the losers.
 
 **Dhan's `trailingJump` is not this trail, and the difference is not cosmetic.**
 `trailingJump` moves the stop up from the moment price moves. This strategy
@@ -175,19 +179,56 @@ leaves the stop *fixed at −10%* until the trade is **+7%** in profit, and only
 then follows 7% behind the running high. Setting a jump would tighten the stop
 during exactly the early wobble the 10% stop exists to absorb — and stop-hunting
 was already diagnosed as this strategy's main leak: 72% of stopped contracts
-later trade back above entry.
+later trade back above entry. `trailingJump` is therefore always sent as 0 and
+the stop is moved from `modify_super_order_stop`, once a minute, upward only.
+
+**Square-off order matters and is not negotiable.** At 15:20 the engine cancels
+`STOP_LOSS_LEG`, then `TARGET_LEG`, re-reads the book, and only then sells. If
+either cancel cannot be confirmed it logs `SQUARE_OFF_BLOCKED` and *does not
+sell*: a market sell into a still-resting stop-sell could fill twice and leave
+the account short a naked option. Leaving the exchange stop in place and
+squaring off by hand is the strictly better failure.
 
 So, concretely:
 
 1. Place the super order with `stopLossPrice = round(entry * 0.90, 2)`,
-   `trailingJump = 0`, and **no** target.
+   `trailingJump = 0`, and an unreachable `targetPrice`.
 2. Track the running high client-side, once a minute.
 3. Once `high_water >= entry * 1.07`, modify the order's stop to
    `round(high_water - entry * 0.07, 2)`. Only ever upward.
-4. Square off at 15:20 regardless.
+4. Square off at 15:20 regardless — cancelling the exit legs first.
 
-Until the trail is managed client-side, running with the fixed 10% stop alone is
-the safe subset: it gives up profit but never takes on unmeasured risk.
+### What live adds that the backtest could not have
+
+- **Entry is a limit order that is not chased.** The backtest enters at
+  `max(next_bar_open, signal_close) * 1.005` and declines the trade if the next
+  bar never trades there. Live that is a limit placed a few seconds into the next
+  minute and cancelled after 75 seconds. An unfilled order is not a missed trade;
+  it is the trade the backtest also declined. Four of the five signals the replay
+  found beyond the backtest's books are exactly this case.
+- **A liquidity gate.** Two-sided quote present, spread ≤ 4%, depth at the top of
+  book, |delta| between 0.15 and 0.70. None of this is in the backtest, which
+  never saw a quote. It can only stop a fill, never create one, so it cannot
+  flatter the result.
+- **A feed-gap alarm.** The opening range needs all fifteen 09:15–09:29 minutes;
+  without them no trade can be taken all day. That condition is reported as
+  `FEED GAP: n of 15`, not as a quiet market, because the two look identical in a
+  log and only one of them is a fault.
+- **A kill switch.** The `nifty_live_enabled` AppSetting is read every tick, so
+  the engine can be stopped without a redeploy.
+
+### Parity is checked, not assumed
+
+`python manage.py replay_nifty_live --all-signals` feeds the stored candles for
+every session the backtest traded back through the live signal path, minute by
+minute, and diffs the two. It currently reproduces **50 of 50** comparable
+backtest signals with zero misses. One session (2026-03-27) is skipped: the
+stored cache starts at 09:19 that day, so the opening range cannot be formed —
+a gap in the option-candle backfill, not in the live index feed, which is a
+different source.
+
+Run it after any change to the entry rule or the engine. Two implementations of
+one rule set drift silently otherwise.
 
 ---
 
