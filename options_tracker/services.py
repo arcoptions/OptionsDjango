@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import re
 import sqlite3
@@ -38,10 +40,48 @@ def get_dhan_credentials():
     token_setting = AppSetting.objects.filter(key="dhan_access_token").first()
     client_setting = AppSetting.objects.filter(key="dhan_client_id").first()
     stored = str(token_setting.value if token_setting else "").strip()
-    access_token = _freshest_token(stored, token_setting.updated_at if token_setting else None)
-    access_token = access_token or os.getenv("DHAN_ACCESS_TOKEN", "").strip()
+    written = _freshest_token(stored, token_setting.updated_at if token_setting else None)
+    access_token = _live_one_of(written, os.getenv("DHAN_ACCESS_TOKEN", "").strip())
     client_id = str(client_setting.value if client_setting else os.getenv("DHAN_CLIENT_ID", "")).strip()
     return access_token, client_id
+
+
+def _live_one_of(written, seeded):
+    """Prefer what was written on this host, but never prefer a token that is dead.
+
+    Ordering by write time is right while both are alive and wrong the moment the
+    newer one lapses. A token pasted into the database on 13 August outranked a
+    working one in the environment for two days: every Dhan call 401ed, the
+    collector recorded nothing, and the renewal job kept trying to renew the
+    corpse -- which cannot work, because Dhan only renews live tokens. Nothing
+    ever asked whether the token it picked was still valid.
+
+    The JWT states its own expiry, so asking costs nothing and needs no network.
+    """
+    if not written:
+        return seeded
+    if seeded and _token_is_spent(written) and not _token_is_spent(seeded):
+        return seeded
+    return written
+
+
+def _token_expiry(access_token):
+    """When this token dies, from its own JWT claim, or None if it will not say.
+
+    Undecodable is not the same as expired -- a token we cannot read may still
+    work -- so callers must treat None as no evidence against it.
+    """
+    try:
+        payload = access_token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return datetime.fromtimestamp(float(json.loads(base64.urlsafe_b64decode(payload))["exp"])).astimezone()
+    except Exception:
+        return None
+
+
+def _token_is_spent(access_token, now=None):
+    expiry = _token_expiry(access_token)
+    return bool(expiry and expiry <= (now or timezone.localtime()))
 
 
 def _freshest_token(stored, stored_at):
@@ -106,8 +146,10 @@ def write_dhan_token_file(access_token):
 def _extract_access_token(body):
     """Pull the token out of a renewal response.
 
-    Dhan documents the endpoint's behaviour but not its response shape, so this
-    accepts the forms their other endpoints use rather than guessing one.
+    Dhan documents the endpoint's behaviour but not its response shape. Observed
+    against the live account it is `{"createTime", "expiryTime", "token"}`, but
+    the other forms their endpoints use are still accepted rather than pinning
+    this to one undocumented key.
     """
     if isinstance(body, str):
         return body.strip()
@@ -142,8 +184,9 @@ def renew_dhan_token():
     headers = {"Accept": "application/json", "access-token": access_token, "dhanClientId": client_id}
     try:
         response = requests.get(DHAN_RENEW_TOKEN_URL, headers=headers, timeout=20)
-        # The docs show a bare curl with no verb, which means GET, but they never
-        # say so outright. If GET is not what they meant, POST is.
+        # The docs show a bare curl with no verb. GET is what they meant -- it is
+        # what the live endpoint answers -- but POST stays as a fallback in case
+        # that changes under us.
         if response.status_code in (404, 405):
             response = requests.post(DHAN_RENEW_TOKEN_URL, headers=headers, json={}, timeout=20)
         body = response.json() if response.content else {}
@@ -162,7 +205,10 @@ def renew_dhan_token():
         return {"ok": False, "error": f"Renewal returned no token. Response keys: {keys}"}
 
     write_dhan_token_file(renewed)
-    return {"ok": True, "validity": dhan_token_validity(renewed)}
+    # The body already says when the new token dies, so the profile round trip is
+    # only a fallback for a response that leaves it out.
+    expiry = str(body.get("expiryTime") or "") if isinstance(body, dict) else ""
+    return {"ok": True, "validity": expiry or dhan_token_validity(renewed)}
 
 
 def dhan_token_validity(access_token=None):

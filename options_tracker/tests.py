@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import shutil
@@ -1274,6 +1275,38 @@ class DhanTokenRenewalTests(TestCase):
 		# If renewal breaks and someone repairs it by hand, a file that always won
 		# would keep serving the dead token.
 		self.assertEqual(access_token, "pasted-just-now")
+
+	def _jwt(self, expires_in_hours):
+		"""A token shaped like Dhan's, carrying only the claim that matters here."""
+		claim = {"exp": int((timezone.now() + timedelta(hours=expires_in_hours)).timestamp())}
+		body = base64.urlsafe_b64encode(json.dumps(claim).encode()).decode().rstrip("=")
+		return f"header.{body}.signature"
+
+	def test_an_expired_token_in_the_database_never_shadows_a_live_one(self):
+		AppSetting.objects.create(key="dhan_access_token", value=self._jwt(-3))
+		live = self._jwt(12)
+
+		with self._env(DHAN_ACCESS_TOKEN=live, DHAN_CLIENT_ID="1111"):
+			access_token, _ = get_dhan_credentials()
+
+		# This is the outage of 14-17 August: a token pasted into the dashboard on
+		# the 13th outranked a working one in the environment, so every Dhan call
+		# 401ed in silence, the collector recorded nothing for two sessions, and
+		# the renewal job kept trying to renew a corpse -- which can never work,
+		# because Dhan renews only live tokens.
+		self.assertEqual(access_token, live)
+
+	def test_a_live_database_token_is_not_displaced_by_an_expired_seed(self):
+		live = self._jwt(12)
+		AppSetting.objects.create(key="dhan_access_token", value=live)
+
+		with self._env(DHAN_ACCESS_TOKEN=self._jwt(-3), DHAN_CLIENT_ID="1111"):
+			access_token, _ = get_dhan_credentials()
+
+		# The rule is "never prefer a dead token", not "always prefer the
+		# environment". A deploy-time seed that has lapsed must not unseat what
+		# someone pasted this morning.
+		self.assertEqual(access_token, live)
 
 	def test_refuses_to_renew_when_there_is_nowhere_to_put_the_result(self):
 		with self._env(DHAN_ACCESS_TOKEN="live-token", DHAN_CLIENT_ID="1111"):
