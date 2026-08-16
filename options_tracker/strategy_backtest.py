@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from statistics import median
+import math
 
 from django.utils import timezone
 
@@ -11,6 +12,11 @@ from .models import IndexOptionCandle
 ENTRY_START = time(9, 25)
 TIME_EXIT = time(15, 20)
 MARKET_OPEN = time(9, 15)
+# How much of the opening range a live feed has to have delivered before the
+# range is trusted. Not a tuned number and not part of the strategy: the
+# backtest applies no such test, so this can only withhold a trade, never
+# manufacture one.
+MIN_OPENING_COVERAGE = 0.8
 NIFTY_PUT_RESEARCH_SUMMARY = {
     "data_start": "2025-08-18",
     "data_end": "2026-08-14",
@@ -366,7 +372,41 @@ def _spot_setups(spot_by_date, opening_ranges, config):
     return defaultdict(lambda: defaultdict(set))
 
 
+def opening_range_closed(spot_rows, config):
+    """Has the feed delivered the last minute of the opening range yet?
+
+    Bars are start-labelled, so on a 15-minute range the 09:29 bar is the
+    fifteenth and it only completes at 09:30. Until it lands the range is still
+    forming and any min/max taken from it is provisional.
+    """
+    if not spot_rows:
+        return False
+    last = MARKET_OPEN.hour * 60 + MARKET_OPEN.minute + config.opening_range_minutes - 1
+    return max(spot_rows).time() >= time(last // 60, last % 60)
+
+
+def opening_coverage_floor(config):
+    """The fewest opening-range minutes a live feed may deliver and still count."""
+    return math.ceil(config.opening_range_minutes * MIN_OPENING_COVERAGE)
+
+
 def spot_setup_timestamps(spot_rows, config):
+    """The setup minutes for one session, for callers holding a live feed.
+
+    The backtest reaches the same setups through `_spot_context`, which only asks
+    that the opening range be non-empty -- it is always handed whole sessions, so
+    a half-formed range is not a state it can be in. A live feed is in exactly
+    that state every morning until 09:30, hence the extra condition here: the
+    range is not usable until the window has closed, which is to say until the
+    last of its minutes has been delivered.
+
+    Coverage is held to a floor rather than to the full count. A range is a min
+    and a max, so a missing minute can only narrow it, and a narrower range makes
+    breakouts easier -- the risk of a gappy feed is invented signals, not lost
+    ones. But demanding every minute is how this came to reject *every* session:
+    the feed was one bar short, and one bar short was indistinguishable from no
+    data at all. A floor keeps the protection and drops the brittleness.
+    """
     if not spot_rows:
         return {}
     session_date = next(iter(spot_rows)).date()
@@ -377,7 +417,9 @@ def spot_setup_timestamps(spot_rows, config):
         spot for timestamp, spot in spot_rows.items()
         if MARKET_OPEN <= timestamp.time() < opening_end.time()
     ]
-    if len(opening_values) < config.opening_range_minutes:
+    if not opening_range_closed(spot_rows, config):
+        return {}
+    if len(opening_values) < opening_coverage_floor(config):
         return {}
     opening_ranges = {session_date: (min(opening_values), max(opening_values))}
     setups = _spot_setups({session_date: spot_rows}, opening_ranges, config)

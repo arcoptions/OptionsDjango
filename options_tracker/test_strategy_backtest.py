@@ -69,6 +69,50 @@ class StrategyBacktestTests(SimpleTestCase):
             },
         )
 
+    def test_setup_survives_a_feed_that_is_missing_the_opening_bar(self):
+        """The outage: one absent minute used to cost the entire session.
+
+        Dhan's `fromDate` is exclusive, so asking from 09:15 returned 09:16
+        onwards and the opening range arrived fourteen minutes long. The old
+        guard demanded all fifteen and returned an empty dict, which is
+        indistinguishable from a quiet market -- so the live engine reported no
+        breakout every day of its life and nobody could tell it was broken.
+        """
+        start = self._timestamp(9, 16)
+        opening = [100] * 9 + [100, 100.5, 101, 101.5, 102]
+        decline = [99.8, 99.7, 99.6, 99.5, 99.4]
+        spot_rows = {
+            start + timedelta(minutes=index): spot
+            for index, spot in enumerate(opening)
+        }
+        for offset, spot in enumerate(decline):
+            spot_rows[self._timestamp(9, 30 + offset)] = spot
+
+        setups = spot_setup_timestamps(spot_rows, nifty_put_strategy_config())
+
+        self.assertEqual(setups, {self._timestamp(9, 34): {"PUT"}})
+
+    def test_no_setup_until_the_opening_window_has_actually_closed(self):
+        """A range read at 09:20 is five minutes of noise, not an opening range."""
+        start = self._timestamp(9, 15)
+        spot_rows = {start + timedelta(minutes=index): 100 + index for index in range(6)}
+
+        self.assertEqual(spot_setup_timestamps(spot_rows, nifty_put_strategy_config()), {})
+
+    def test_a_feed_below_the_coverage_floor_is_refused(self):
+        """Missing minutes can only narrow the range, which invents breakouts.
+
+        A min and a max taken from a third of the window is a tighter range than
+        the real one, so every later bar clears it more easily. Withholding the
+        session is the safe direction; the backtest applies no such test, so this
+        can only ever skip a trade.
+        """
+        spot_rows = {self._timestamp(9, 15 + index): 100 for index in (0, 1, 2, 3, 14)}
+        for minute, spot in ((30, 99.8), (31, 99.7), (32, 99.6), (33, 99.5), (34, 99.4)):
+            spot_rows[self._timestamp(9, minute)] = spot
+
+        self.assertEqual(spot_setup_timestamps(spot_rows, nifty_put_strategy_config()), {})
+
     def test_simulation_tracks_fixed_strike_and_uses_stop_first(self):
         config = nifty_put_strategy_config()
         candidate = {

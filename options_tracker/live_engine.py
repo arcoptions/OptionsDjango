@@ -67,7 +67,12 @@ from .services import (
     place_market_exit,
     place_super_order,
 )
-from .strategy_backtest import MARKET_OPEN, spot_setup_timestamps
+from .strategy_backtest import (
+    MARKET_OPEN,
+    opening_coverage_floor,
+    opening_range_closed,
+    spot_setup_timestamps,
+)
 
 
 UNDERLYING = "NIFTY"
@@ -152,7 +157,23 @@ def _log(event, payload, order_id=""):
 # --------------------------------------------------------------------------- #
 
 def intraday_bars(security_id, segment, instrument, session_date):
-    """One session of completed 1-minute bars, oldest first."""
+    """One session of completed 1-minute bars, oldest first.
+
+    Both ends of Dhan's window are exclusive, which is not what the field names
+    suggest and not what this asked for originally. `fromDate 09:15:00` returns
+    09:16 onwards -- it drops the opening bar -- so the opening range came back
+    fourteen minutes long against the fifteen the strategy is defined on, and
+    `spot_setup_timestamps` rejected every session it was ever given. The engine
+    could not have produced a signal on any day. Asking from 09:00 restores the
+    09:15 bar; Dhan sends nothing before the open, but the trim below makes that
+    a guarantee rather than an observation.
+
+    The far end runs to 15:40 because the closing auction session extends F&O
+    past 15:30, which is why a full session is 385 bars to 15:39 and not 375 to
+    15:29. Nothing the shipped strategy does reaches that far -- it is flat by
+    15:20 -- but the stored candles this was validated against include the tail,
+    and the point of this window is to match them exactly.
+    """
     access_token, client_id = get_dhan_credentials()
     if not access_token or not client_id:
         raise RuntimeError("Dhan credentials are not configured.")
@@ -162,8 +183,8 @@ def intraday_bars(security_id, segment, instrument, session_date):
         "instrument": instrument,
         "interval": "1",
         "oi": False,
-        "fromDate": f"{session_date.isoformat()} 09:15:00",
-        "toDate": f"{session_date.isoformat()} 15:30:00",
+        "fromDate": f"{session_date.isoformat()} 09:00:00",
+        "toDate": f"{session_date.isoformat()} 15:40:00",
     }
     response = requests.post(
         DHAN_INTRADAY_URL,
@@ -184,8 +205,15 @@ def intraday_bars(security_id, segment, instrument, session_date):
     bars = []
     for index, epoch in enumerate(stamps):
         pick = lambda name: (data.get(name) or [None] * len(stamps))[index]
+        stamp = datetime.fromtimestamp(epoch, tz=tz)
+        if stamp.time() < MARKET_OPEN:
+            # Asked for from 09:00 only to defeat the exclusive bound. Anything
+            # genuinely before the bell is not part of the session the strategy
+            # was measured on and must not reach the opening range or a volume
+            # average.
+            continue
         bars.append({
-            "timestamp": datetime.fromtimestamp(epoch, tz=tz),
+            "timestamp": stamp,
             "open": _number(pick("open")), "high": _number(pick("high")),
             "low": _number(pick("low")), "close": _number(pick("close")),
             "volume": _number(pick("volume")),
@@ -278,15 +306,19 @@ def detect_signal(now=None, spot_rows=None, snapshot=None):
 
     setups = spot_setup_timestamps(spot_rows, config)
     if not setups:
-        # `spot_setup_timestamps` needs all 15 opening minutes and returns an
-        # empty dict without them, which otherwise reads exactly like a quiet
-        # market. It is not: a feed gap in the first fifteen minutes silently
-        # costs the whole session, so it is called out as the fault it is.
+        # An empty dict reads exactly like a quiet market, and three quite
+        # different things produce one. Only the middle case is a fault, and
+        # saying so plainly is the difference between a morning that is merely
+        # early and one where no trade is possible at all.
         covered = opening_minutes_present(spot_rows, config)
-        if covered < config.opening_range_minutes:
+        floor = opening_coverage_floor(config)
+        if not opening_range_closed(spot_rows, config):
+            return None, [f"opening range still forming; {covered} minutes so far"]
+        if covered < floor:
             return None, [
                 f"FEED GAP: {covered} of {config.opening_range_minutes} opening-range "
-                f"minutes arrived. No trade is possible today until this is repaired."
+                f"minutes arrived, under the {floor} this needs. No trade is possible "
+                f"today until this is repaired."
             ]
         return None, ["opening range held; no breakout yet"]
 

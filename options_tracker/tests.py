@@ -5,7 +5,7 @@ import shutil
 import tempfile
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -1224,6 +1224,52 @@ class _FakeResponse:
 
 	def json(self):
 		return self._payload
+
+
+class LiveEngineFeedTests(TestCase):
+	"""The request window itself, which is where the engine was silently broken."""
+
+	trade_date = date(2026, 8, 17)
+
+	def _epoch(self, hour, minute):
+		return timezone.make_aware(
+			datetime.combine(self.trade_date, time(hour, minute))
+		).timestamp()
+
+	def _fetch(self, minutes):
+		body = {
+			"timestamp": [self._epoch(*minute) for minute in minutes],
+			"open": [100.0] * len(minutes), "high": [101.0] * len(minutes),
+			"low": [99.0] * len(minutes), "close": [100.5] * len(minutes),
+			"volume": [1000.0] * len(minutes),
+		}
+		response = Mock(ok=True)
+		response.json.return_value = body
+		with patch("options_tracker.live_engine.get_dhan_credentials", return_value=("t", "1")), \
+				patch("options_tracker.live_engine.requests.post", return_value=response) as post:
+			bars = live_engine.intraday_bars("13", "IDX_I", "INDEX", self.trade_date)
+		return bars, post.call_args.kwargs["json"]
+
+	def test_the_window_reaches_past_both_exclusive_bounds(self):
+		"""Both ends of Dhan's window exclude the moment they name.
+
+		Asking from 09:15 returned 09:16 onwards, so the opening range came back
+		one minute short and every session was rejected. The far end runs to
+		15:40 because the closing auction extends F&O past 15:30 -- a full
+		session is 385 bars ending 15:39, not 375 ending 15:29.
+		"""
+		_, payload = self._fetch([(9, 15), (9, 16)])
+
+		self.assertEqual(payload["fromDate"], "2026-08-17 09:00:00")
+		self.assertEqual(payload["toDate"], "2026-08-17 15:40:00")
+
+	def test_anything_before_the_bell_is_discarded(self):
+		"""09:00 is asked for only to defeat the exclusive bound, not to be used."""
+		bars, _ = self._fetch([(9, 5), (9, 14), (9, 15), (9, 16)])
+
+		self.assertEqual(
+			[bar["timestamp"].strftime("%H:%M") for bar in bars], ["09:15", "09:16"],
+		)
 
 
 class DhanTokenRenewalTests(TestCase):
