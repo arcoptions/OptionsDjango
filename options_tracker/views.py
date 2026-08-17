@@ -11,12 +11,32 @@ from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Max, Min, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
+from .live_config import (
+    live_settings,
+    panel_rows,
+    reset_live_settings,
+    risk_surface,
+    save_live_settings,
+    warnings_for,
+)
+from .live_dashboard import (
+    by_month,
+    curve_svg,
+    engine_snapshot,
+    performance,
+    recent_events,
+    risk_panel,
+    sizing_preview,
+    today_summary,
+    trade_rows,
+)
 from .models import (
     AppSetting,
     ChartinkTrigger,
@@ -891,3 +911,120 @@ def archive(request):
         "options_tracker/archive.html",
         {"title": "Archive", "rows": rows[:300], "month": month, "source": source, "q": q},
     )
+
+
+LIVE_TABS = ("live", "trades", "metrics", "risk")
+
+
+def _proposed_settings(post):
+    """Read the risk form back, keeping anything the user did not touch."""
+    proposed = dict(live_settings())
+    for row in panel_rows():
+        raw = post.get(f"set_{row['key']}", "").strip()
+        if not raw:
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        proposed[row["key"]] = value / 100 if row.get("percent") else value
+    return proposed
+
+
+@require_http_methods(["GET", "POST"])
+def nifty_live(request):
+    """The live strategy: what the engine is doing, what it did, and its risk."""
+    preview_of = None
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        if action == "save":
+            settings, notes = save_live_settings(_proposed_settings(request.POST))
+            messages.success(request, "Risk settings saved. They apply from the next entry.")
+            for note in notes:
+                messages.warning(request, note)
+            return redirect(f"{reverse('nifty_live')}?tab=risk")
+        if action == "reset":
+            reset_live_settings()
+            messages.success(request, "Back to the validated settings.")
+            return redirect(f"{reverse('nifty_live')}?tab=risk")
+        if action == "preview":
+            preview_of = _proposed_settings(request.POST)
+        if action in ("arm", "disarm"):
+            # The kill switch. Read by the engine every tick, so this stops or
+            # starts entries within about fifteen seconds and without a redeploy.
+            AppSetting.objects.update_or_create(
+                key="nifty_live_enabled", defaults={"value": "1" if action == "arm" else "0"},
+            )
+            DhanOrderEvent.objects.create(
+                order_id="", correlation_id="", status="ENGINE_SWITCH",
+                payload_json={"at": timezone.localtime().isoformat(), "action": action},
+            )
+            messages.success(
+                request,
+                "Engine armed. It will take the next valid signal."
+                if action == "arm"
+                else "Engine disarmed. Any open position is still managed to its stop.",
+            )
+            return redirect(reverse("nifty_live"))
+
+    tab = request.GET.get("tab", "live")
+    if tab not in LIVE_TABS:
+        tab = "live"
+    if preview_of:
+        # A preview POST carries no query string, so without this the result is
+        # computed and then rendered on a tab that has nowhere to show it.
+        tab = "risk"
+
+    rows = trade_rows()
+    settings = live_settings()
+    engine = engine_snapshot()
+    surface = risk_surface()
+    results = performance(rows, settings["capital"])
+
+    context = {
+        "title": "NIFTY Live Strategy",
+        "tab": tab,
+        "engine": engine,
+        "enabled": (AppSetting.objects.filter(key="nifty_live_enabled")
+                    .values_list("value", flat=True).first() or "").strip() in ("1", "true", "True", "yes"),
+        "today": today_summary(rows),
+        "settings": settings,
+        "rows": rows[:300],
+        "row_count": len(rows),
+        "performance": results,
+        "curve": curve_svg(results["curve"]),
+        "months": by_month(rows),
+        "panel": risk_panel(),
+        "warnings": warnings_for(settings),
+        "baseline": surface.get("baseline"),
+        "sessions": surface.get("sessions"),
+        "has_surface": bool(surface),
+        "current_sizing": sizing_preview(settings),
+        "preview": sizing_preview(preview_of) if preview_of else None,
+        "preview_warnings": warnings_for(preview_of) if preview_of else [],
+        "events": recent_events(40) if tab == "live" else [],
+    }
+    return render(request, "options_tracker/nifty_live.html", context)
+
+
+@require_http_methods(["GET"])
+def nifty_live_status_api(request):
+    """Just the engine's heartbeat, for the Live tab to poll without a reload."""
+    engine = engine_snapshot()
+    today = today_summary(trade_rows())
+    return JsonResponse({
+        "ok": True,
+        "state": engine["state"],
+        "dry_run": engine["dry_run"],
+        "stale": engine["stale"],
+        "age_seconds": engine["age_seconds"],
+        "at": engine["at"],
+        "notes": engine["notes"],
+        "rejections": engine["rejections"],
+        "session": engine["session"],
+        "position": engine["position"],
+        "trades_today": engine["trades_today"],
+        "realized_r": engine["realized_r"],
+        "net_pnl_today": today["net_pnl"],
+        "observed_today": today["observed"],
+    })

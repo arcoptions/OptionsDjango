@@ -13,3 +13,8 @@ staticfiles/
 research/cache/
 research/*.pkl
 brief_output.txt
+.sweep.log
+
+# Credential scratch files written during deployment. Never commit these.
+.aadtok
+.cid

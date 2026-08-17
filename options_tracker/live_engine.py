@@ -4,6 +4,11 @@ The rules are in `research/STRATEGY.md` and the measured config is
 `nifty_trail_strategy.nifty_trail_config()`. Nothing here re-decides strategy;
 this module only takes the same signal live and puts it on Dhan.
 
+Risk settings come through `live_config.live_strategy_config()`, which is that
+same measured config with any dashboard override applied. The backtest still
+reads `nifty_trail_config()` directly and is unaffected by anything set here, so
+the research lineage cannot be moved by turning a knob in the browser.
+
 Three deliberate choices are worth knowing before reading the code.
 
 **The feed is 1-minute chart data, not the 30-second snapshot stream.** The
@@ -41,6 +46,7 @@ from django.utils import timezone
 
 from .capital_pnl import NIFTY_LOT_SIZE
 from .index_oi_services import DHAN_INTRADAY_URL, INDEX_CONFIG
+from .live_config import live_sizing, live_strategy_config
 from .models import (
     AppSetting,
     DhanOrderEvent,
@@ -52,12 +58,7 @@ from .models import (
     TradeState,
     TradeStyle,
 )
-from .nifty_trail_strategy import (
-    MAX_CASH_FRACTION,
-    RISK_PER_TRADE,
-    STARTING_CAPITAL,
-    nifty_trail_config,
-)
+from .nifty_trail_strategy import STARTING_CAPITAL
 from .services import (
     cancel_super_order_leg,
     fetch_super_order,
@@ -116,12 +117,8 @@ def engine_enabled():
 
 
 def live_capital():
-    return _number(os.getenv("NIFTY_LIVE_CAPITAL"), STARTING_CAPITAL) or STARTING_CAPITAL
-
-
-def lot_cap():
-    """Day-one throttle. Caps size; never turns a skip into a trade."""
-    return int(_number(os.getenv("NIFTY_LIVE_FIXED_LOTS"), 0))
+    """Equity to size against, as tuned on the dashboard."""
+    return live_sizing()["capital"] or STARTING_CAPITAL
 
 
 def load_state():
@@ -287,7 +284,53 @@ def opening_minutes_present(spot_rows, config):
     )
 
 
-def detect_signal(now=None, spot_rows=None, snapshot=None):
+def opening_range(spot_rows, config):
+    """`(low, high)` of the opening window, or None while it is still forming."""
+    if not spot_rows:
+        return None
+    opening_end = (
+        datetime.combine(timezone.localdate(), MARKET_OPEN)
+        + timedelta(minutes=config.opening_range_minutes)
+    ).time()
+    values = [
+        spot for timestamp, spot in spot_rows.items()
+        if MARKET_OPEN <= timestamp.time() < opening_end
+    ]
+    return (min(values), max(values)) if values else None
+
+
+def session_context(spot_rows, config):
+    """What the engine can see right now, in the shape the dashboard displays.
+
+    Built from the bars `detect_signal` has already fetched, so putting the
+    opening range and today's triggers on screen costs no extra Dhan call.
+    """
+    bounds = opening_range(spot_rows, config)
+    context = {
+        "bars": len(spot_rows),
+        "opening_minutes": opening_minutes_present(spot_rows, config),
+        "opening_required": config.opening_range_minutes,
+        "opening_floor": opening_coverage_floor(config),
+        "range_closed": opening_range_closed(spot_rows, config),
+    }
+    if spot_rows:
+        latest = max(spot_rows)
+        context["last_spot"] = round(spot_rows[latest], 2)
+        context["last_bar_at"] = latest.isoformat()
+    if bounds:
+        low, high = bounds
+        buffer = config.opening_range_buffer_percent / 100
+        context.update({
+            "opening_low": round(low, 2),
+            "opening_high": round(high, 2),
+            "opening_width": round(high - low, 2),
+            "call_trigger": round(high * (1 + buffer), 2),
+            "put_trigger": round(low * (1 - buffer), 2),
+        })
+    return context
+
+
+def detect_signal(now=None, spot_rows=None, snapshot=None, context=None):
     """Evaluate the last completed 1-minute bar. Returns (candidate, reasons).
 
     Every filter is the one `strategy_backtest._candidate` applies, in the same
@@ -295,12 +338,14 @@ def detect_signal(now=None, spot_rows=None, snapshot=None):
     backtest could not see.
     """
     now = now or timezone.localtime()
-    config = nifty_trail_config()
+    config = live_strategy_config()
     reasons = []
     session_date = now.date()
 
     if spot_rows is None:
         spot_rows = spot_series(session_date)
+    if context is not None:
+        context.update(session_context(spot_rows, config))
     if not spot_rows:
         return None, ["no spot bars yet"]
 
@@ -421,15 +466,22 @@ def detect_signal(now=None, spot_rows=None, snapshot=None):
 # Sizing
 # --------------------------------------------------------------------------- #
 
-def size_position(equity, entry, stop_percent=0.10, lot_size=NIFTY_LOT_SIZE):
-    """The STRATEGY.md section 5 formula, unchanged. Zero lots means skip."""
+def size_position(equity, entry, stop_percent=None, lot_size=NIFTY_LOT_SIZE):
+    """The STRATEGY.md section 5 formula, at whatever risk is currently dialled in.
+
+    Zero lots means skip -- the account cannot take this trade at this size, and
+    forcing it would break the risk budget the whole result rests on.
+    """
+    sizing = live_sizing()
+    if stop_percent is None:
+        stop_percent = live_strategy_config().stop_percent
     unit_risk = entry * stop_percent
     if unit_risk <= 0:
         return 0
-    risk_lots = floor(equity * RISK_PER_TRADE / (unit_risk * lot_size))
-    cash_lots = floor(equity * MAX_CASH_FRACTION / (entry * lot_size))
+    risk_lots = floor(equity * sizing["risk_per_trade"] / (unit_risk * lot_size))
+    cash_lots = floor(equity * sizing["max_cash_fraction"] / (entry * lot_size))
     lots = max(0, min(risk_lots, cash_lots))
-    cap = lot_cap()
+    cap = int(sizing["fixed_lots"])
     return min(lots, cap) if cap > 0 else lots
 
 
@@ -452,8 +504,9 @@ def open_position(candidate, state, now=None, dry_run=False):
         return None, ["no fresh option-chain snapshot at entry"]
 
     entry, row = _entry_limit(candidate, snapshot, now)
-    stop = round(entry * (1 - nifty_trail_config().stop_percent), 2)
-    lots = size_position(live_capital(), entry)
+    config = live_strategy_config()
+    stop = round(entry * (1 - config.stop_percent), 2)
+    lots = size_position(live_capital(), entry, config.stop_percent)
     if not lots:
         return None, [f"sizing rounds to zero lots at Rs {entry:.2f}"]
     quantity = lots * NIFTY_LOT_SIZE
@@ -521,6 +574,10 @@ def open_position(candidate, state, now=None, dry_run=False):
         "entry": entry,
         "initial_stop": stop,
         "stop": stop,
+        # Frozen at entry so a mid-session settings change cannot move the stop
+        # on a trade that is already running.
+        "stop_percent": config.stop_percent,
+        "trail_gap_r": config.trail_gap_r,
         "quantity": quantity,
         "high_water": entry,
         "filled": False,
@@ -535,10 +592,16 @@ def open_position(candidate, state, now=None, dry_run=False):
 # --------------------------------------------------------------------------- #
 
 def _trailed_stop(position, high_water):
-    """Fixed at -10% until +7%, then 7% behind the high. Upward only."""
+    """Fixed at -10% until +7%, then 7% behind the high. Upward only.
+
+    The two percentages come off the position, not off the current config. A
+    slider moved while this trade is running must not retroactively change the
+    stop it was entered on; the new setting applies to the next entry.
+    """
     entry = position["entry"]
-    config = nifty_trail_config()
-    gap = entry * config.stop_percent * config.trail_gap_r
+    stop_percent = position.get("stop_percent", live_strategy_config().stop_percent)
+    trail_gap_r = position.get("trail_gap_r", live_strategy_config().trail_gap_r)
+    gap = entry * stop_percent * trail_gap_r
     if high_water - entry < gap:
         return position["stop"]
     return max(position["stop"], round(high_water - gap, 2))
@@ -713,7 +776,7 @@ def _entry_allowed(state, now, config):
 def tick(now=None, dry_run=False):
     """One pass of the engine. Safe to call as often as you like."""
     now = now or timezone.localtime()
-    config = nifty_trail_config()
+    config = live_strategy_config()
     state = load_state()
     status = {"at": now.isoformat(), "dry_run": dry_run, "notes": []}
 
@@ -740,8 +803,10 @@ def tick(now=None, dry_run=False):
 
         allowed, blocker = _entry_allowed(state, now, config)
         if allowed:
-            candidate, reasons = detect_signal(now)
+            context = {}
+            candidate, reasons = detect_signal(now, context=context)
             status["rejections"] = reasons
+            status["session"] = context
             if candidate:
                 position, entry_notes = open_position(candidate, state, now, dry_run)
                 status["notes"].extend(entry_notes)

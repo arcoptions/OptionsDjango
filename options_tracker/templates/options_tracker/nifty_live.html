@@ -1,0 +1,411 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<style>
+  .live-head { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; letter-spacing:.4px; }
+  .badge.armed { background:#dcfce7; color:#15803d; }
+  .badge.observe { background:#e0e7ff; color:#3730a3; }
+  .badge.off { background:#f1f5f9; color:#475569; }
+  .badge.stale { background:#fee2e2; color:#b91c1c; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px 18px; }
+  .kv div .k { color:var(--muted); font-size:12px; }
+  .kv div .v { font-size:17px; font-weight:700; margin-top:2px; }
+  .pos { color:var(--green); } .neg { color:var(--danger); }
+  .knob { border:1px solid var(--line); border-radius:12px; padding:14px; background:#fff; margin-bottom:12px; }
+  .knob.dirty { border-color:#fbbf24; background:#fffdf5; }
+  .knob-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .knob-head h4 { margin:0; font-size:15px; }
+  .knob-body { display:grid; grid-template-columns:200px 1fr; gap:16px; margin-top:10px; align-items:start; }
+  .knob input { max-width:200px; }
+  .sweep { display:grid; gap:3px; }
+  .sweep-row { display:grid; grid-template-columns:70px 1fr 110px; gap:8px; align-items:center; font-size:12px; }
+  .sweep-bar { height:14px; border-radius:3px; background:#e2e8f0; overflow:hidden; }
+  .sweep-bar span { display:block; height:100%; background:#86efac; }
+  .sweep-bar span.neg { background:#fca5a5; }
+  .sweep-row.here { font-weight:800; }
+  .sweep-row.here .sweep-bar span { background:#d7b15d; }
+  .tag { font-size:11px; padding:2px 7px; border-radius:999px; background:#f1f5f9; color:#475569; }
+  .tag.warn { background:#fef3c7; color:#92400e; }
+  .scroll { overflow-x:auto; }
+  .feed { font-family:ui-monospace,Consolas,monospace; font-size:12px; max-height:340px; overflow:auto; }
+  .feed div { padding:3px 0; border-bottom:1px solid #f1f5f9; }
+  @media (max-width:760px) { .knob-body { grid-template-columns:1fr; } }
+</style>
+
+<div class="tabs">
+  <a href="?tab=live" class="{% if tab == 'live' %}active{% endif %}">Live</a>
+  <a href="?tab=trades" class="{% if tab == 'trades' %}active{% endif %}">Trades ({{ row_count }})</a>
+  <a href="?tab=metrics" class="{% if tab == 'metrics' %}active{% endif %}">Metrics</a>
+  <a href="?tab=risk" class="{% if tab == 'risk' %}active{% endif %}">Risk</a>
+</div>
+
+<div class="panel">
+  <div class="live-head">
+    {% if not enabled %}
+      <span class="badge off">DISARMED</span>
+    {% elif engine.dry_run %}
+      <span class="badge observe">OBSERVE ONLY</span>
+    {% else %}
+      <span class="badge armed">ARMED &middot; LIVE ORDERS</span>
+    {% endif %}
+    {% if engine.stale %}<span class="badge stale">NO HEARTBEAT</span>{% endif %}
+    <span class="muted">
+      {% if engine.at %}last tick {{ engine.age_seconds }}s ago &middot; {{ engine.state }}{% else %}the engine has never reported{% endif %}
+    </span>
+    <form method="post" style="margin-left:auto;">
+      {% csrf_token %}
+      {% if enabled %}
+        <button class="btn secondary" name="action" value="disarm">Disarm</button>
+      {% else %}
+        <button class="btn" name="action" value="arm">Arm engine</button>
+      {% endif %}
+    </form>
+  </div>
+  <div class="kv" style="margin-top:14px;">
+    <div><div class="k">Today's P&amp;L</div><div class="v {% if today.net_pnl > 0 %}pos{% elif today.net_pnl < 0 %}neg{% endif %}">&#8377; {{ today.net_pnl|floatformat:2 }}</div></div>
+    <div><div class="k">Trades today</div><div class="v">{{ engine.trades_today }} / {{ engine.max_trades_per_day }}</div></div>
+    <div><div class="k">Day R</div><div class="v">{{ engine.realized_r|floatformat:2 }} <span class="muted">stop at -{{ engine.daily_loss_limit_r }}</span></div></div>
+    <div><div class="k">Signals observed</div><div class="v">{{ today.observed }}</div></div>
+    <div><div class="k">Net since start</div><div class="v {% if performance.net_pnl > 0 %}pos{% elif performance.net_pnl < 0 %}neg{% endif %}">&#8377; {{ performance.net_pnl|floatformat:2 }}</div></div>
+    <div><div class="k">Capital</div><div class="v">&#8377; {{ settings.capital|floatformat:0 }}</div></div>
+  </div>
+</div>
+
+{% if tab == 'live' %}
+  {% if engine.error %}<div class="msg error">Engine error: {{ engine.error }}</div>{% endif %}
+
+  {% if engine.position %}
+    <div class="panel">
+      <h3 style="margin-top:0;">Open position &mdash; {{ engine.position.option }}</h3>
+      <div class="kv">
+        <div><div class="k">Entry</div><div class="v">&#8377; {{ engine.position.fill_price|default:engine.position.entry|floatformat:2 }}</div></div>
+        <div><div class="k">Quantity</div><div class="v">{{ engine.position.quantity }} <span class="muted">({{ engine.position.lots }} lot{{ engine.position.lots|pluralize }})</span></div></div>
+        <div><div class="k">Stop now</div><div class="v">&#8377; {{ engine.position.stop|floatformat:2 }}</div></div>
+        <div><div class="k">High water</div><div class="v">&#8377; {{ engine.position.high_water|floatformat:2 }}</div></div>
+        <div><div class="k">Locked in</div><div class="v {% if engine.position.locked_r > 0 %}pos{% endif %}">{{ engine.position.locked_r }}R</div></div>
+        <div><div class="k">Deployed</div><div class="v">&#8377; {{ engine.position.deployed|floatformat:0 }}</div></div>
+        <div><div class="k">At risk</div><div class="v">&#8377; {{ engine.position.at_risk|floatformat:0 }}</div></div>
+        <div><div class="k">Order</div><div class="v" style="font-size:13px;">{{ engine.position.order_id|default:"-" }}</div></div>
+      </div>
+      <p class="muted" style="margin-bottom:0;">
+        Entered on a {{ engine.position.stop_percent|floatformat:3 }} stop and a {{ engine.position.trail_gap_r }}R trail.
+        Those are frozen for this trade &mdash; changing them now applies to the next entry.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="grid">
+    <div class="panel">
+      <h3 style="margin-top:0;">Session</h3>
+      {% with s=engine.session %}
+        {% if s.bars %}
+          <div class="kv">
+            <div><div class="k">Spot</div><div class="v">{{ s.last_spot|floatformat:2 }}</div></div>
+            <div><div class="k">Bars in</div><div class="v">{{ s.bars }} <span class="muted">to {{ s.last_bar_at }}</span></div></div>
+            <div><div class="k">Opening range</div><div class="v">{% if s.range_closed %}{{ s.opening_low|floatformat:2 }} &ndash; {{ s.opening_high|floatformat:2 }}{% else %}forming{% endif %}</div></div>
+            <div><div class="k">Range width</div><div class="v">{% if s.opening_width %}{{ s.opening_width|floatformat:2 }}{% else %}-{% endif %}</div></div>
+            <div><div class="k">CALL above</div><div class="v">{% if s.call_trigger %}{{ s.call_trigger|floatformat:2 }}{% else %}-{% endif %}</div></div>
+            <div><div class="k">PUT below</div><div class="v">{% if s.put_trigger %}{{ s.put_trigger|floatformat:2 }}{% else %}-{% endif %}</div></div>
+          </div>
+        {% else %}
+          <p class="muted">No bars yet today. The opening range needs {{ s.opening_required|default:12 }} of the first {{ s.opening_minutes|default:15 }} minutes before anything can trigger.</p>
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0;">Why it is not trading</h3>
+      {% if engine.rejections %}
+        <ul style="margin:0; padding-left:18px;">{% for reason in engine.rejections %}<li>{{ reason }}</li>{% endfor %}</ul>
+      {% elif engine.notes %}
+        <ul style="margin:0; padding-left:18px;">{% for note in engine.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="muted">Nothing rejected on the last tick.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if today.rows %}
+    <div class="panel">
+      <h3 style="margin-top:0;">Today</h3>
+      <div class="scroll"><table>
+        <tr><th>Time</th><th>Contract</th><th>Kind</th><th>Entry</th><th>Qty</th><th>Stop</th><th>Outcome</th><th>Net</th></tr>
+        {% for row in today.rows %}
+          <tr>
+            <td>{{ row.opened_at|date:"H:i:s" }}</td>
+            <td>{{ row.symbol }}</td>
+            <td>{% if row.kind == 'OBSERVED' %}<span class="tag warn">observed</span>{% else %}<span class="tag">live</span>{% endif %}</td>
+            <td>{{ row.entry|floatformat:2 }}</td>
+            <td>{{ row.quantity }}</td>
+            <td>{{ row.stop|floatformat:2 }}</td>
+            <td>{{ row.outcome }}</td>
+            <td class="{% if row.net_pnl > 0 %}pos{% elif row.net_pnl < 0 %}neg{% endif %}">{% if row.net_pnl != None %}{{ row.net_pnl|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </table></div>
+    </div>
+  {% endif %}
+
+  <div class="panel">
+    <h3 style="margin-top:0;">Engine log</h3>
+    <div class="feed">
+      {% for event in events %}
+        <div><strong>{{ event.at|date:"d M H:i:s" }}</strong> &nbsp; {{ event.status }} {% if event.order_id %}&nbsp;#{{ event.order_id }}{% endif %}</div>
+      {% empty %}
+        <div class="muted">Nothing logged yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+{% elif tab == 'trades' %}
+  <div class="panel">
+    <h3 style="margin-top:0;">Every trade the engine has taken</h3>
+    <p class="muted">
+      Rows marked <span class="tag warn">observed</span> are signals the engine found while it was not
+      allowed to place orders. They are shown so an observe-only day does not look like a silent one,
+      and they are excluded from every P&amp;L figure on this page.
+    </p>
+    <div class="scroll"><table>
+      <tr>
+        <th>Date</th><th>In</th><th>Out</th><th>Contract</th><th>Kind</th>
+        <th>Limit</th><th>Fill</th><th>Slip</th><th>Qty</th><th>Stop</th>
+        <th>Exit</th><th>Outcome</th><th>R</th><th>Costs</th><th>Net</th>
+      </tr>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.date }}</td>
+          <td>{{ row.opened_at|date:"H:i" }}</td>
+          <td>{% if row.closed_at %}{{ row.closed_at|date:"H:i" }}{% else %}&ndash;{% endif %}</td>
+          <td>{{ row.symbol }}</td>
+          <td>{% if row.kind == 'OBSERVED' %}<span class="tag warn">observed</span>{% else %}<span class="tag">live</span>{% endif %}</td>
+          <td>{{ row.limit|floatformat:2 }}</td>
+          <td>{{ row.entry|floatformat:2 }}</td>
+          <td class="{% if row.slippage > 0 %}neg{% endif %}">{% if row.slippage != None %}{{ row.slippage|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+          <td>{{ row.quantity }}</td>
+          <td>{{ row.stop|floatformat:2 }}</td>
+          <td>{% if row.exit %}{{ row.exit|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+          <td>{{ row.outcome }}</td>
+          <td>{% if row.realized_r != None %}{{ row.realized_r|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+          <td>{% if row.charges %}{{ row.charges|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+          <td class="{% if row.net_pnl > 0 %}pos{% elif row.net_pnl < 0 %}neg{% endif %}">{% if row.net_pnl != None %}{{ row.net_pnl|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="15" class="muted">The engine has not traded yet.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+
+{% elif tab == 'metrics' %}
+  <div class="panel">
+    <h3 style="margin-top:0;">Realised results</h3>
+    <div class="kv">
+      <div><div class="k">Net P&amp;L</div><div class="v {% if performance.net_pnl > 0 %}pos{% elif performance.net_pnl < 0 %}neg{% endif %}">&#8377; {{ performance.net_pnl|floatformat:2 }}</div></div>
+      <div><div class="k">Return</div><div class="v">{{ performance.return_percent }}%</div></div>
+      <div><div class="k">Closed trades</div><div class="v">{{ performance.trades }}</div></div>
+      <div><div class="k">Win rate</div><div class="v">{{ performance.win_rate }}% <span class="muted">{{ performance.wins }}W / {{ performance.losses }}L</span></div></div>
+      <div><div class="k">Max drawdown</div><div class="v neg">&#8377; {{ performance.max_drawdown|floatformat:2 }} <span class="muted">{{ performance.max_drawdown_percent }}%</span></div></div>
+      <div><div class="k">Average trade</div><div class="v">&#8377; {{ performance.average_net_pnl|floatformat:2 }}</div></div>
+      <div><div class="k">Best / worst</div><div class="v">{{ performance.best_trade|floatformat:0 }} / {{ performance.worst_trade|floatformat:0 }}</div></div>
+      <div><div class="k">Total R</div><div class="v">{{ performance.total_r }}</div></div>
+      <div><div class="k">Longest losing run</div><div class="v">{{ performance.longest_losing_streak }}</div></div>
+      <div><div class="k">Costs paid</div><div class="v">&#8377; {{ performance.charges|floatformat:2 }}</div></div>
+      <div><div class="k">Open now</div><div class="v">{{ performance.open_trades }}</div></div>
+      <div><div class="k">Observed, not taken</div><div class="v">{{ performance.observed_signals }}</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0;">Fill quality</h3>
+    {% if performance.average_slippage != None %}
+      <div class="kv">
+        <div><div class="k">Average slippage</div><div class="v {% if performance.average_slippage > 0 %}neg{% endif %}">&#8377; {{ performance.average_slippage|floatformat:2 }} <span class="muted">per unit</span></div></div>
+        <div><div class="k">Fills measured</div><div class="v">{{ performance.fills_measured }}</div></div>
+      </div>
+      <p class="muted" style="margin-bottom:0;">
+        Limit price against the price actually paid. This is the number live trading exists to buy:
+        the bid-ask spread was the largest single sensitivity in the backtest and had never been
+        observed on a real fill.
+      </p>
+    {% else %}
+      <p class="muted">No fills yet. Once orders go through, the gap between the limit and the traded price is measured here.</p>
+    {% endif %}
+  </div>
+
+  {% if curve %}
+    <div class="panel">
+      <h3 style="margin-top:0;">Equity</h3>
+      <svg viewBox="0 0 {{ curve.width }} {{ curve.height }}" width="100%" height="180" preserveAspectRatio="none">
+        <polygon points="{{ curve.area }}" fill="{% if curve.up %}rgba(22,163,74,.10){% else %}rgba(239,68,68,.10){% endif %}"/>
+        <polyline points="{{ curve.points }}" fill="none" stroke="{% if curve.up %}#16a34a{% else %}#ef4444{% endif %}" stroke-width="2"/>
+      </svg>
+      <div class="row muted" style="justify-content:space-between;">
+        <span>low &#8377; {{ curve.low|floatformat:0 }}</span>
+        <span>now &#8377; {{ curve.last|floatformat:0 }}</span>
+        <span>high &#8377; {{ curve.high|floatformat:0 }}</span>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if months %}
+    <div class="panel">
+      <h3 style="margin-top:0;">By month</h3>
+      <div class="scroll"><table>
+        <tr><th>Month</th><th>Trades</th><th>Win rate</th><th>Net</th></tr>
+        {% for month in months %}
+          <tr>
+            <td>{{ month.month }}</td><td>{{ month.trades }}</td><td>{{ month.win_rate }}%</td>
+            <td class="{% if month.net_pnl > 0 %}pos{% elif month.net_pnl < 0 %}neg{% endif %}">&#8377; {{ month.net_pnl|floatformat:2 }}</td>
+          </tr>
+        {% endfor %}
+      </table></div>
+    </div>
+  {% endif %}
+
+  {% if baseline %}
+    <div class="panel">
+      <h3 style="margin-top:0;">Against the backtest</h3>
+      <p class="muted">
+        What the same rules did over {{ sessions }} historical sessions at the validated settings.
+        Live results should be read against this, not against a target.
+      </p>
+      <div class="kv">
+        <div><div class="k">Backtest net</div><div class="v">&#8377; {{ baseline.net_pnl|floatformat:2 }}</div></div>
+        <div><div class="k">Backtest trades</div><div class="v">{{ baseline.trades }}</div></div>
+        <div><div class="k">Backtest win rate</div><div class="v">{{ baseline.win_rate }}%</div></div>
+        <div><div class="k">Backtest drawdown</div><div class="v">&#8377; {{ baseline.max_drawdown|floatformat:2 }}</div></div>
+        <div><div class="k">Per trade</div><div class="v">&#8377; {{ baseline.average_net_pnl|floatformat:2 }}</div></div>
+      </div>
+    </div>
+  {% endif %}
+
+{% elif tab == 'risk' %}
+  {% if not has_surface %}
+    <div class="msg warning">
+      The measured surface has not been built, so these controls can be changed but their historical
+      effect cannot be shown. Run <code>python manage.py build_risk_surface</code>.
+    </div>
+  {% endif %}
+
+  {% for note in warnings %}<div class="msg warning">{{ note }}</div>{% endfor %}
+
+  {% if current_sizing %}
+    <div class="panel">
+      <h3 style="margin-top:0;">These settings, over {{ current_sizing.sessions }} historical sessions</h3>
+      <div class="kv">
+        <div><div class="k">Net P&amp;L</div><div class="v {% if current_sizing.net_pnl > 0 %}pos{% else %}neg{% endif %}">&#8377; {{ current_sizing.net_pnl|floatformat:0 }}</div></div>
+        <div><div class="k">Return</div><div class="v">{{ current_sizing.return_percent }}%</div></div>
+        <div><div class="k">Trades taken</div><div class="v">{{ current_sizing.trades }} <span class="muted">{{ current_sizing.skipped }} too small to size</span></div></div>
+        <div><div class="k">Win rate</div><div class="v">{{ current_sizing.win_rate }}%</div></div>
+        <div><div class="k">Max drawdown</div><div class="v neg">&#8377; {{ current_sizing.max_drawdown|floatformat:0 }} <span class="muted">{{ current_sizing.max_drawdown_percent }}%</span></div></div>
+        <div><div class="k">Largest position</div><div class="v">&#8377; {{ current_sizing.max_deployed|floatformat:0 }}</div></div>
+        <div><div class="k">Largest single risk</div><div class="v">&#8377; {{ current_sizing.max_stop_risk|floatformat:0 }}</div></div>
+        <div><div class="k">Average size</div><div class="v">{{ current_sizing.average_lots }} lots</div></div>
+      </div>
+      <p class="muted" style="margin-bottom:0;">
+        Sizing is replayed exactly against the recorded trade list, so this is a real result at these
+        numbers rather than a projection. Strategy settings below change which trades exist and are
+        answered by the sweep next to each control.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if preview %}
+    <div class="panel" style="border-color:#fbbf24; background:#fffdf5;">
+      <h3 style="margin-top:0;">Preview &mdash; not saved</h3>
+      <div class="kv">
+        <div><div class="k">Net P&amp;L</div><div class="v {% if preview.net_pnl > 0 %}pos{% else %}neg{% endif %}">&#8377; {{ preview.net_pnl|floatformat:0 }}</div></div>
+        <div><div class="k">Trades</div><div class="v">{{ preview.trades }}</div></div>
+        <div><div class="k">Win rate</div><div class="v">{{ preview.win_rate }}%</div></div>
+        <div><div class="k">Max drawdown</div><div class="v neg">&#8377; {{ preview.max_drawdown|floatformat:0 }}</div></div>
+        <div><div class="k">Largest position</div><div class="v">&#8377; {{ preview.max_deployed|floatformat:0 }}</div></div>
+        <div><div class="k">Largest single risk</div><div class="v">&#8377; {{ preview.max_stop_risk|floatformat:0 }}</div></div>
+      </div>
+      {% for note in preview_warnings %}<p class="muted" style="margin-bottom:0;">{{ note }}</p>{% endfor %}
+      <p class="muted">Sizing only. Strategy changes are not replayed here &mdash; read the sweep beside each control.</p>
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="panel">
+      <div class="row">
+        <button class="btn" name="action" value="save">Save settings</button>
+        <button class="btn secondary" name="action" value="preview">Preview sizing</button>
+        <button class="btn secondary" name="action" value="reset"
+                onclick="return confirm('Reset every setting to the validated configuration?');">Reset to validated</button>
+        <span class="muted">Changes apply from the next entry. A running trade keeps the stop and trail it was opened with.</span>
+      </div>
+    </div>
+
+    {% for row in panel %}
+      <div class="knob {% if not row.is_default %}dirty{% endif %}">
+        <div class="knob-head">
+          <h4>{{ row.label }}</h4>
+          <div>
+            {% if row.is_default %}
+              <span class="tag">validated</span>
+            {% else %}
+              <span class="tag warn">changed from {{ row.shipped_display|floatformat:2 }}{{ row.unit }}</span>
+            {% endif %}
+            {% if row.outside_tested %}<span class="tag warn">never measured</span>{% endif %}
+            <span class="tag">{{ row.kind }}</span>
+          </div>
+        </div>
+        <div class="knob-body">
+          <div>
+            <input type="number" name="set_{{ row.key }}" value="{{ row.display|floatformat:row.decimals }}"
+                   step="{{ row.step }}" min="{{ row.hard_display.0 }}" max="{{ row.hard_display.1 }}" />
+            <div class="muted" style="margin-top:6px;">
+              {{ row.unit }} &middot; allowed {{ row.hard_display.0|floatformat:2 }}&ndash;{{ row.hard_display.1|floatformat:2 }}
+            </div>
+            <p class="muted" style="margin:8px 0 0;">{{ row.help }}</p>
+          </div>
+          <div>
+            {% if row.points %}
+              <div class="muted" style="margin-bottom:6px;">Measured over {{ sessions }} sessions, one change at a time:</div>
+              <div class="sweep">
+                {% for point in row.points %}
+                  <div class="sweep-row {% if point.current %}here{% endif %}">
+                    <span>{{ point.display|floatformat:2 }}{{ row.unit }}</span>
+                    <span class="sweep-bar"><span class="{% if not point.positive %}neg{% endif %}" style="width:{{ point.bar }}%"></span></span>
+                    <span>&#8377; {{ point.net_pnl|floatformat:0 }}{% if point.best %} &#9733;{% endif %}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% elif row.kind == 'sizing' %}
+              <div class="muted">
+                This does not change which trades happen, only their size, so its effect is replayed
+                exactly in the summary above rather than swept.
+              </div>
+            {% else %}
+              <div class="muted">Not swept.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </form>
+{% endif %}
+
+<script>
+  (() => {
+    if ("{{ tab }}" !== "live") return;
+    const fmt = (value) => Number(value).toLocaleString("en-IN", {maximumFractionDigits: 2});
+    const refresh = async () => {
+      try {
+        const response = await fetch("{% url 'nifty_live_status_api' %}", {headers: {"Accept": "application/json"}});
+        const data = await response.json();
+        if (!data.ok) return;
+        // A heartbeat that has stopped is the one thing the page must never hide,
+        // so a stale engine reloads rather than sitting on numbers that look live.
+        const changed = data.trades_today !== {{ engine.trades_today }}
+          || (data.position ? 1 : 0) !== {{ engine.position|yesno:"1,0" }};
+        if (changed) { window.location.reload(); return; }
+        document.title = `${data.state}${data.stale ? " (stale)" : ""} | NIFTY Live`;
+      } catch (error) { /* leave the page as it is */ }
+    };
+    window.setInterval(refresh, 15000);
+  })();
+</script>
+{% endblock %}

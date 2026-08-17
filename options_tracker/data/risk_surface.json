@@ -1,0 +1,1147 @@
+{
+  "baseline": {
+    "signals": 51,
+    "trades": 51,
+    "skipped": 0,
+    "net_pnl": 38625.64,
+    "win_rate": 66.7,
+    "max_drawdown": 5114.5,
+    "return_percent": 38.63,
+    "average_net_pnl": 757.37
+  },
+  "baseline_sizing": {
+    "capital": 100000.0,
+    "risk_per_trade": 0.02,
+    "max_cash_fraction": 0.4
+  },
+  "sessions": 246,
+  "surface": {
+    "stop_percent": {
+      "shipped": 0.1,
+      "points": [
+        {
+          "value": 0.06,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 27418.72,
+          "win_rate": 62.7,
+          "max_drawdown": 7287.73,
+          "return_percent": 27.42,
+          "average_net_pnl": 537.62
+        },
+        {
+          "value": 0.08,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 20516.94,
+          "win_rate": 70.6,
+          "max_drawdown": 4940.08,
+          "return_percent": 20.52,
+          "average_net_pnl": 402.29
+        },
+        {
+          "value": 0.1,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 0.125,
+          "shipped": false,
+          "signals": 51,
+          "trades": 48,
+          "skipped": 3,
+          "net_pnl": 26153.08,
+          "win_rate": 64.6,
+          "max_drawdown": 7356.3,
+          "return_percent": 26.15,
+          "average_net_pnl": 544.86
+        },
+        {
+          "value": 0.15,
+          "shipped": false,
+          "signals": 50,
+          "trades": 35,
+          "skipped": 15,
+          "net_pnl": 1233.02,
+          "win_rate": 57.1,
+          "max_drawdown": 7546.82,
+          "return_percent": 1.23,
+          "average_net_pnl": 35.23
+        },
+        {
+          "value": 0.2,
+          "shipped": false,
+          "signals": 49,
+          "trades": 20,
+          "skipped": 29,
+          "net_pnl": 4856.44,
+          "win_rate": 70.0,
+          "max_drawdown": 7001.89,
+          "return_percent": 4.86,
+          "average_net_pnl": 242.82
+        },
+        {
+          "value": 0.25,
+          "shipped": false,
+          "signals": 47,
+          "trades": 10,
+          "skipped": 37,
+          "net_pnl": 4630.59,
+          "win_rate": 80.0,
+          "max_drawdown": 1768.96,
+          "return_percent": 4.63,
+          "average_net_pnl": 463.06
+        },
+        {
+          "value": 0.3,
+          "shipped": false,
+          "signals": 45,
+          "trades": 1,
+          "skipped": 44,
+          "net_pnl": -2050.0,
+          "win_rate": 0.0,
+          "max_drawdown": 2050.0,
+          "return_percent": -2.05,
+          "average_net_pnl": -2050.0
+        }
+      ]
+    },
+    "trail_gap_r": {
+      "shipped": 0.7,
+      "points": [
+        {
+          "value": 0.3,
+          "shipped": false,
+          "signals": 51,
+          "trades": 50,
+          "skipped": 1,
+          "net_pnl": 10849.95,
+          "win_rate": 72.0,
+          "max_drawdown": 4759.71,
+          "return_percent": 10.85,
+          "average_net_pnl": 217.0
+        },
+        {
+          "value": 0.5,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 15233.81,
+          "win_rate": 76.5,
+          "max_drawdown": 4767.2,
+          "return_percent": 15.23,
+          "average_net_pnl": 298.7
+        },
+        {
+          "value": 0.6,
+          "shipped": false,
+          "signals": 51,
+          "trades": 50,
+          "skipped": 1,
+          "net_pnl": 16008.57,
+          "win_rate": 68.0,
+          "max_drawdown": 5548.9,
+          "return_percent": 16.01,
+          "average_net_pnl": 320.17
+        },
+        {
+          "value": 0.7,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 0.8,
+          "shipped": false,
+          "signals": 51,
+          "trades": 50,
+          "skipped": 1,
+          "net_pnl": 36343.75,
+          "win_rate": 68.0,
+          "max_drawdown": 5369.99,
+          "return_percent": 36.34,
+          "average_net_pnl": 726.88
+        },
+        {
+          "value": 1.0,
+          "shipped": false,
+          "signals": 51,
+          "trades": 50,
+          "skipped": 1,
+          "net_pnl": 26555.39,
+          "win_rate": 58.0,
+          "max_drawdown": 9445.43,
+          "return_percent": 26.56,
+          "average_net_pnl": 531.11
+        },
+        {
+          "value": 1.25,
+          "shipped": false,
+          "signals": 50,
+          "trades": 49,
+          "skipped": 1,
+          "net_pnl": 13794.67,
+          "win_rate": 53.1,
+          "max_drawdown": 10301.24,
+          "return_percent": 13.79,
+          "average_net_pnl": 281.52
+        },
+        {
+          "value": 1.5,
+          "shipped": false,
+          "signals": 50,
+          "trades": 48,
+          "skipped": 2,
+          "net_pnl": 1870.44,
+          "win_rate": 47.9,
+          "max_drawdown": 10080.75,
+          "return_percent": 1.87,
+          "average_net_pnl": 38.97
+        }
+      ]
+    },
+    "premium_min": {
+      "shipped": 100,
+      "points": [
+        {
+          "value": 50,
+          "shipped": false,
+          "signals": 71,
+          "trades": 71,
+          "skipped": 0,
+          "net_pnl": 54873.1,
+          "win_rate": 67.6,
+          "max_drawdown": 8963.63,
+          "return_percent": 54.87,
+          "average_net_pnl": 772.86
+        },
+        {
+          "value": 75,
+          "shipped": false,
+          "signals": 62,
+          "trades": 62,
+          "skipped": 0,
+          "net_pnl": 52381.42,
+          "win_rate": 66.1,
+          "max_drawdown": 8963.63,
+          "return_percent": 52.38,
+          "average_net_pnl": 844.86
+        },
+        {
+          "value": 100,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 125,
+          "shipped": false,
+          "signals": 40,
+          "trades": 39,
+          "skipped": 1,
+          "net_pnl": 24981.16,
+          "win_rate": 66.7,
+          "max_drawdown": 5900.29,
+          "return_percent": 24.98,
+          "average_net_pnl": 640.54
+        },
+        {
+          "value": 150,
+          "shipped": false,
+          "signals": 33,
+          "trades": 32,
+          "skipped": 1,
+          "net_pnl": 16953.37,
+          "win_rate": 62.5,
+          "max_drawdown": 7069.79,
+          "return_percent": 16.95,
+          "average_net_pnl": 529.79
+        },
+        {
+          "value": 200,
+          "shipped": false,
+          "signals": 19,
+          "trades": 17,
+          "skipped": 2,
+          "net_pnl": 5481.61,
+          "win_rate": 52.9,
+          "max_drawdown": 4564.79,
+          "return_percent": 5.48,
+          "average_net_pnl": 322.45
+        },
+        {
+          "value": 250,
+          "shipped": false,
+          "signals": 7,
+          "trades": 5,
+          "skipped": 2,
+          "net_pnl": 5995.65,
+          "win_rate": 60.0,
+          "max_drawdown": 1715.97,
+          "return_percent": 6.0,
+          "average_net_pnl": 1199.13
+        }
+      ]
+    },
+    "volume_ratio": {
+      "shipped": 1.5,
+      "points": [
+        {
+          "value": 1.0,
+          "shipped": false,
+          "signals": 58,
+          "trades": 58,
+          "skipped": 0,
+          "net_pnl": 33398.55,
+          "win_rate": 65.5,
+          "max_drawdown": 6339.89,
+          "return_percent": 33.4,
+          "average_net_pnl": 575.84
+        },
+        {
+          "value": 1.25,
+          "shipped": false,
+          "signals": 55,
+          "trades": 55,
+          "skipped": 0,
+          "net_pnl": 30401.14,
+          "win_rate": 65.5,
+          "max_drawdown": 6339.89,
+          "return_percent": 30.4,
+          "average_net_pnl": 552.75
+        },
+        {
+          "value": 1.5,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 1.75,
+          "shipped": false,
+          "signals": 41,
+          "trades": 41,
+          "skipped": 0,
+          "net_pnl": 39510.31,
+          "win_rate": 70.7,
+          "max_drawdown": 4537.68,
+          "return_percent": 39.51,
+          "average_net_pnl": 963.67
+        },
+        {
+          "value": 2.0,
+          "shipped": false,
+          "signals": 36,
+          "trades": 36,
+          "skipped": 0,
+          "net_pnl": 28936.71,
+          "win_rate": 69.4,
+          "max_drawdown": 4537.68,
+          "return_percent": 28.94,
+          "average_net_pnl": 803.8
+        },
+        {
+          "value": 2.5,
+          "shipped": false,
+          "signals": 26,
+          "trades": 26,
+          "skipped": 0,
+          "net_pnl": 25417.54,
+          "win_rate": 69.2,
+          "max_drawdown": 4140.6,
+          "return_percent": 25.42,
+          "average_net_pnl": 977.6
+        }
+      ]
+    },
+    "minimum_spot_move_percent": {
+      "shipped": 0.15,
+      "points": [
+        {
+          "value": 0.05,
+          "shipped": false,
+          "signals": 151,
+          "trades": 149,
+          "skipped": 2,
+          "net_pnl": -1368.95,
+          "win_rate": 52.3,
+          "max_drawdown": 23035.55,
+          "return_percent": -1.37,
+          "average_net_pnl": -9.19
+        },
+        {
+          "value": 0.1,
+          "shipped": false,
+          "signals": 94,
+          "trades": 92,
+          "skipped": 2,
+          "net_pnl": 2623.97,
+          "win_rate": 52.2,
+          "max_drawdown": 18301.31,
+          "return_percent": 2.62,
+          "average_net_pnl": 28.52
+        },
+        {
+          "value": 0.15,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 0.2,
+          "shipped": false,
+          "signals": 28,
+          "trades": 28,
+          "skipped": 0,
+          "net_pnl": 18324.09,
+          "win_rate": 67.9,
+          "max_drawdown": 5597.34,
+          "return_percent": 18.32,
+          "average_net_pnl": 654.43
+        },
+        {
+          "value": 0.25,
+          "shipped": false,
+          "signals": 14,
+          "trades": 14,
+          "skipped": 0,
+          "net_pnl": 8431.23,
+          "win_rate": 78.6,
+          "max_drawdown": 3192.72,
+          "return_percent": 8.43,
+          "average_net_pnl": 602.23
+        }
+      ]
+    },
+    "max_trades_per_day": {
+      "shipped": 3,
+      "points": [
+        {
+          "value": 1,
+          "shipped": false,
+          "signals": 38,
+          "trades": 38,
+          "skipped": 0,
+          "net_pnl": 27915.86,
+          "win_rate": 65.8,
+          "max_drawdown": 3806.16,
+          "return_percent": 27.92,
+          "average_net_pnl": 734.63
+        },
+        {
+          "value": 2,
+          "shipped": false,
+          "signals": 49,
+          "trades": 49,
+          "skipped": 0,
+          "net_pnl": 33386.21,
+          "win_rate": 65.3,
+          "max_drawdown": 5114.5,
+          "return_percent": 33.39,
+          "average_net_pnl": 681.35
+        },
+        {
+          "value": 3,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 4,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 5,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        }
+      ]
+    },
+    "daily_loss_limit_r": {
+      "shipped": 2,
+      "points": [
+        {
+          "value": 1.0,
+          "shipped": false,
+          "signals": 47,
+          "trades": 47,
+          "skipped": 0,
+          "net_pnl": 35112.89,
+          "win_rate": 66.0,
+          "max_drawdown": 4718.84,
+          "return_percent": 35.11,
+          "average_net_pnl": 747.08
+        },
+        {
+          "value": 1.5,
+          "shipped": false,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 2.0,
+          "shipped": true,
+          "signals": 51,
+          "trades": 51,
+          "skipped": 0,
+          "net_pnl": 38625.64,
+          "win_rate": 66.7,
+          "max_drawdown": 5114.5,
+          "return_percent": 38.63,
+          "average_net_pnl": 757.37
+        },
+        {
+          "value": 3.0,
+          "shipped": false,
+          "signals": 52,
+          "trades": 52,
+          "skipped": 0,
+          "net_pnl": 50982.07,
+          "win_rate": 67.3,
+          "max_drawdown": 5272.46,
+          "return_percent": 50.98,
+          "average_net_pnl": 980.42
+        },
+        {
+          "value": 4.0,
+          "shipped": false,
+          "signals": 52,
+          "trades": 52,
+          "skipped": 0,
+          "net_pnl": 50982.07,
+          "win_rate": 67.3,
+          "max_drawdown": 5272.46,
+          "return_percent": 50.98,
+          "average_net_pnl": 980.42
+        }
+      ]
+    }
+  },
+  "trades": [
+    {
+      "date": "2025-11-07",
+      "signal_at": "2025-11-07T11:12:00+05:30",
+      "exit_at": "2025-11-07T11:34:00+05:30",
+      "entry": 106.98,
+      "stop_loss": 96.28,
+      "realized_r": 3.95,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 25400.0
+    },
+    {
+      "date": "2025-11-14",
+      "signal_at": "2025-11-14T09:31:00+05:30",
+      "exit_at": "2025-11-14T09:35:00+05:30",
+      "entry": 149.24,
+      "stop_loss": 134.32,
+      "realized_r": 1.24,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 25850.0
+    },
+    {
+      "date": "2025-12-05",
+      "signal_at": "2025-12-05T10:04:00+05:30",
+      "exit_at": "2025-12-05T10:06:00+05:30",
+      "entry": 109.14,
+      "stop_loss": 98.23,
+      "realized_r": 0.02,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 26100.0
+    },
+    {
+      "date": "2025-12-10",
+      "signal_at": "2025-12-10T09:30:00+05:30",
+      "exit_at": "2025-12-10T09:44:00+05:30",
+      "entry": 144.37,
+      "stop_loss": 129.93,
+      "realized_r": 0.11,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 25900.0
+    },
+    {
+      "date": "2026-01-22",
+      "signal_at": "2026-01-22T09:30:00+05:30",
+      "exit_at": "2026-01-22T09:38:00+05:30",
+      "entry": 146.78,
+      "stop_loss": 132.1,
+      "realized_r": 0.96,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 25400.0
+    },
+    {
+      "date": "2026-01-30",
+      "signal_at": "2026-01-30T09:36:00+05:30",
+      "exit_at": "2026-01-30T11:11:00+05:30",
+      "entry": 204.52,
+      "stop_loss": 184.07,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 25300.0
+    },
+    {
+      "date": "2026-02-02",
+      "signal_at": "2026-02-02T09:31:00+05:30",
+      "exit_at": "2026-02-02T09:35:00+05:30",
+      "entry": 164.17,
+      "stop_loss": 147.75,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 24900.0
+    },
+    {
+      "date": "2026-02-02",
+      "signal_at": "2026-02-02T12:14:00+05:30",
+      "exit_at": "2026-02-02T12:18:00+05:30",
+      "entry": 125.52,
+      "stop_loss": 112.97,
+      "realized_r": 0.2,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24900.0
+    },
+    {
+      "date": "2026-02-25",
+      "signal_at": "2026-02-25T12:34:00+05:30",
+      "exit_at": "2026-02-25T12:38:00+05:30",
+      "entry": 139.59,
+      "stop_loss": 125.63,
+      "realized_r": 0.69,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 25550.0
+    },
+    {
+      "date": "2026-02-26",
+      "signal_at": "2026-02-26T11:40:00+05:30",
+      "exit_at": "2026-02-26T11:46:00+05:30",
+      "entry": 124.07,
+      "stop_loss": 111.66,
+      "realized_r": 0.87,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 25500.0
+    },
+    {
+      "date": "2026-03-02",
+      "signal_at": "2026-03-02T09:33:00+05:30",
+      "exit_at": "2026-03-02T09:35:00+05:30",
+      "entry": 105.32,
+      "stop_loss": 94.79,
+      "realized_r": 0.23,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24950.0
+    },
+    {
+      "date": "2026-03-04",
+      "signal_at": "2026-03-04T10:14:00+05:30",
+      "exit_at": "2026-03-04T10:30:00+05:30",
+      "entry": 333.51,
+      "stop_loss": 300.16,
+      "realized_r": 0.0,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24400.0
+    },
+    {
+      "date": "2026-03-05",
+      "signal_at": "2026-03-05T10:26:00+05:30",
+      "exit_at": "2026-03-05T10:35:00+05:30",
+      "entry": 236.17,
+      "stop_loss": 212.55,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "PUT",
+      "strike": 24550.0
+    },
+    {
+      "date": "2026-03-05",
+      "signal_at": "2026-03-05T12:30:00+05:30",
+      "exit_at": "2026-03-05T13:34:00+05:30",
+      "entry": 228.34,
+      "stop_loss": 205.51,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 24650.0
+    },
+    {
+      "date": "2026-03-09",
+      "signal_at": "2026-03-09T11:40:00+05:30",
+      "exit_at": "2026-03-09T11:43:00+05:30",
+      "entry": 200.35,
+      "stop_loss": 180.31,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 23950.0
+    },
+    {
+      "date": "2026-03-13",
+      "signal_at": "2026-03-13T09:45:00+05:30",
+      "exit_at": "2026-03-13T10:02:00+05:30",
+      "entry": 218.08,
+      "stop_loss": 196.27,
+      "realized_r": 1.55,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23400.0
+    },
+    {
+      "date": "2026-03-16",
+      "signal_at": "2026-03-16T09:30:00+05:30",
+      "exit_at": "2026-03-16T09:39:00+05:30",
+      "entry": 177.63,
+      "stop_loss": 159.87,
+      "realized_r": 2.0,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23200.0
+    },
+    {
+      "date": "2026-03-16",
+      "signal_at": "2026-03-16T11:19:00+05:30",
+      "exit_at": "2026-03-16T11:25:00+05:30",
+      "entry": 183.56,
+      "stop_loss": 165.2,
+      "realized_r": 0.07,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23200.0
+    },
+    {
+      "date": "2026-03-16",
+      "signal_at": "2026-03-16T14:18:00+05:30",
+      "exit_at": "2026-03-16T14:25:00+05:30",
+      "entry": 169.84,
+      "stop_loss": 152.86,
+      "realized_r": 4.02,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23200.0
+    },
+    {
+      "date": "2026-03-18",
+      "signal_at": "2026-03-18T09:50:00+05:30",
+      "exit_at": "2026-03-18T09:55:00+05:30",
+      "entry": 224.72,
+      "stop_loss": 202.25,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 23750.0
+    },
+    {
+      "date": "2026-03-18",
+      "signal_at": "2026-03-18T10:49:00+05:30",
+      "exit_at": "2026-03-18T11:46:00+05:30",
+      "entry": 233.86,
+      "stop_loss": 210.47,
+      "realized_r": 1.34,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23750.0
+    },
+    {
+      "date": "2026-03-19",
+      "signal_at": "2026-03-19T09:38:00+05:30",
+      "exit_at": "2026-03-19T09:52:00+05:30",
+      "entry": 248.64,
+      "stop_loss": 223.78,
+      "realized_r": 0.24,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23250.0
+    },
+    {
+      "date": "2026-03-20",
+      "signal_at": "2026-03-20T09:32:00+05:30",
+      "exit_at": "2026-03-20T09:40:00+05:30",
+      "entry": 252.36,
+      "stop_loss": 227.12,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 23300.0
+    },
+    {
+      "date": "2026-03-20",
+      "signal_at": "2026-03-20T12:19:00+05:30",
+      "exit_at": "2026-03-20T12:32:00+05:30",
+      "entry": 255.82,
+      "stop_loss": 230.24,
+      "realized_r": 0.9,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23200.0
+    },
+    {
+      "date": "2026-03-25",
+      "signal_at": "2026-03-25T09:44:00+05:30",
+      "exit_at": "2026-03-25T11:18:00+05:30",
+      "entry": 309.64,
+      "stop_loss": 278.68,
+      "realized_r": 2.68,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23250.0
+    },
+    {
+      "date": "2026-03-27",
+      "signal_at": "2026-03-27T09:34:00+05:30",
+      "exit_at": "2026-03-27T10:02:00+05:30",
+      "entry": 243.96,
+      "stop_loss": 219.56,
+      "realized_r": 0.04,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23000.0
+    },
+    {
+      "date": "2026-03-30",
+      "signal_at": "2026-03-30T09:31:00+05:30",
+      "exit_at": "2026-03-30T09:35:00+05:30",
+      "entry": 123.41,
+      "stop_loss": 111.07,
+      "realized_r": 2.67,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 22600.0
+    },
+    {
+      "date": "2026-04-01",
+      "signal_at": "2026-04-01T10:25:00+05:30",
+      "exit_at": "2026-04-01T10:32:00+05:30",
+      "entry": 294.26,
+      "stop_loss": 264.83,
+      "realized_r": 0.04,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 22800.0
+    },
+    {
+      "date": "2026-04-01",
+      "signal_at": "2026-04-01T13:23:00+05:30",
+      "exit_at": "2026-04-01T13:45:00+05:30",
+      "entry": 268.49,
+      "stop_loss": 241.64,
+      "realized_r": 3.19,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 22800.0
+    },
+    {
+      "date": "2026-04-06",
+      "signal_at": "2026-04-06T09:35:00+05:30",
+      "exit_at": "2026-04-06T09:38:00+05:30",
+      "entry": 215.57,
+      "stop_loss": 194.01,
+      "realized_r": 0.33,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 22700.0
+    },
+    {
+      "date": "2026-04-06",
+      "signal_at": "2026-04-06T12:20:00+05:30",
+      "exit_at": "2026-04-06T12:32:00+05:30",
+      "entry": 214.37,
+      "stop_loss": 192.93,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 22700.0
+    },
+    {
+      "date": "2026-04-06",
+      "signal_at": "2026-04-06T12:49:00+05:30",
+      "exit_at": "2026-04-06T12:52:00+05:30",
+      "entry": 204.67,
+      "stop_loss": 184.2,
+      "realized_r": 0.2,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 22750.0
+    },
+    {
+      "date": "2026-04-09",
+      "signal_at": "2026-04-09T09:49:00+05:30",
+      "exit_at": "2026-04-09T09:52:00+05:30",
+      "entry": 192.86,
+      "stop_loss": 173.57,
+      "realized_r": 0.16,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23800.0
+    },
+    {
+      "date": "2026-04-09",
+      "signal_at": "2026-04-09T12:47:00+05:30",
+      "exit_at": "2026-04-09T13:23:00+05:30",
+      "entry": 188.34,
+      "stop_loss": 169.51,
+      "realized_r": 0.78,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23800.0
+    },
+    {
+      "date": "2026-04-30",
+      "signal_at": "2026-04-30T10:00:00+05:30",
+      "exit_at": "2026-04-30T10:19:00+05:30",
+      "entry": 189.79,
+      "stop_loss": 170.81,
+      "realized_r": 1.23,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23850.0
+    },
+    {
+      "date": "2026-05-04",
+      "signal_at": "2026-05-04T12:12:00+05:30",
+      "exit_at": "2026-05-04T12:16:00+05:30",
+      "entry": 115.83,
+      "stop_loss": 104.25,
+      "realized_r": 0.86,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 24150.0
+    },
+    {
+      "date": "2026-05-07",
+      "signal_at": "2026-05-07T12:39:00+05:30",
+      "exit_at": "2026-05-07T12:46:00+05:30",
+      "entry": 195.27,
+      "stop_loss": 175.74,
+      "realized_r": 0.27,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24450.0
+    },
+    {
+      "date": "2026-05-13",
+      "signal_at": "2026-05-13T09:31:00+05:30",
+      "exit_at": "2026-05-13T09:42:00+05:30",
+      "entry": 209.59,
+      "stop_loss": 188.63,
+      "realized_r": 1.61,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23350.0
+    },
+    {
+      "date": "2026-05-13",
+      "signal_at": "2026-05-13T11:38:00+05:30",
+      "exit_at": "2026-05-13T11:49:00+05:30",
+      "entry": 260.65,
+      "stop_loss": 234.58,
+      "realized_r": 0.55,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23450.0
+    },
+    {
+      "date": "2026-06-05",
+      "signal_at": "2026-06-05T10:34:00+05:30",
+      "exit_at": "2026-06-05T10:38:00+05:30",
+      "entry": 140.55,
+      "stop_loss": 126.5,
+      "realized_r": 1.61,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 23450.0
+    },
+    {
+      "date": "2026-06-05",
+      "signal_at": "2026-06-05T11:06:00+05:30",
+      "exit_at": "2026-06-05T11:11:00+05:30",
+      "entry": 168.04,
+      "stop_loss": 151.24,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 23500.0
+    },
+    {
+      "date": "2026-06-19",
+      "signal_at": "2026-06-19T15:02:00+05:30",
+      "exit_at": "2026-06-19T15:06:00+05:30",
+      "entry": 119.49,
+      "stop_loss": 107.54,
+      "realized_r": 0.08,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24000.0
+    },
+    {
+      "date": "2026-06-24",
+      "signal_at": "2026-06-24T10:02:00+05:30",
+      "exit_at": "2026-06-24T10:19:00+05:30",
+      "entry": 149.14,
+      "stop_loss": 134.23,
+      "realized_r": 0.94,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 23900.0
+    },
+    {
+      "date": "2026-06-29",
+      "signal_at": "2026-06-29T10:26:00+05:30",
+      "exit_at": "2026-06-29T10:31:00+05:30",
+      "entry": 102.11,
+      "stop_loss": 91.9,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 24100.0
+    },
+    {
+      "date": "2026-07-09",
+      "signal_at": "2026-07-09T10:41:00+05:30",
+      "exit_at": "2026-07-09T10:43:00+05:30",
+      "entry": 158.24,
+      "stop_loss": 142.42,
+      "realized_r": 0.34,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24100.0
+    },
+    {
+      "date": "2026-07-09",
+      "signal_at": "2026-07-09T15:06:00+05:30",
+      "exit_at": "2026-07-09T15:09:00+05:30",
+      "entry": 153.97,
+      "stop_loss": 138.57,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "PUT",
+      "strike": 23950.0
+    },
+    {
+      "date": "2026-07-15",
+      "signal_at": "2026-07-15T12:56:00+05:30",
+      "exit_at": "2026-07-15T12:58:00+05:30",
+      "entry": 191.05,
+      "stop_loss": 171.95,
+      "realized_r": 0.34,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 24050.0
+    },
+    {
+      "date": "2026-07-22",
+      "signal_at": "2026-07-22T09:31:00+05:30",
+      "exit_at": "2026-07-22T10:28:00+05:30",
+      "entry": 173.56,
+      "stop_loss": 156.2,
+      "realized_r": 1.28,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "PUT",
+      "strike": 24050.0
+    },
+    {
+      "date": "2026-07-24",
+      "signal_at": "2026-07-24T12:28:00+05:30",
+      "exit_at": "2026-07-24T12:34:00+05:30",
+      "entry": 139.64,
+      "stop_loss": 125.68,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "CALL",
+      "strike": 23800.0
+    },
+    {
+      "date": "2026-07-30",
+      "signal_at": "2026-07-30T12:32:00+05:30",
+      "exit_at": "2026-07-30T12:34:00+05:30",
+      "entry": 114.92,
+      "stop_loss": 103.43,
+      "realized_r": 1.31,
+      "outcome": "TRAIL_EXIT",
+      "option_type": "CALL",
+      "strike": 24300.0
+    },
+    {
+      "date": "2026-08-05",
+      "signal_at": "2026-08-05T09:54:00+05:30",
+      "exit_at": "2026-08-05T10:02:00+05:30",
+      "entry": 123.36,
+      "stop_loss": 111.02,
+      "realized_r": -1.0,
+      "outcome": "STOP",
+      "option_type": "PUT",
+      "strike": 24600.0
+    }
+  ],
+  "sessions_with_trades": 38
+}
