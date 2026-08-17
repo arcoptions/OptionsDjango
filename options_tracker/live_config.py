@@ -285,6 +285,9 @@ def _format(key, value):
     unit = spec["unit"]
     if unit == "Rs":
         return f"Rs {text}"
+    if unit == "lots":
+        # 0 is the "no ceiling" sentinel, not a size, and reads as nonsense.
+        return "no cap" if not number else f"{text} lot" + ("" if number == 1 else "s")
     return f"{text}{unit}" if unit else text
 
 
