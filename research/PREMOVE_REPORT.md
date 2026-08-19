@@ -254,3 +254,59 @@ Files: `research/premove_features.parquet` (features),
 `research/premove_legs.py` (ATM CE/PE legs),
 `research/premove_otm.py` (the strike ladder).
 Outputs: `premove_otm.csv`, `premove_otm_summary.csv`.
+
+---
+
+# Correction, 19 August 2026: the direction rule is withdrawn
+
+`research/overlap_rescore.py`, output in `research/overlap_rescore.txt`.
+
+A defect was found in this project's standard significance test while running
+the pre-breakout study (`PRE_BREAKOUT_REPORT.md`). Day-clustering removes the
+correlation between stocks but **not the serial overlap between dates**: a
+10-day forward window sampled every session shares nine tenths of its window
+with the session before, so t is inflated by roughly the square root of the
+horizon. Both findings in this report use multi-day windows sampled daily and
+neither was ever given a significance number — they rested on "every fold
+positive" and "frozen out-of-sample", which guard against leakage but say
+nothing about how much could be luck.
+
+Re-scored, the inflation lands almost exactly where theory says: **2.3x at
+horizon 5** (root-5 = 2.24) and **3.0-3.2x at horizon 10** (root-10 = 3.16).
+
+## Motion survives
+
+| | edge | t pooled | t clustered | **t de-overlapped** |
+|---|---|---|---|---|
+| +10% touch, top decile vs same-day base | +6.25% | 11.51 | 9.21 | **+4.08** |
+| -10% touch, top decile vs same-day base | +2.84% | 7.16 | 4.92 | **+2.18** |
+
+36 independent 5-day blocks. The 2.73x lift is real and is now the
+best-evidenced result in the stock programme. The bottom-90% mirror comes out
+negative as it must (-3.56, -2.65), so the arithmetic checks.
+
+## Direction does not
+
+The rule reproduces exactly — 3.06 and 0.79 — so this is the same measurement
+re-scored, not a re-derivation.
+
+| | t clustered | **t de-overlapped** |
+|---|---|---|
+| CE bucket, up minus down | 4.67 | **1.50** |
+| PE bucket, down minus up | 2.31 | **0.72** |
+| CE-minus-PE up rate (same-day, drift-free) | 3.17 | **1.07** |
+| *the same EMA split on LOW-IV names (placebo)* | 2.77 | *0.89* |
+
+Two things kill it. The drift-free spread — the version free of the window's own
+rise — falls to **1.07**. And the placebo scores **0.89**: applying the identical
+EMA split to exactly the names the rule says to exclude gives statistically the
+same answer. **The high-IV condition, the one part that was actually frozen,
+adds nothing.** The test window holds 14 independent 10-day blocks; freezing a
+rule out of sample prevents overfitting, it does not make 14 observations into
+evidence.
+
+**So the original verdict stands: motion is predictable, the side is not.** The
+re-labelled result that appeared to overturn it is withdrawn. This does not
+change any downstream conclusion — the rule already failed when priced against
+real premiums, and worst of all on puts. It changes what should be attempted
+next: a CE-or-PE picker is not a live thread.

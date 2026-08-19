@@ -1,0 +1,32 @@
+================================================================================================================
+SERIAL-OVERLAP RE-SCORE
+Multi-day forward windows sampled daily inflate t by about sqrt(horizon).
+The right-hand column is the honest one. 'ratio' is how much the old
+day-clustered figure overstated it.
+================================================================================================================
+
+1. MOTION -- the 2.73x lift, horizon 5 sessions
+
+  +10% touch: base 4.98%, top decile 13.61%, lift 2.73x on 3,403 picks
+  -10% touch: base 3.14%, top decile 6.05%, lift 1.93x on 3,403 picks
+
+  measure                                            n   days      edge  t pooled    t clust t DE-OVERLAP   ratio
+  ------------------------------------------------------------------------------------------------------------
+  +10% touch top-decile vs same-day base         3,403    180   +6.25%     11.51      9.21       4.08     2.3x
+    ...bottom 90% (mirror, must be negative)    30,617    180   -0.69%     -6.45     -7.87      -3.56     2.2x
+  -10% touch top-decile vs same-day base         3,403    180   +2.84%      7.16      4.92       2.18     2.3x
+    ...bottom 90% (mirror, must be negative)    30,617    180   -0.32%     -3.42     -5.75      -2.65     2.2x
+
+2. DIRECTION -- the frozen 3.06 vs 0.79 rule, horizon 10 sessions
+
+  frozen boundary 2026-01-01, test window 2026-01-02 -> 2026-08-03 (143 sessions)
+  base rates on test: up 9.2%, down 6.3%
+  high-IV names: 3,136 below EMAs (CE), 3,048 above (PE)
+  reported ratios: CE up 17.6% vs dn 5.7% = 3.06   PE up 9.3% vs dn 11.7% = 0.79
+
+  measure                                            n   days      edge  t pooled    t clust t DE-OVERLAP   ratio
+  ------------------------------------------------------------------------------------------------------------
+  CE bucket: up minus down                       3,136    134  +11.83%     14.63      4.67       1.50     3.1x
+  PE bucket: down minus up                       3,048    137   +2.46%      3.25      2.31       0.72     3.2x
+  CE-minus-PE up rate (same-day, drift-free)       130    130   +5.14%      3.17      3.17       1.07     3.0x
+    ...same split on LOW IV (placebo)              141    141   +2.62%      2.77      2.77       0.89     3.1x
