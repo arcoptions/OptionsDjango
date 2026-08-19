@@ -24,9 +24,12 @@ WHY THERE IS NO TREND FILTER. Momentum genuinely lifts the up-rate on the
 underlying -- a combined 20-day relative-strength and EMA-stack rank adds
 +5.1pp out of sample at an overlap-safe t of +2.18. Priced on real calls it
 INVERTS: break-even rises from 56.8% to 68.6% and the payoff when right falls
-from +73.7% to +49.2%. A trending stock's rise is already in the premium. This
-is the eleventh signal in this programme that is real on the stock and dead on
-the option, and it is why the model ships with no directional overlay at all.
+from +73.7% to +49.2%. (Both hurdles there carry the expiry-crossing error
+found later and corrected in `expiry_contamination.py`; they are contaminated
+in the same direction by the same mechanism, so the INVERSION survives and only
+the levels move.) A trending stock's rise is already in the premium. This is
+the eleventh signal in this programme that is real on the stock and dead on the
+option, and it is why the model ships with no directional overlay at all.
 
     python research/call_shortlist.py
 """
@@ -48,7 +51,14 @@ MIN_TURNOVER = 3e8          # rupees of daily turnover
 
 # Measured on 6,499 signals, 138 symbols, 351 sessions (2025-03 to 2026-08).
 P_MOVE, P_UP, P_UP10 = 0.730, 0.484, 0.180
-HURDLE = 0.568
+
+# Was 0.568, which was contaminated: a five-session hold that ran past expiry
+# was priced against next month's contract at the same strike. Corrected in
+# research/expiry_contamination.py -- 67.1% dropping those trades, 68.9%
+# cutting every hold at expiry instead. The three numbers above are measured on
+# equity candles and are unaffected; this one is the option-side price and it
+# is nearly twice as expensive as advertised.
+HURDLE = 0.671
 
 SCAN = """( {cash} (
     latest atr( 14 ) > latest close * 0.04

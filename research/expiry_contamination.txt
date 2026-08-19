@@ -1,0 +1,69 @@
+====================================================================================================
+THE HOLD RAN PAST EXPIRY
+====================================================================================================
+
+  17 expiries detected from the premium series, not assumed from a
+  calendar. Note where the weekday changes:
+
+    2025-03-27 Thu   2025-04-24 Thu   2025-05-29 Thu   2025-06-26 Thu   2025-07-31 Thu   2025-08-28 Thu
+    2025-09-30 Tue   2025-10-28 Tue   2025-11-25 Tue   2025-12-30 Tue   2026-01-27 Tue   2026-02-24 Tue
+    2026-03-30 Mon   2026-04-28 Tue   2026-05-26 Tue   2026-06-30 Tue   2026-07-28 Tue
+
+  A last-Thursday rule would get 6 of 17 right. NSE moved equity
+  derivatives to the last Tuesday partway through the sample.
+
+----------------------------------------------------------------------------------------------------
+WHAT THE CONTAMINATION IS WORTH
+----------------------------------------------------------------------------------------------------
+
+  sample                              n    if right    if wrong     win%    break-even    median    t(5d)
+  --------------------------------------------------------------------------------------------------
+  as shipped (held through)       3,388       73.7%      -54.4%    45.1%         56.8%    -15.6%    +1.04
+    of which crossed expiry         774      160.7%       36.8%    63.4%   always pays    +91.6%    +3.08
+    of which did not              2,614       59.0%      -59.4%    39.7%         67.1%    -24.5%    -1.66
+
+  CORRECTED (cut at expiry)       3,388       58.3%      -72.1%    37.9%         68.9%    -32.1%    +0.52
+    of which crossed expiry         774       55.1%     -100.3%    31.8%         79.4%    -99.1%    +0.62
+    of which did not              2,614       59.0%      -59.4%    39.7%         67.1%    -24.5%    -1.66
+
+  The crossed rows are the whole story. Held through expiry they pay
+  when the stock FALLS -- 'always pays' means the median trade profits
+  even on a wrong read, which no call can do. Cut at expiry they fall
+  back in line with everything else, which is what a real contract does.
+
+  774 of 3,388 trades (23%) held past an expiry. On those the
+  median return falls from +91.6% to -99.1% once the contract is
+  allowed to die on schedule, and the hold shortens from 125 bars
+  to 74.
+
+----------------------------------------------------------------------------------------------------
+VERDICT
+----------------------------------------------------------------------------------------------------
+
+  The shipped hurdle is 56.8%. It is wrong. Two independent corrections
+  bracket the real one:
+
+    drop the crossed trades      67.1%   every trade a clean 5-session hold
+    cut every hold at expiry     68.9%   every trade kept, none mispriced
+
+  Take the first. Truncation prices honestly but changes the question:
+  a hold cut at expiry exits with no time value left, which is a
+  different trade from the five-session hold being measured, and its
+  -99.1% median is that difference rather than a result. Dropping the
+  crossed trades costs 23% of the sample and biases toward entries
+  earlier in the month, which is a real limitation and a smaller one.
+  That the two agree within two points is what makes either usable.
+
+  So the read must be right about 67% of the time, not 56.8%, against
+  48.4% free. Required skill goes from 8.4 points above blind picking
+  to roughly 19. And on the clean sample t(5d) is negative, so the
+  trade is not merely harder than advertised -- at the measured
+  accuracy it loses.
+
+  Every downstream number priced on this cache inherits the same error:
+  the strike ladder, the premium bands, and the elasticity gradient that
+  looked like a finding an hour ago and was days-to-expiry in disguise.
+
+  The stock-level shortlist is NOT affected -- 73% move 5%, 48.4% rise
+  are measured on equity candles and never touch an option contract.
+  What changes is the price of acting on it.

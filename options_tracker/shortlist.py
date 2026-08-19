@@ -49,7 +49,19 @@ MIN_HISTORY = 60            # sessions needed before the features mean anything
 # Measured on 6,499 signals, 138 symbols, 351 sessions (2025-03 to 2026-08).
 P_MOVE, P_UP, P_UP10 = 0.730, 0.484, 0.180
 P_MOVE_BASE, P_UP_BASE = 0.413, 0.234
-HURDLE = 0.568
+
+# The option-side price of acting on the list. This was 0.568 and that number
+# was wrong: the option cache is built on NEAREST expiry, so pinning a strike
+# pins the contract only within one expiry cycle, and a five-session hold that
+# ran past expiry was marked out against next month's option carrying a fresh
+# month of time value. Those trades returned +36.8% at the median when the
+# stock FELL, which no call does. Priced on contracts that stay themselves the
+# hurdle is 67.1% (research/expiry_contamination.py); cutting every hold at
+# expiry instead of dropping the affected trades gives 68.9%, so the correction
+# is bracketed rather than tuned. Unlike P_MOVE and P_UP above -- which come
+# from equity candles and never touch an option -- this one is a price, and it
+# nearly doubles the skill the read has to supply.
+HURDLE = 0.671
 
 SCAN = """( {cash} (
     latest atr( 14 ) > latest close * 0.04
