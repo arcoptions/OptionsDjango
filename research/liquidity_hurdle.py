@@ -1,17 +1,19 @@
 """Does option-side liquidity lower the chart reader's hurdle?
 
 `strike_ladder.py` answered its own question -- no cheaper strike helps -- but
-left a bigger number lying in its output. The ATM row appears twice:
+left a bigger number lying in its output. The ATM row appeared twice:
 
     all 3,388 ATM trades      break-even 56.8%   win 45.1%
     the 1,437 matched ones    break-even 49.6%   win 52.3%
 
 Same strike, same model, same hold. The only difference is that the matched set
 required the ATM+2 contract to have ALSO traded that morning, and on that subset
-the hurdle falls 7.2 points -- from 8.4 points of skill above the 48.4% free
-rate down to 1.2. If that is real it is worth more than anything else tested in
-this programme, because it costs the user nothing: they simply do not take the
-trade.
+the hurdle fell 7.2 points. If that were real it would be worth more than
+anything else tested in this programme, because it costs the user nothing: they
+simply do not take the trade.
+
+(Both of those levels were wrong -- see WHAT CAME OF IT below -- but the gap
+between them was not, which is why the question was worth asking.)
 
 WHY THIS IS NOT AUTOMATICALLY HINDSIGHT. The fill test in `price_rung` is
 applied at the ENTRY bar and nowhere else: the contract needs a finite open, a
@@ -26,7 +28,7 @@ WHY IT STILL MIGHT BE NOTHING. Three ways it dies, and each is checked below:
   * COMPOSITION. Chains with live wings belong to bigger, more optioned names.
     That is a different universe, not a better filter -- so the buckets are
     also compared inside the same session, where the market is held constant.
-  * MONTHS. The shipped hurdle swings from 18% to unreachable across months.
+  * MONTHS. The shipped hurdle swings from 46% to unreachable across months.
     A bucket that only wins in some of them is that instability re-labelled.
 
 WHAT IS BEING TESTED. Four entry-time observables, three buckets each, so
@@ -36,14 +38,21 @@ the matched definition. `premium` is included because friction here is set by
 premium rather than moneyness, and because the NIFTY Rs100 floor is known to
 invert on stocks -- a prior worth being wrong against.
 
-WHAT CAME OF IT. The hypothesis is dead: the liquid case has the WORSE hurdle,
-59.6% against 56.8%. But the bucket that produced the illusion pays when the
-stock falls, which no call does, and running that down found a pricing bug
-underneath the whole programme -- the hold crossing expiry onto a fresh
-contract. That is measured in `expiry_contamination.py`. Both hurdles quoted
-here are contaminated by it; their COMPARISON survives, their levels do not.
+WHAT CAME OF IT. The hypothesis is dead: the liquid case has the WORSE hurdle.
+But the bucket that produced the illusion paid when the stock FELL, which no
+call does, and running that down found a pricing bug underneath the whole
+programme -- the hold crossing expiry onto a fresh contract, measured in
+`expiry_contamination.py`.
 
-    python research/liquidity_hurdle.py
+This file predicted, before the fix existed, that both hurdles were
+contaminated alike: the COMPARISON would survive and the LEVELS would not.
+Re-run 2026-08-19 under `premove_legs.expiries()`, that is what happened --
+every level moved up about ten points and the gap held. The verdict is
+unchanged and now rests on honest numbers. The one thing that DID change is
+the diagnostic: the cheap bucket no longer pays when the stock falls, because
+that signature WAS the bug.
+
+    python research/liquidity_hurdle.py [--rebuild]
 """
 from __future__ import annotations
 
@@ -355,38 +364,63 @@ def main() -> None:
     # intrinsic value the premium never paid for), or an EXIT built mostly
     # from the intrinsic fallback rather than from real quotes.
     #
-    # It is none of the three. The bucket is cheap, real and well quoted -- and
-    # cheap is the tell, because premium as a share of spot is mostly a clock.
+    # It was none of the three. The bucket is cheap, real and well quoted --
+    # and cheap was the tell, because premium as a share of spot is mostly a
+    # clock. The fourth possibility, the one that turned out to be true, was
+    # not on that list: the contract stopped being itself partway through the
+    # hold. That is why this section is kept even though the guard has since
+    # removed what it was diagnosing -- the elimination is what pointed at it.
     log("\n" + "-" * 78)
-    log("SANITY CHECK ON THE 'ALWAYS PAYS' BUCKET")
+    log("SANITY CHECK ON THE BUCKET THAT ONCE 'ALWAYS PAID'")
     log("-" * 78)
     log("\n  {:<12} {:>7} {:>9} {:>11} {:>11} {:>10} {:>9}".format(
         "wing", "trades", "premium", "prem/spot", "moneyness", "quotes/125", "median"))
     log("  " + "-" * 72)
+    finger = {}
     for flag, label in ((True, "traded"), (False, "did not")):
         b = f[f["wing_live"] == flag]
         if not len(b):
             continue
+        finger[label] = b
         log("  {:<12} {:>7,} {:>8.2f} {:>10.2f}% {:>10.2f}% {:>10.0f} {:>+8.1f}%".format(
             label, len(b), b["premium"].median(),
             b["prem_pct"].median() * 100, b["moneyness"].median() * 100,
             b["quotes"].median(), b["ret"].median() * 100))
-    log("\n  All three fingerprints come back clean. The cheap bucket is 1.83% of")
-    log("  spot against 3.45% -- a factor of 1.9, not the order of magnitude a")
-    log("  broken print would show. Its moneyness is -0.09%, so it is genuinely")
-    log("  at the money. And it carries MORE live quotes than the expensive")
-    log("  bucket, 42 against 38, so the exit is not an intrinsic fallback.")
-    log("  These are real, well-quoted, cheap contracts.")
-    log("")
-    log("  Which is the answer, once you read premium as a clock rather than a")
-    log("  price. An at-the-money call is worth roughly 3-4% of spot with a")
-    log("  month to run and under 2% with days left, so a low prem/spot is not a")
-    log("  bargain -- it is a contract close to expiry. And a contract close to")
-    log("  expiry is exactly the one a five-session hold runs PAST, at which")
-    log("  point the pinned strike silently becomes next month's option with a")
-    log("  fresh month of time value. That is what pays when the stock falls.")
-    log("  See expiry_contamination.py, which measures it: 3.7% break-even on")
-    log("  the trades that cross, which is not an edge but an impossibility.")
+    if len(finger) == 2:
+        rich, cheap = finger["traded"], finger["did not"]
+        ratio = (rich["prem_pct"].median() / cheap["prem_pct"].median()
+                 if cheap["prem_pct"].median() else float("nan"))
+        log("\n  All three fingerprints come back clean. The cheap bucket is"
+            " {:.2f}% of".format(cheap["prem_pct"].median() * 100))
+        log("  spot against {:.2f}% -- a factor of {:.1f}, not the order of"
+            " magnitude a".format(rich["prem_pct"].median() * 100, ratio))
+        log("  broken print would show. Its moneyness is {:.2f}%, so it is"
+            " genuinely".format(cheap["moneyness"].median() * 100))
+        log("  at the money. And it carries {} live quotes against {}, so the"
+            .format(int(cheap["quotes"].median()), int(rich["quotes"].median())))
+        log("  exit is not an intrinsic fallback. These are real, well-quoted,")
+        log("  cheap contracts.")
+        log("")
+        log("  Which was the answer, once you read premium as a clock rather")
+        log("  than a price. An at-the-money call is worth roughly 3-4% of spot")
+        log("  with a month to run and under 2% with days left, so a low")
+        log("  prem/spot is not a bargain -- it is a contract close to expiry.")
+        log("  And a contract close to expiry is exactly the one a five-session")
+        log("  hold runs PAST, at which point the pinned strike silently becomes")
+        log("  next month's option carrying a fresh month of time value. THAT is")
+        log("  what used to pay when the stock fell. See expiry_contamination.py.")
+        log("")
+        wrong = cheap[~cheap["went_up"]]["ret"].median() * 100
+        log("  The guard is now on, and the signature it was diagnosing is gone:")
+        log("  this bucket returns {:+.1f}% at the median when the stock does NOT"
+            .format(wrong))
+        if wrong < 0:
+            log("  rise, which is what a call is supposed to do. An impossibility")
+            log("  that disappears when you fix the thing you blamed for it is")
+            log("  the strongest confirmation this project has of a diagnosis.")
+        else:
+            log("  rise -- still positive, so the expiry guard was NOT the whole")
+            log("  explanation and something else is inflating this bucket.")
 
     log("\n" + "-" * 78)
     log("WHAT rungs_live ACTUALLY MEASURES")
@@ -414,23 +448,57 @@ def main() -> None:
     log("\n" + "-" * 78)
     log("VERDICT")
     log("-" * 78)
-    log("\n  The hypothesis was that a liquid chain lowers the hurdle. It does")
-    log("  not: with the wing trading -- the liquid case -- the hurdle is 59.6%,")
-    log("  WORSE than the 56.8% baseline. The apparent win sits entirely in the")
-    log("  236 trades where the wing did NOT trade, and that bucket pays even")
-    log("  when the stock falls, which no option does.")
+    live = f[f["wing_live"]]
+    dead_wing = f[~f["wing_live"]]
+    need_live = hurdle(live)[3]
+    need_dead = hurdle(dead_wing)[3]
     log("")
-    log("  So the 49.6% in the strike ladder's matched table is not a filter the")
-    log("  user could run. It is what happens when you require three contracts")
-    log("  to have printed, on a cache where printing is partly a function of")
-    log("  what has finished downloading.")
+    if need_live == need_live and need_base == need_base and need_live >= need_base:
+        log("  The hypothesis was that a liquid chain lowers the hurdle. It does")
+        log("  not: with the wing trading -- the liquid case -- the hurdle is")
+        log("  {:.1%}, WORSE than the {:.1%} baseline. What is left sits entirely"
+            .format(need_live, need_base))
+        log("  in the {:,} trades where the wing did NOT trade.".format(len(dead_wing)))
+    else:
+        log("  With the wing trading -- the liquid case -- the hurdle is {:.1%}"
+            .format(need_live))
+        log("  against the {:.1%} baseline, so the liquid chain does NOT carry"
+            .format(need_base))
+        log("  the penalty this file expected. Re-read the buckets above before")
+        log("  quoting that, because it reverses the original verdict.")
     log("")
-    log("  The bucket that pays when the stock falls turned out to be worth more")
-    log("  than the question that found it. Chasing why a cheap contract could")
-    log("  do that led to the pricing bug behind it, and that bug is in the")
-    log("  shipped 56.8% too -- see expiry_contamination.py. This file's own")
-    log("  numbers carry it: read the 59.6% and the 56.8% as contaminated alike,")
-    log("  which leaves the comparison between them intact and both levels wrong.")
+    if need_dead == need_dead:
+        spaced = dead_wing[dead_wing["day"].isin(non_overlapping(dead_wing["day"]))]
+        t5 = day_t(spaced["ret"].values, spaced["day"].values)
+        readable = sum(
+            1 for _, chunk in dead_wing.groupby(dead_wing["day"].dt.to_period("M"))
+            if hurdle(chunk)[3] == hurdle(chunk)[3])
+        months = dead_wing["day"].dt.to_period("M").nunique()
+        log("  And that residue does NOT survive as a filter. It is {:,} trades"
+            .format(len(dead_wing)))
+        log("  needing {:.1%}, on a median of {:+.1f}% with t(5d) {:+.2f}. A"
+            .format(need_dead, dead_wing["ret"].median() * 100, t5))
+        log("  positive t beside a negative median is a lottery, not an edge --")
+        log("  and it can be scored in only {} of its {} months, because the"
+            .format(readable, months))
+        log("  bucket is too thin to read anywhere else.")
+    log("")
+    log("  So the strike ladder's matched table is not a filter the user could")
+    log("  run. It is what happens when you require three contracts to have")
+    log("  printed, on a cache where printing is partly a function of what has")
+    log("  finished downloading.")
+    log("")
+    log("  THE PREDICTION THIS FILE MADE HAS NOW BEEN TESTED. It said the two")
+    log("  hurdles were contaminated alike, so the COMPARISON would survive the")
+    log("  expiry fix and the LEVELS would not. Re-run under the guard:")
+    log("    liquid wing   {:>6.1%}   (was 59.6% unguarded)".format(need_live))
+    log("    baseline      {:>6.1%}   (was 56.8% unguarded)".format(need_base))
+    log("    no wing       {:>6.1%}   (was 49.6% unguarded)".format(need_dead))
+    log("  Both moved up about ten points and the liquid-minus-illiquid gap is")
+    log("  {:.1f} points against the 10.0 it was before. The comparison held;"
+        .format((need_live - need_dead) * 100))
+    log("  the levels did not, exactly as predicted. Every number on this page")
+    log("  is now the guarded one.")
 
     with open(OUT, "w") as handle:
         handle.write("\n".join(LINES) + "\n")

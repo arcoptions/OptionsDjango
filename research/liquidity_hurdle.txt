@@ -7,8 +7,8 @@ DOES OPTION-SIDE LIQUIDITY LOWER THE HURDLE?
 
   3,388 ATM trades priced across 295 sessions
 
-  BASELINE (every trade)  premium 25.70  if right +73.7%  if wrong -54.4%
-  win 45.1%, break-even 56.8% against 48.4% free.
+  BASELINE (every trade)  premium 25.70  if right +58.3%  if wrong -72.1%
+  win 37.9%, break-even 68.9% against 48.4% free.
 
 ------------------------------------------------------------------------------
 THE SPLIT THAT STARTED THIS: did the ATM+2 wing trade at entry?
@@ -16,8 +16,8 @@ THE SPLIT THAT STARTED THIS: did the ATM+2 wing trade at entry?
 
   wing              trades   premium    if right    if wrong    win%   break-even
   ----------------------------------------------------------------------------
-  traded             3,152    28.35       70.0%      -57.2%   43.7%        59.6%
-  did not              236     5.03      127.6%       24.6%   64.0%  always pays
+  traded             3,152    28.35       56.6%      -71.6%   37.6%        69.5%
+  did not              236     5.03       88.3%      -85.0%   41.9%        60.3%
 
 ------------------------------------------------------------------------------
 THE SAME QUESTION ASKED THREE OTHER WAYS
@@ -26,23 +26,23 @@ THE SAME QUESTION ASKED THREE OTHER WAYS
   by rungs_live
   bucket            trades   premium    if right    if wrong    win%   break-even
   ----------------------------------------------------------------------------
-  1-2 rungs          1,925    26.05       56.0%      -73.3%   39.6%        63.9%
-  3 rungs            1,214    24.15       81.9%      -38.3%   51.5%        50.2%
-  4-5 rungs            249    45.05      118.4%      -27.7%   56.6%        43.0%
+  1-2 rungs          1,925    26.05       36.8%     -100.3%   31.1%        78.7%
+  3 rungs            1,214    24.15       74.6%      -49.4%   46.0%        60.3%
+  4-5 rungs            249    45.05      106.7%      -34.7%   50.6%        55.2%
 
   by opt_vol
   bucket            trades   premium    if right    if wrong    win%   break-even
   ----------------------------------------------------------------------------
-  thin volume        1,129    64.35       88.1%      -53.8%   44.5%        55.2%
-  middling           1,129    25.05       71.6%      -53.7%   46.8%        53.7%
-  heavy volume       1,130    11.44       62.9%      -55.5%   44.2%        62.4%
+  thin volume        1,129    64.35       76.3%      -72.5%   37.6%        66.1%
+  middling           1,129    25.05       61.4%      -68.6%   40.9%        63.7%
+  heavy volume       1,130    11.44       41.2%      -74.2%   35.1%        77.6%
 
   by premium
   bucket            trades   premium    if right    if wrong    win%   break-even
   ----------------------------------------------------------------------------
-  under Rs10           830     5.85      106.6%      -45.0%   52.7%        38.6%
-  Rs10-40            1,255    19.85       68.7%      -55.3%   44.8%        58.0%
-  over Rs40          1,303    95.10       60.2%      -59.3%   40.7%        65.7%
+  under Rs10           830     5.85       79.9%      -95.1%   39.4%        64.2%
+  Rs10-40            1,255    19.85       54.0%      -66.0%   38.6%        68.4%
+  over Rs40          1,303    95.10       52.9%      -71.2%   36.2%        72.3%
 
 ------------------------------------------------------------------------------
 IS IT THE FILTER OR THE UNIVERSE? Same-session comparison
@@ -52,10 +52,10 @@ IS IT THE FILTER OR THE UNIVERSE? Same-session comparison
 
   wing              trades    if right    if wrong    win%   break-even
   -------------------------------------------------------------------
-  traded             1,738       87.1%      -42.8%   56.6%        44.4%
-  did not              227      125.9%        5.4%   63.0%  always pays
+  traded             1,738       80.5%      -66.5%   49.6%        59.4%
+  did not              227       89.7%      -95.0%   41.9%        61.5%
 
-  mean return +82.3% with a live wing against +191.2% without
+  mean return +72.5% with a live wing against +348.2% without
 
 ------------------------------------------------------------------------------
 DOES IT HOLD ACROSS MONTHS?
@@ -63,9 +63,9 @@ DOES IT HOLD ACROSS MONTHS?
 
   month         wing n     wing b/e    rest n     rest b/e
   -------------------------------------------------------
-  2025-03          263        19.5%        30           --
-  2025-04          632        38.8%        70           --
-  2025-05          290        65.5%         8           --
+  2025-03          263        46.6%        30           --
+  2025-04          632        51.8%        70        54.7%
+  2025-05          290        76.8%         8           --
   2025-06           36           --        12           --
   2025-07           25           --         3           --
   2025-08           65           --         3           --
@@ -73,22 +73,25 @@ DOES IT HOLD ACROSS MONTHS?
   2025-10           10           --         3           --
   2025-11            7           --         1           --
   2025-12           41           --         0           --
-  2026-01          121        66.7%         7           --
-  2026-02          453        82.0%        11           --
-  2026-03          363       143.2%        24           --
-  2026-04          452        50.0%        39           --
-  2026-05          117        37.5%         5           --
-  2026-06          119        91.3%         9           --
-  2026-07          107        73.6%        11           --
+  2026-01          121        87.1%         7           --
+  2026-02          453        90.4%        11           --
+  2026-03          363       260.8%        24           --
+  2026-04          452        52.7%        39           --
+  2026-05          117        46.9%         5           --
+  2026-06          119        91.5%         9           --
+  2026-07          107        84.3%        11           --
   2026-08           38           --         0           --
+
+  The live-wing bucket has the lower hurdle in 1 of 1 readable
+  months. Ten of twelve would be a filter; six would be a coin.
 
 ------------------------------------------------------------------------------
 IS THE RETURN GAP ITSELF SIGNIFICANT?
 ------------------------------------------------------------------------------
 
-  live wing  n 3,152  mean +38.2%  median -18.3%  t(day) +2.04  t(5d) +0.21
+  live wing  n 3,152  mean +26.1%  median -32.5%  t(day) -1.89  t(5d) -2.23
 
-  no wing    n 236  mean +194.4%  median +100.5%  t(day) +5.36  t(5d) +2.02
+  no wing    n 236  mean +335.0%  median -23.9%  t(day) +1.30  t(5d) +0.99
 
   t(day) treats a session as one bet. t(5d) also spaces entries five
   sessions apart so no two trades share a holding period -- without it
@@ -97,30 +100,35 @@ IS THE RETURN GAP ITSELF SIGNIFICANT?
   median is a lottery, not an edge.
 
 ------------------------------------------------------------------------------
-SANITY CHECK ON THE 'ALWAYS PAYS' BUCKET
+SANITY CHECK ON THE BUCKET THAT ONCE 'ALWAYS PAID'
 ------------------------------------------------------------------------------
 
   wing          trades   premium   prem/spot   moneyness quotes/125    median
   ------------------------------------------------------------------------
-  traded         3,152    28.30       3.45%       0.01%         38    -18.3%
-  did not          236     4.97       1.83%      -0.09%         42   +100.5%
+  traded         3,152    28.30       3.45%       0.01%         38    -32.5%
+  did not          236     4.97       1.83%      -0.09%         42    -23.9%
 
   All three fingerprints come back clean. The cheap bucket is 1.83% of
   spot against 3.45% -- a factor of 1.9, not the order of magnitude a
   broken print would show. Its moneyness is -0.09%, so it is genuinely
-  at the money. And it carries MORE live quotes than the expensive
-  bucket, 42 against 38, so the exit is not an intrinsic fallback.
-  These are real, well-quoted, cheap contracts.
+  at the money. And it carries 42 live quotes against 38, so the
+  exit is not an intrinsic fallback. These are real, well-quoted,
+  cheap contracts.
 
-  Which is the answer, once you read premium as a clock rather than a
-  price. An at-the-money call is worth roughly 3-4% of spot with a
-  month to run and under 2% with days left, so a low prem/spot is not a
-  bargain -- it is a contract close to expiry. And a contract close to
-  expiry is exactly the one a five-session hold runs PAST, at which
-  point the pinned strike silently becomes next month's option with a
-  fresh month of time value. That is what pays when the stock falls.
-  See expiry_contamination.py, which measures it: 3.7% break-even on
-  the trades that cross, which is not an edge but an impossibility.
+  Which was the answer, once you read premium as a clock rather
+  than a price. An at-the-money call is worth roughly 3-4% of spot
+  with a month to run and under 2% with days left, so a low
+  prem/spot is not a bargain -- it is a contract close to expiry.
+  And a contract close to expiry is exactly the one a five-session
+  hold runs PAST, at which point the pinned strike silently becomes
+  next month's option carrying a fresh month of time value. THAT is
+  what used to pay when the stock fell. See expiry_contamination.py.
+
+  The guard is now on, and the signature it was diagnosing is gone:
+  this bucket returns -85.0% at the median when the stock does NOT
+  rise, which is what a call is supposed to do. An impossibility
+  that disappears when you fix the thing you blamed for it is
+  the strongest confirmation this project has of a diagnosis.
 
 ------------------------------------------------------------------------------
 WHAT rungs_live ACTUALLY MEASURES
@@ -148,19 +156,28 @@ VERDICT
 ------------------------------------------------------------------------------
 
   The hypothesis was that a liquid chain lowers the hurdle. It does
-  not: with the wing trading -- the liquid case -- the hurdle is 59.6%,
-  WORSE than the 56.8% baseline. The apparent win sits entirely in the
-  236 trades where the wing did NOT trade, and that bucket pays even
-  when the stock falls, which no option does.
+  not: with the wing trading -- the liquid case -- the hurdle is
+  69.5%, WORSE than the 68.9% baseline. What is left sits entirely
+  in the 236 trades where the wing did NOT trade.
 
-  So the 49.6% in the strike ladder's matched table is not a filter the
-  user could run. It is what happens when you require three contracts
-  to have printed, on a cache where printing is partly a function of
-  what has finished downloading.
+  And that residue does NOT survive as a filter. It is 236 trades
+  needing 60.3%, on a median of -23.9% with t(5d) +0.99. A
+  positive t beside a negative median is a lottery, not an edge --
+  and it can be scored in only 1 of its 15 months, because the
+  bucket is too thin to read anywhere else.
 
-  The bucket that pays when the stock falls turned out to be worth more
-  than the question that found it. Chasing why a cheap contract could
-  do that led to the pricing bug behind it, and that bug is in the
-  shipped 56.8% too -- see expiry_contamination.py. This file's own
-  numbers carry it: read the 59.6% and the 56.8% as contaminated alike,
-  which leaves the comparison between them intact and both levels wrong.
+  So the strike ladder's matched table is not a filter the user could
+  run. It is what happens when you require three contracts to have
+  printed, on a cache where printing is partly a function of what has
+  finished downloading.
+
+  THE PREDICTION THIS FILE MADE HAS NOW BEEN TESTED. It said the two
+  hurdles were contaminated alike, so the COMPARISON would survive the
+  expiry fix and the LEVELS would not. Re-run under the guard:
+    liquid wing    69.5%   (was 59.6% unguarded)
+    baseline       68.9%   (was 56.8% unguarded)
+    no wing        60.3%   (was 49.6% unguarded)
+  Both moved up about ten points and the liquid-minus-illiquid gap is
+  9.2 points against the 10.0 it was before. The comparison held;
+  the levels did not, exactly as predicted. Every number on this page
+  is now the guarded one.
