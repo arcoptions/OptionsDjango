@@ -1,0 +1,121 @@
+==========================================================================================
+CAN THE MOTION SIGNAL BE RUN AS A CHARTINK SCAN?
+==========================================================================================
+69,741 stock-days, 189 symbols, 369 sessions
+32 features a scan can compute, 8 it is blind to (iv, iv_rank, iv_chg5, iv_vs_rv, oi, oi_chg5, skew, breadth)
+
+1. CEILING -- refit on scan-visible features only
+   The full model scored 2.73x on +10% touch. A scan cannot beat this row.
+
+   up10     base 4.98% -> top decile 12.28% = 2.47x   t +3.40
+   motion   base 8.10% -> top decile 17.16% = 2.12x   t +3.89
+
+2. FLOOR -- plain scan rules, +10% UP touch in 5 sessions
+
+  +10% UP touch in 5 sessions  (base rate 5.04%)
+  rule                                            n  per day      hit    lift        t
+  ------------------------------------------------------------------------------------
+  near 20d HIGH (<=2%)                       14,615     40.2   3.24%    0.64    -0.98
+  near 20d LOW  (<=2%)                       10,519     28.9   3.40%    0.68    -1.83
+  near EITHER 20d edge (<=2%)                25,118     69.0   3.31%    0.66    -3.12
+  near EITHER 20d edge (<=1%)                11,961     32.9   3.36%    0.67    -2.25
+    + volume surge >1.5x                      6,310     17.3   4.09%    0.81    -0.68
+    + top-quartile ATR                        5,527     15.2   4.90%    0.97     0.06
+    + both                                    1,754      4.8   6.10%    1.21     0.08
+  top-quartile ATR alone                     16,183     44.5   6.72%    1.33     3.17
+  top-decile ATR alone                        8,634     23.7   7.34%    1.46     2.25
+  20d breakout (brk_up20)                     4,405     12.1   4.13%    0.82    -0.47
+  volume surge >2x alone                      7,182     19.7   5.57%    1.11     1.37
+  SCAN A: ATR% > 4.0%                         6,499     17.9  18.05%    3.58     5.83
+  SCAN B:  + |20d move| > 6%                  4,041     11.1  17.99%    3.57     5.18
+
+2. FLOOR -- plain scan rules, 10% move EITHER WAY in 5 sessions
+
+  10% move EITHER WAY in 5 sessions  (base rate 7.97%)
+  rule                                            n  per day      hit    lift        t
+  ------------------------------------------------------------------------------------
+  near 20d HIGH (<=2%)                       14,615     40.2   5.32%    0.67    -1.63
+  near 20d LOW  (<=2%)                       10,519     28.9   5.28%    0.66    -1.33
+  near EITHER 20d edge (<=2%)                25,118     69.0   5.29%    0.66    -3.86
+  near EITHER 20d edge (<=1%)                11,961     32.9   5.29%    0.66    -2.89
+    + volume surge >1.5x                      6,310     17.3   6.39%    0.80    -0.98
+    + top-quartile ATR                        5,527     15.2   7.45%    0.94     0.08
+    + both                                    1,754      4.8   8.61%    1.08    -0.17
+  top-quartile ATR alone                     16,183     44.5  10.14%    1.27     3.54
+  top-decile ATR alone                        8,634     23.7  10.71%    1.34     2.58
+  20d breakout (brk_up20)                     4,405     12.1   7.04%    0.88    -0.36
+  volume surge >2x alone                      7,182     19.7   8.87%    1.11     1.69
+  SCAN A: ATR% > 4.0%                         6,499     17.9  24.03%    3.02     7.11
+  SCAN B:  + |20d move| > 6%                  4,041     11.1  24.99%    3.14     6.22
+
+3. SCALE OR PREDICTION -- is the signal an event, or just volatility?
+
+   ATR quartile       ATR%  ATR-days to 10%    motion    lift
+   ------------------------------------------------------------
+   Q1 calm          1.84%             1.09    1.50%    0.19
+   Q2               2.37%             0.84    4.48%    0.58
+   Q3               2.92%             0.68    7.67%    0.99
+   Q4 volatile      3.83%             0.52   17.34%    2.24
+
+   A calm stock must travel ~1.1 days of its own range to make 10%; a
+   volatile one ~0.5. The 11x spread in hit rate is mostly that.
+
+   CONTROL A -- refit with the volatility features removed:
+     scan features (as above)         8.10% -> 17.16% = 2.12x   t +3.89
+     volatility features removed      8.10% -> 15.13% = 1.87x   t +3.44
+
+   CONTROL B -- re-score the model INSIDE volatility buckets.
+   A genuine event-predictor must still rank here. A volatility sorter cannot.
+     bucket               n     base   top decile    lift       t
+     ----------------------------------------------------------
+     Q1 calm          8,505   1.78%       2.82%    1.59    0.62
+     Q2               8,505   6.01%       7.17%    1.19   -0.06
+     Q3               8,505   8.52%      10.46%    1.23    0.75
+     Q4 volatile      8,505  16.08%      22.21%    1.38    0.92
+
+4. SYNTAX -- the scan, and what it is honestly for
+
+   Verdict: buildable, and it will do what it says -- surface stocks that
+   go on to travel 10%. But it is a volatility filter, and volatility is
+   what option sellers already charge for. Use it as a WATCHLIST, where
+   the direction call is yours, not as a mechanical signal.
+
+   ------------------------------------------------------------------------
+   A. THE WATCHLIST SCAN  (17.8 names/day, 3.11x, t +6.95)
+
+   ( {cash} (
+       latest atr( 14 ) > latest close * 0.04
+       and latest close > 100
+       and latest sma( latest volume , 20 ) > 300000
+   ) )
+
+   B. TIGHTER, ADDS A 20-DAY MOVE  (11.7 names/day, 3.31x, t +6.22)
+
+   ( {cash} (
+       latest atr( 14 ) > latest close * 0.04
+       and ( latest close > 1.06 * 20 days ago close
+             or latest close < 0.94 * 20 days ago close )
+       and latest close > 100
+       and latest sma( latest volume , 20 ) > 300000
+   ) )
+
+   ------------------------------------------------------------------------
+   THREE THINGS THAT WILL BREAK IT IF IGNORED
+
+   1. RESTRICT THE UNIVERSE TO F&O NAMES. Every number here was measured on
+      181 F&O stocks. `ATR% > 4%` run against the whole market surfaces
+      illiquid small-caps this sample never contained, where nothing above
+      was tested. Set the scan's group to the F&O list.
+
+   2. DO NOT ADD "close near 20-day high". It is the intuitive filter and it
+      INVERTS -- 0.66x, t -3.12 (section 2). A fixed-percentage distance to a
+      boundary selects narrow-range stocks, which is the opposite of what the
+      signal wants. `to_hi20` is the model's top feature by permutation
+      importance and still fails as a threshold; the model uses it in
+      combination, a scan cannot.
+
+   3. THE SCAN IS DIRECTION-BLIND, and section 3 says it is a volatility
+      ranking rather than an event predictor. It tells you where the range is
+      about to be wide. It does not tell you which way, and buying premium on
+      it pays for exactly the volatility it selects.
+   ------------------------------------------------------------------------
