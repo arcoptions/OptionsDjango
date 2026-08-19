@@ -122,7 +122,10 @@ def main() -> None:
     print("  prior close does not predict it. Size accordingly.")
     print()
     print("  Puts are excluded by measurement, not preference: the put side")
-    print("  needs 122.3% of reads correct, i.e. no read is good enough.")
+    print("  needs 122.3% of reads correct, i.e. no read is good enough. Even")
+    print("  a perfect put read has a negative median. Re-priced on the")
+    print("  repaired cache it is still unreachable, but on four scoreable")
+    print("  months -- the put cache has an ATM gap that is not being backfilled.")
 
     print("\nChartink equivalent:\n{}".format(SCAN))
 
