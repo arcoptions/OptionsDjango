@@ -62,7 +62,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "trading_terminal.settings")
 django.setup()
 
 from option_spreads import TAX, TICK, day_t  # noqa: E402
-from premove_legs import HOLD, load  # noqa: E402
+from premove_legs import HOLD, expiries, load  # noqa: E402
 from chart_reader_hurdle import scan_entries  # noqa: E402
 from strike_ladder import non_overlapping  # noqa: E402
 
@@ -83,15 +83,19 @@ def log(message: str = "") -> None:
     LINES.append(message)
 
 
-def price_atm(frame: pd.DataFrame, entries: set) -> list[dict]:
+def price_atm(frame: pd.DataFrame, entries: set,
+              deadlines: list | None = None) -> list[dict]:
     """Buy the ATM call, and record what the chain looked like at that moment.
 
     The trade is `strike_ladder.price_rung(rung="ATM")` unchanged -- absolute
-    strike, pinned for the hold, missing quotes valued at intrinsic. What is
+    strike, pinned for the hold, missing quotes valued at intrinsic, and the
+    hold cut at the front-month expiry so the contract stays itself. What is
     added is a snapshot of the entry bar: the premium, the ATM contract's own
     volume, and how many neighbouring rungs were themselves tradeable. Every
     one of those is visible before the order is placed.
     """
+    if deadlines is None:
+        deadlines = expiries("CALL")
     opens = frame.pivot_table(index="ts", columns="strike", values="open")
     grid = opens.index
     close = frame.pivot_table(index="ts", columns="strike", values="close").reindex(grid)
@@ -127,9 +131,12 @@ def price_atm(frame: pd.DataFrame, entries: set) -> list[dict]:
         entry = opens.at[ts, k]
         cost = entry + TICK
         i = pos[ts]
+        dead = next((e for e in deadlines if e >= day), None)
         values = []
         for j in range(i + 1, min(i + 1 + HOLD, len(grid))):
             t = grid[j]
+            if dead is not None and t.date() > dead:
+                break        # past the roll this strike is another contract
             v = close.at[t, k]
             if not np.isfinite(v):
                 s = spot.get(t, np.nan)

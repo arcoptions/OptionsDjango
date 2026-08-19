@@ -8,41 +8,41 @@ loading CALL...
   3,684,578 CALL bars, 189 symbols
 
 loading PUT...
-  1,688,478 PUT bars, 189 symbols
+  2,202,238 PUT bars, 189 symbols
 
-4,991 option trades priced
+4,978 option trades priced
 
   bucket                                  n     pooled       mean     median   SESS med     win%  best exit
   --------------------------------------------------------------------------------------------------------
-  CALL, stock DID rise 5% (perfect)   1,579      68.0%     109.0%      73.7%      60.3%    70.6%     137.0%
-  CALL, stock did not                 1,809     -44.0%      -3.2%     -54.4%     -45.9%    22.9%      12.8%
-  CALL, every scan name (no skill)    3,388       9.3%      49.0%     -15.6%     -18.1%    45.1%      59.7%
+  CALL, stock DID rise 5% (perfect)   1,579      60.2%      85.4%      58.3%      32.6%    66.9%     118.8%
+  CALL, stock did not                 1,809     -56.3%      14.7%     -72.1%     -59.4%    12.6%       7.0%
+  CALL, every scan name (no skill)    3,388      -0.9%      47.7%     -32.1%     -34.2%    37.9%      34.6%
 
-  PUT, stock DID fall 5% (perfect)      314      35.1%     383.3%      -9.9%      22.4%    43.9%      83.5%
-  PUT, stock did not                  1,289      31.9%    1625.2%    -100.3%     -44.3%    16.8%      22.9%
-  PUT, every scan name (no skill)     1,603      32.7%    1381.9%    -100.3%     -14.6%    22.1%      31.4%
+  PUT, stock DID fall 5% (perfect)      308      39.7%     357.0%     -21.9%      -1.3%    39.0%      67.9%
+  PUT, stock did not                  1,282      11.6%     873.8%    -100.3%     -58.0%     9.4%      17.3%
+  PUT, every scan name (no skill)     1,590      17.9%     773.7%    -100.3%     -37.1%    15.2%      24.8%
 
 THE HURDLE -- how often the read must be right just to break even
 
-  CALL  needs 56.8% of reads correct; picking at random gives 48.4%
-     (loses 29.4% of the time when right, 77.1% when wrong)
+  CALL  needs 68.9% of reads correct; picking at random gives 48.4%
+     (loses 33.1% of the time when right, 87.4% when wrong)
       accuracy    median      mean    win%
-         40.0%    -23.6%     40.9%   41.9%
-         48.4%    -13.2%     50.7%   46.0%  <- random pick
-         55.0%     -3.6%     57.9%   49.1%
-         56.8%      0.2%     60.9%   50.0%  <- break-even
-         60.0%      5.9%     64.2%   51.5%
-         70.0%     24.9%     75.0%   56.3%
+         40.0%    -38.2%     45.4%   34.3%
+         48.4%    -29.9%     49.8%   38.9%  <- random pick
+         55.0%    -21.9%     53.6%   42.5%
+         60.0%    -14.9%     57.4%   45.2%
+         68.9%      0.0%     63.6%   50.0%  <- break-even
+         70.0%      2.2%     63.5%   50.6%
 
-  PUT  is UNREACHABLE: it needs 122.3% of reads correct, i.e. more
-     than all of them. Even a perfect read has a -9.9% median.
-     (loses 56.1% of the time when right, 83.2% when wrong)
+  PUT  is UNREACHABLE: it needs 137.4% of reads correct, i.e. more
+     than all of them. Even a perfect read has a -21.9% median.
+     (loses 61.0% of the time when right, 90.6% when wrong)
       accuracy    median      mean    win%
-         29.5%   -100.1%   1225.1%   24.8%  <- random pick
-         40.0%    -83.0%   1163.4%   27.6%
-         55.0%    -45.9%    925.1%   31.6%
-         60.0%    -38.4%    891.8%   33.0%
-         70.0%    -28.0%    759.2%   35.8%
+         29.5%    -99.1%    720.5%   18.1%  <- random pick
+         40.0%    -88.8%    673.9%   21.4%
+         55.0%    -65.3%    579.4%   25.6%
+         60.0%    -55.4%    589.9%   27.1%
+         70.0%    -41.0%    523.1%   30.0%
 
   The mean column stays positive at every accuracy INCLUDING random,
   which is the fat-tail trap this project has hit twice. Read the
@@ -54,9 +54,9 @@ IS THE HURDLE STABLE? (the same calculation, month by month)
 
   month       trades     break-even  median if PERFECT
   ----------------------------------------------------
-  2025-03        293          18.2%            +106.0%
-  2025-04        702          33.8%            +120.2%
-  2025-05        298          64.5%             +39.6%
+  2025-03        293          46.1%            +108.3%
+  2025-04        702          51.8%            +110.4%
+  2025-05        298          75.5%             +31.0%
   2025-06         48           thin                n/a
   2025-07         28           thin                n/a
   2025-08         68           thin                n/a
@@ -64,24 +64,24 @@ IS THE HURDLE STABLE? (the same calculation, month by month)
   2025-10         13           thin                n/a
   2025-11          8           thin                n/a
   2025-12         41           thin                n/a
-  2026-01        128          66.1%             +27.3%
-  2026-02        464          81.9%             +23.0%
-  2026-03        387    unreachable             -39.5%
-  2026-04        491          50.3%             +79.0%
-  2026-05        122          37.4%            +142.7%
-  2026-06        128          88.7%             +23.7%
-  2026-07        118          64.8%             +83.4%
+  2026-01        128          84.7%             +20.6%
+  2026-02        464          90.0%             +16.1%
+  2026-03        387    unreachable             -98.3%
+  2026-04        491          53.3%             +76.4%
+  2026-05        122          47.3%            +136.3%
+  2026-06        128          94.3%             +13.2%
+  2026-07        118          81.0%             +27.3%
   2026-08         38           thin                n/a
 
-  'thin' is a hole in the option cache, not a verdict. Of the 11 months
-  that can be scored the hurdle runs 18% to unreachable, and in 2026-03
+  'thin' is a hole in the option cache, not a verdict. Of the 10 months
+  that can be scored the hurdle runs 46% to unreachable, and in 2026-03
   even a perfect read lost money.
 
   Splitting the same data by how the broad tape behaved makes the
   mechanism explicit:
 
-  days when MORE scan names rose than usual     2,258 trades  break-even 48.7%
-  days when FEWER rose                          1,130 trades  break-even 87.9%
+  days when MORE scan names rose than usual     2,258 trades  break-even 63.3%
+  days when FEWER rose                          1,130 trades  break-even unreachable
 
   Read that as: the read has to be far better on exactly the days it is
   hardest to be right. Most of what this trade wins or loses is the
@@ -97,26 +97,31 @@ CAN THE REGIME BE CALLED IN ADVANCE? (breadth at the prior close)
 
   prior breadth  trades    break-even  median if PERFECT
   ----------------------------------------------------
-  weakest         881         57.7%             +83.3%
-  weak            895         61.8%             +69.3%
-  ok              771         63.2%             +58.0%
-  strongest       841         38.5%             +85.3%
+  weakest         881         76.8%             +55.9%
+  weak            895         71.1%             +54.6%
+  ok              771         69.1%             +51.2%
+  strongest       841         58.9%             +79.1%
 
-  Not monotone -- the middle two buckets are WORSE than the weakest, so
-  this is not a dose-response. Only the top quartile stands out, and it
-  does not hold up:
+  Monotone -- the hurdle falls at every step from weakest to
+  strongest, so this IS a dose-response. It was not one before the
+  expiry correction, and a dose-response is the check a lucky
+  bucket usually fails. The top quartile:
 
-    top quartile     841 trades over  43 days   median  +22.5%   day-t +1.84
-    the rest       2,547 trades over 252 days   median  -23.8%   day-t +2.61
+    top quartile     841 trades over  43 days   median   -8.2%   day-t +1.27
+    the rest       2,547 trades over 252 days   median  -36.6%   day-t -3.98
 
     split in half by date, top-quartile edge over the rest:
-      first half   +94.3pp
-      second half  +20.6pp
+      first half   +27.0pp
+      second half  +44.4pp
 
-  43 days, a day-t BELOW the bucket it is supposed to beat, and an edge
-  that decays from +94pp to +21pp across the sample. There is no
-  in-advance regime filter here. The regime risk has to be borne, not
-  timed -- which is the real reason this is a market bet.
+  This survives the two checks that killed it before the expiry
+  correction: its day-t is now ABOVE the bucket it should beat, and
+  the edge GROWS across the two halves instead of decaying. What
+  still sinks it is the level, not the stability -- the best
+  quartile needs 58.9% against the 48.4% a coin gives, so it makes
+  the trade less bad rather than positive, on only 43 days.
+  Either way the regime risk has to be borne, not timed -- which is the
+  real reason this is a market bet.
 
 ============================================================================================================
 DOES THE EXIT LOWER THE HURDLE? (no -- it breaks the measure)
@@ -124,26 +129,27 @@ DOES THE EXIT LOWER THE HURDLE? (no -- it breaks the measure)
 
   exit rule           break-even     median       mean     win%     day-t
   ----------------------------------------------------------------------
-  hold to day 5            56.8%     -15.6%      49.0%    45.1%     +3.19
-  first touch 1.5x         31.0%      48.1%      -1.2%    57.4%     -5.34
-  first touch 2x           39.5%      20.5%      15.5%    53.2%     -0.30
-  first touch 3x           46.4%       0.6%      36.6%    50.1%     +3.13
+  hold to day 5            68.9%     -32.1%      47.7%    37.9%     -0.57
+  first touch 1.5x         47.8%      -3.8%     -12.7%    49.3%    -11.00
+  first touch 2x           57.4%     -20.3%      -2.1%    44.1%     -7.00
+  first touch 3x           63.2%     -26.9%      10.8%    41.1%     -4.15
 
-  Read the 1.5x row across: it looks like the hurdle collapses to 31%,
-  well BELOW the 48.4% a coin gives, with a +48.1% median at no skill.
-  That would be a money machine. Its day-t is -5.34. The target caps
-  every winner at +50% while the losers still go to -100%, so more than
-  half the trades finish positive and the average still loses. Do not
-  use the hurdle on a capped payoff.
+  Read the 1.5x row across: the hurdle falls to 47.8% against the 48.4% a
+  coin gives, and 49.3% of trades finish positive -- yet its day-t is
+  -11.00. The target caps every winner at +50% while the losers still run
+  to -100%, so the COUNT of winners and the AVERAGE point opposite ways.
+  Do not use the hurdle on a capped payoff: it is built on the
+  probability of losing and cannot see a truncated right tail.
 
-  And the hold column's own +49.0% mean does not survive either. It is
+  And the hold column's own +47.7% mean does not survive either. It is
   a 5-day return sampled every day, so its windows overlap:
 
-    naive day-clustered t   +3.19   (295 days)
-    overlap-safe t          +1.46   (~59 independent 5-day blocks)
-    top 1% of trades carry +17.4pp of that mean; the median is -15.6%
-    and only 40.0% of days are positive.
+    naive day-clustered t   -0.57   (295 days)
+    overlap-safe t          -0.84   (~59 independent 5-day blocks)
+    top 1% of trades carry +44.9pp of that mean; the median is -32.1%
+    and only 30.2% of days are positive.
 
   So no-skill call buying on the scan is NOT quietly profitable. The
-  positive mean is payoff shape, and once the overlap is removed it is
-  not significant. Consistent with the buying null, not against it.
+  mean is pure payoff shape: the day-clustered t is already -0.57
+  BEFORE any overlap correction, so the de-overlapping below is not
+  even load-bearing. Agrees with the buying null outright.

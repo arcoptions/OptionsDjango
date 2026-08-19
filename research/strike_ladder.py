@@ -43,7 +43,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "trading_terminal.settings")
 django.setup()
 
 from option_spreads import TAX, TICK, day_t  # noqa: E402
-from premove_legs import HOLD, load  # noqa: E402
+from premove_legs import HOLD, expiries, load  # noqa: E402
 from chart_reader_hurdle import scan_entries  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,14 +58,24 @@ def log(message: str = "") -> None:
     LINES.append(message)
 
 
-def price_rung(frame: pd.DataFrame, entries: set, rung: str) -> list[dict]:
+def price_rung(frame: pd.DataFrame, entries: set, rung: str,
+               deadlines: list | None = None) -> list[dict]:
     """One contract per entry, anchored on `rung` instead of always on ATM.
 
     This is `premove_legs.run_symbol` with the anchor lifted out. The strike is
     still absolute once chosen, so the contract stays pinned for the whole hold
     even as spot moves it to a different rung -- that fix is what makes any of
     these numbers real, and it must not be undone by anchoring per bar.
+
+    Pinning the strike is NOT the same as pinning the contract, though, and this
+    function shipped for a while believing it was. On a nearest-expiry cache the
+    hold has to stop at the roll or it is marked out against next month's option
+    (`expiry_contamination.py`, 2026-08-19). The rung COMPARISON is the output
+    here and every rung crosses at the same rate, so the shape of the ladder is
+    unaffected; the levels move down.
     """
+    if deadlines is None:
+        deadlines = expiries("CALL")
     opens = frame.pivot_table(index="ts", columns="strike", values="open")
     grid = opens.index
     close = frame.pivot_table(index="ts", columns="strike", values="close").reindex(grid)
@@ -92,9 +102,12 @@ def price_rung(frame: pd.DataFrame, entries: set, rung: str) -> list[dict]:
             continue
         cost = entry + TICK
         i = pos[ts]
+        dead = next((e for e in deadlines if e >= day), None)
         values = []
         for j in range(i + 1, min(i + 1 + HOLD, len(grid))):
             t = grid[j]
+            if dead is not None and t.date() > dead:
+                break        # past the roll this strike is another contract
             v = close.at[t, k]
             if not np.isfinite(v):
                 s = spot.get(t, np.nan)
@@ -110,6 +123,7 @@ def price_rung(frame: pd.DataFrame, entries: set, rung: str) -> list[dict]:
         fees = (entry + values[-1]) * TAX
         out.append({"day": day, "strike": k, "cost": cost,
                     "spot": spot.get(ts, np.nan),
+                    "truncated": bool(dead is not None and len(values) < HOLD),
                     "hold": values[-1] - cost - fees})
     return out
 

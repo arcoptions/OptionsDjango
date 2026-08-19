@@ -41,6 +41,16 @@ TWO TRAPS ARE LIVE HERE AND THEY PULL AGAINST EACH OTHER.
   being re-based underneath us.  That test never looks at the strike, the
   direction, or the outcome, so it cannot delete a winner.  Detected dates are
   printed so they can be checked against the actual corporate action.
+
+A THIRD TRAP was found later, on 2026-08-19, and it is the same shape as the
+corporate action: the cache is NEAREST-expiry, so past a roll a pinned strike is
+next month's contract carrying a fresh month of time value.  Held five sessions
+that is a quarter of all trades, and it flatters them badly enough that the
+crossed ones profit when the stock FALLS.  Holds are now cut at the expiry, which
+is detected from the premium series rather than from a calendar -- see
+`premove_legs.expiries` and `expiry_contamination.py`.  It cuts the same way as
+the imputation above, against the trade, so an OTM null measured here is doubly
+safe and only a POSITIVE would need re-reading.
 """
 
 import os
@@ -54,6 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from option_spreads import IST, TAX, TICK, day_t, log  # noqa: E402
+from premove_legs import expiries  # noqa: E402
 
 from options_tracker.models import StockOptionCandle  # noqa: E402
 
@@ -147,7 +158,20 @@ def rebase_bars(spot):
     return set(spot.index[step.abs() > SPLIT_JUMP])
 
 
-def run_symbol(frame, entries, rung):
+def run_symbol(frame, entries, rung, deadlines=None):
+    """One OTM contract per entry, held HOLD bars or until the contract dies.
+
+    TWO ways the contract can stop being itself, and both end the path. A
+    corporate action re-bases spot but not the strike (`rebase_bars` below), and
+    an expiry re-bases the whole contract: this cache is nearest-expiry, so past
+    a roll the same strike is next month's option carrying a fresh month of time
+    value. The second guard was added 2026-08-19, after the first -- see
+    `expiry_contamination.py`. A re-base VOIDS the trade because the two price
+    scales are not comparable; an expiry merely ENDS it, because everything up
+    to that bar was priced honestly.
+    """
+    if deadlines is None:
+        deadlines = expiries("CALL")
     o = frame.pivot_table(index="ts", columns="strike", values="open")
     grid = o.index
     cl = frame.pivot_table(index="ts", columns="strike", values="close").reindex(grid)
@@ -175,9 +199,12 @@ def run_symbol(frame, entries, rung):
             continue
         cost = entry + TICK
         i = pos[ts]
+        dead = next((e for e in deadlines if e >= day), None)
         values, quoted, cut = [], 0, False
         for j in range(i + 1, min(i + 1 + HOLD, len(grid))):
             t = grid[j]
+            if dead is not None and t.date() > dead:
+                break            # past the roll this strike is another contract
             if t in broken:      # the contract was re-based; the path ends here
                 cut = True
                 break
@@ -197,7 +224,8 @@ def run_symbol(frame, entries, rung):
         rec = {"day": day, "rung": rung, "strike": k, "cost": cost,
                "spot": spot.get(ts, np.nan), "hold": values[-1] - cost - fees,
                "best": values.max() - cost - fees,
-               "quoted": quoted / len(values), "bars": len(values)}
+               "quoted": quoted / len(values), "bars": len(values),
+               "truncated": bool(dead is not None and len(values) < HOLD)}
         for mult in (1.5, 2.0, 3.0):
             hit = (values >= cost * mult).any()
             rec["t{:g}".format(mult)] = (

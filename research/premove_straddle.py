@@ -51,6 +51,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from option_spreads import IST, TAX, TICK, day_t, log  # noqa: E402
+from premove_legs import expiries  # noqa: E402
 
 from options_tracker.models import StockOptionCandle  # noqa: E402
 
@@ -126,8 +127,20 @@ def load(symbol=None):
     return f.drop_duplicates(subset=["symbol", "ts", "side", "strike"])
 
 
-def run_symbol(frame, entries):
-    """entries: {date} on which to open at the first bar. Returns trade dicts."""
+def run_symbol(frame, entries, deadlines=None):
+    """entries: {date} on which to open at the first bar. Returns trade dicts.
+
+    The pair is cut at the front-month expiry. `expiry_code=1` is nearest
+    expiry, so past a roll both legs at this strike are next month's contracts
+    carrying a month of time value the straddle never paid for -- and unlike the
+    intrinsic imputation above, which understates, this one OVERSTATES on both
+    legs at once. Guard added 2026-08-19; see `expiry_contamination.py`. This
+    file's headline result was already discarded for an unrelated reason (the
+    PUT cache hole -- see `premove_legs.py`), so the guard changes nothing that
+    is still quoted; it is here so a re-run is not wrong a second way.
+    """
+    if deadlines is None:
+        deadlines = expiries("CALL")
     calls = frame[frame.side == "CALL"]
     puts = frame[frame.side == "PUT"]
     if calls.empty or puts.empty:
@@ -162,9 +175,12 @@ def run_symbol(frame, entries):
             continue
         cost = (c_in + TICK) + (p_in + TICK)
         i = pos[ts]
+        dead = next((e for e in deadlines if e >= day), None)
         path, quoted_all = [], True
         for j in range(i + 1, min(i + 1 + HOLD, len(grid))):
             t = grid[j]
+            if dead is not None and t.date() > dead:
+                break        # past the roll both legs are different contracts
             cv, pv = c_close.at[t, k], p_close.at[t, k]
             if not (np.isfinite(cv) and np.isfinite(pv)):
                 quoted_all = False
@@ -188,6 +204,7 @@ def run_symbol(frame, entries):
             "target": (cost * TARGET if hit is not None else values[-1]) - cost - fees,
             "hit_target": hit is not None,
             "bars": len(values), "quoted_all": quoted_all,
+            "truncated": bool(dead is not None and len(values) < HOLD),
         })
     return out
 

@@ -20,6 +20,15 @@ That is also the leg the original question was about: predict the move, buy the
 call.  The PUT leg runs on the months that have puts and is reported separately
 with its own sample size attached, never pooled with the call leg.
 
+A THIRD BUG, found 2026-08-19, long after this file's results were used.  The
+absolute-strike fix above pins the STRIKE; it does not pin the CONTRACT, because
+the cache is nearest-expiry.  A hold running past a roll was marked out against
+next month's option at the same strike, carrying a month of time value it never
+paid for.  23% of five-session holds, and they returned +36.8% at the median on
+trades where the stock FELL.  `expiries()` below detects the rolls and
+`run_symbol` now cuts the hold at one BY DEFAULT.  See `expiry_contamination.py`
+for the cost: the shipped break-even hurdle moved 56.8% -> 67.1%.
+
 WHAT THE COMPARISON IS.  Not profit against zero -- buying ATM premium loses on
 this cache before any signal (0.77x per 2-day hold), so the signal column is
 measured against the NON-SIGNAL column and the gap is the whole finding.  A CE
@@ -47,6 +56,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from option_spreads import IST, TAX, TICK, day_t, log  # noqa: E402
 
 from options_tracker.models import StockOptionCandle  # noqa: E402
+from django.db import connection  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FEATURES = os.path.join(HERE, "premove_features.parquet")
@@ -118,7 +128,62 @@ def load(side):
     return f.drop_duplicates(subset=["symbol", "ts", "strike"])
 
 
-def run_symbol(frame, entries, side):
+_EXPIRIES = {}
+
+
+def expiries(side="CALL"):
+    """Front-month death days, read off the premium series.
+
+    `expiry_code=1` is NEAREST expiry with no expiry DATE stored, so a pinned
+    strike names one contract only within a cycle. Hold past the roll and the
+    same strike is next month's option carrying a month of time value the trade
+    never paid for -- which is worth +36.8% at the median on trades where the
+    stock FELL, i.e. a call that pays for being wrong. `option_spreads.py` and
+    `chartink_options.py` have guarded this since they were written; this file
+    did not, and five studies built on it inherited the error. See
+    `expiry_contamination.py` for what it cost.
+
+    Detected rather than assumed, because a last-Thursday rule is right 6 times
+    in 17: NSE moved equity derivatives to the last TUESDAY partway through the
+    sample, and a calendar written today goes stale the next time they move it.
+    The premium collapses into expiry and roughly doubles on the roll, so the
+    jump is unmistakable at any threshold between about 1.5x and 2.5x.
+    """
+    if side in _EXPIRIES:
+        return _EXPIRIES[side]
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT date(timestamp), AVG(open/spot), COUNT(*) "
+            "FROM options_tracker_stockoptioncandle "
+            "WHERE option_type=%s AND relative_strike='ATM' AND spot>0 AND open>0 "
+            "GROUP BY 1 ORDER BY 1", [side])
+        rows = cur.fetchall()
+    f = pd.DataFrame(rows, columns=["d", "pp", "n"])
+    f["d"] = pd.to_datetime(f["d"]).dt.date
+    f["jump"] = f["pp"].shift(-1) / f["pp"]
+    hits = f[(f["jump"] > 1.8) & (f["n"] > 200) & (f["d"] > f["d"].min())]["d"]
+    # One roll a month. The premium decays for days beforehand, so nearby
+    # sessions can also clear the threshold -- the LAST jump in a month is the
+    # roll itself and the earlier ones are the decay leading into it.
+    last = {}
+    for day in hits:
+        last[(day.year, day.month)] = max(last.get((day.year, day.month), day), day)
+    _EXPIRIES[side] = sorted(last.values())
+    return _EXPIRIES[side]
+
+
+def run_symbol(frame, entries, side, deadlines=None):
+    """One ATM contract per entry, held HOLD bars or until the contract dies.
+
+    `deadlines` DEFAULTS to the expiries detected for `side`, so a caller gets
+    the guard without knowing it needs one -- three studies imported this
+    function and inherited the bug precisely because the unguarded path was the
+    easy one. Pass an empty list to reproduce the old behaviour; the only
+    reason to do that is to measure what it cost, and it now has to be asked
+    for out loud.
+    """
+    if deadlines is None:
+        deadlines = expiries(side)
     o = frame.pivot_table(index="ts", columns="strike", values="open")
     grid = o.index
     cl = frame.pivot_table(index="ts", columns="strike", values="close").reindex(grid)
@@ -145,9 +210,13 @@ def run_symbol(frame, entries, side):
             continue
         cost = entry + TICK
         i = pos[ts]
+        # The last session on which this strike is still this contract.
+        dead = next((e for e in deadlines if e >= day), None) if deadlines else None
         values, quoted = [], 0
         for j in range(i + 1, min(i + 1 + HOLD, len(grid))):
             t = grid[j]
+            if dead is not None and t.date() > dead:
+                break
             v = cl.at[t, k]
             if np.isfinite(v):
                 quoted += 1
@@ -163,7 +232,10 @@ def run_symbol(frame, entries, side):
         fees = (entry + values[-1]) * TAX
         rec = {"day": day, "strike": k, "cost": cost, "spot": spot.get(ts, np.nan),
                "hold": values[-1] - cost - fees, "best": values.max() - cost - fees,
-               "quoted": quoted / len(values), "bars": len(values)}
+               "quoted": quoted / len(values), "bars": len(values),
+               # A hold cut short is a different trade from one that ran its
+               # course, and the caller must be able to tell them apart.
+               "truncated": bool(dead is not None and len(values) < HOLD)}
         for mult in TARGETS:
             hit = (values >= cost * mult).any()
             rec["t{:g}".format(mult)] = (
@@ -203,10 +275,15 @@ def leg(side, scored, label):
         opts.ts.max().date(), ", ".join(sorted(opts.rel.unique()))))
 
     rows = []
+    deadlines = expiries(side)
+    log("{} expiries detected from the premium series, {} -> {}. Holds are cut"
+        .format(len(deadlines), deadlines[0], deadlines[-1]))
+    log("there: past the roll a pinned strike is next month's contract.")
     for symbol in sorted(set(opts.symbol.unique()) & set(scored.symbol.unique())):
         want = scored[scored.symbol == symbol]
         flags = want.set_index("entry").signal.to_dict()
-        for t in run_symbol(opts[opts.symbol == symbol], set(want.entry), side):
+        for t in run_symbol(opts[opts.symbol == symbol], set(want.entry), side,
+                            deadlines):
             t["symbol"], t["signal"] = symbol, bool(flags.get(t["day"], False))
             rows.append(t)
     trades = pd.DataFrame(rows)
