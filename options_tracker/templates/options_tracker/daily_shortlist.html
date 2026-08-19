@@ -1,0 +1,283 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+
+{# ---- 1. today's list ---------------------------------------------------- #}
+<div class="panel" style="border-color:#bfdbfe; background:#f8fbff;">
+  <div class="row" style="justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+    <div>
+      <div class="muted">Stocks that may travel 5%+ within {{ horizon }} sessions &mdash; the call shortlist</div>
+      <div style="font-size:34px; font-weight:800; line-height:1.15;">
+        {% if latest_day %}{{ today_rows|length }} name{{ today_rows|length|pluralize }}{% else %}No list yet{% endif %}
+      </div>
+      <div class="muted">
+        {% if latest_day %}
+          From the close of <strong>{{ latest_day|date:"D d M Y" }}</strong>
+          {% if latest_is_live %}
+            &mdash; recorded live, before the outcome existed
+          {% else %}
+            &mdash; <span style="color:var(--danger);">reconstructed from history, not a live suggestion</span>
+          {% endif %}
+        {% else %}
+          Run <code>manage.py build_daily_shortlist --once</code> to produce one.
+        {% endif %}
+      </div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(3,minmax(130px,1fr)); min-width:400px;">
+      <div class="stat"><div class="label">Moves 5%+ in {{ horizon }} sessions</div>
+        <div class="value" style="font-size:19px;">{{ exp_move|floatformat:1 }}%</div>
+        <div class="muted">{{ base_move|floatformat:1 }}% for any stock</div></div>
+      <div class="stat"><div class="label">Rises 5%+</div>
+        <div class="value" style="font-size:19px;">{{ exp_up|floatformat:1 }}%</div>
+        <div class="muted">{{ base_up|floatformat:1 }}% for any stock</div></div>
+      <div class="stat"><div class="label">Rises 10%+</div>
+        <div class="value" style="font-size:19px;">{{ exp_up10|floatformat:1 }}%</div>
+        <div class="muted">the big ones</div></div>
+    </div>
+  </div>
+
+  {% if stale %}
+  <div class="muted" style="color:var(--danger); margin-bottom:10px;">
+    This list is {{ age_days }} days old. The evening build has not run &mdash; check the
+    daemon on the VM before trading from it.
+  </div>
+  {% endif %}
+
+  {% if today_rows %}
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>#</th><th>Symbol</th>
+      <th style="text-align:right;">Close</th>
+      <th style="text-align:right;">Daily swing (ATR)</th>
+      <th style="text-align:right;">Where in its 20-day range</th>
+      <th style="text-align:right;">Last 5 days</th>
+      <th style="text-align:right;">Turnover</th>
+    </tr></thead>
+    <tbody>
+      {% for item in today_rows %}
+      <tr>
+        <td class="muted">{{ item.row.rank }}</td>
+        <td><a href="{% url 'stock_option_detail' item.row.symbol %}"><strong>{{ item.row.symbol }}</strong></a></td>
+        <td style="text-align:right;">&#8377;{{ item.close_text }}</td>
+        <td style="text-align:right; font-weight:700;">{{ item.atr_pct|floatformat:2 }}%</td>
+        <td style="text-align:right;">{{ item.pos20_pct|floatformat:0 }}%</td>
+        <td style="text-align:right; color:{% if item.mom5_pct < 0 %}var(--danger){% else %}var(--green){% endif %};">
+          {{ item.mom5_pct|floatformat:1 }}%</td>
+        <td style="text-align:right;" class="muted">&#8377;{{ item.turnover_text }} cr</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% elif latest_day %}
+  <div style="padding:6px 2px; line-height:1.6;">
+    <strong>No name qualifies today. This is the model working, not failing.</strong>
+    <p style="margin:8px 0 0;">
+      The threshold is absolute, not a ranking: a stock has to actually swing
+      {{ atr_cut_pct|floatformat:0 }}% a day, and on a quiet tape none does. Taking the
+      most volatile names available anyway was tested and is <em>worse</em> &mdash; it hands
+      over the same number of names at a materially lower hit rate. <strong>Do not lower
+      the threshold to fill the list.</strong> A short list is the signal.
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+{# ---- 2. what to expect -------------------------------------------------- #}
+<div class="panel" style="border-color:#fde68a; background:#fffdf5;">
+  <strong style="font-size:16px;">What this list does and does not tell you</strong>
+  <p style="margin:8px 0 12px; line-height:1.6;">
+    The rule is three filters on yesterday's close: average daily swing above
+    <strong>{{ atr_cut_pct|floatformat:0 }}% of price</strong>, price above
+    &#8377;{{ min_close|floatformat:0 }}, and turnover above
+    &#8377;{{ min_turnover_cr|floatformat:0 }} cr a day. The first is the whole signal;
+    the other two only remove names you cannot get in and out of cleanly.
+    Ordering is by turnover, so the cheapest to trade sit at the top.
+  </p>
+  <p style="margin:0 0 12px; line-height:1.6;">
+    <strong>It finds movement, not direction.</strong> These names are far more likely
+    than average to make a 5% move &mdash; {{ exp_move|floatformat:1 }}% against
+    {{ base_move|floatformat:1 }}% &mdash; but roughly half those moves are down
+    ({{ exp_up|floatformat:1 }}% up). Every directional rule tested either vanished
+    or inverted once real option prices were applied. The chart read is yours; this
+    is the watchlist it operates on.
+  </p>
+  <div class="grid">
+    <div class="stat">
+      <div class="label">Reads you must get right to break even</div>
+      <div class="value" style="color:var(--danger);">{{ hurdle|floatformat:1 }}%</div>
+      <div class="muted">buying calls and holding {{ horizon }} sessions</div>
+    </div>
+    <div class="stat">
+      <div class="label">Free, from picking blind</div>
+      <div class="value">{{ exp_up|floatformat:1 }}%</div>
+      <div class="muted">the up-rate of the list itself</div>
+    </div>
+    <div class="stat">
+      <div class="label">Skill the read must add</div>
+      <div class="value" style="color:var(--danger);">+{{ hurdle_gap|floatformat:1 }}</div>
+      <div class="muted">percentage points, just to break even</div>
+    </div>
+  </div>
+  <div class="muted" style="margin-top:10px; line-height:1.6;">
+    Read that middle number carefully. If you buy a call on every name here and read
+    the direction no better than a coin, you lose &mdash; the premium is the toll and
+    {{ exp_up|floatformat:1 }}% does not cover it. The list is only worth trading if your
+    chart read is genuinely better than {{ hurdle|floatformat:1 }}% correct. Puts are
+    excluded because the same measurement puts their break-even above 100%: no read is
+    good enough.
+  </div>
+</div>
+
+{# ---- 3. live track record ----------------------------------------------- #}
+<div class="panel" style="border-color:#bbf7d0;">
+  <strong style="font-size:16px;">Live track record &mdash; picks written down in advance</strong>
+  {% if live and live.has_results %}
+    <div class="muted" style="margin:6px 0 10px;">
+      {{ live.scored|floatformat:0 }} scored pick{{ live.scored|pluralize }} across
+      {{ live.sessions }} session{{ live.sessions|pluralize }},
+      {{ live.first_day|date:"d M Y" }} &rarr; {{ live.last_day|date:"d M Y" }}.
+      {{ live.pending }} still inside their {{ horizon }}-session window and not yet counted.
+    </div>
+    <div class="grid">
+      <div class="stat"><div class="label">Moved 5%+</div>
+        <div class="value">{{ live.moved_pct|floatformat:1 }}%</div>
+        <div class="muted">expected {{ exp_move|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Rose 5%+</div>
+        <div class="value">{{ live.up5_pct|floatformat:1 }}%</div>
+        <div class="muted">expected {{ exp_up|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Rose 10%+</div>
+        <div class="value">{{ live.up10_pct|floatformat:1 }}%</div>
+        <div class="muted">expected {{ exp_up10|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Fell 5%+</div>
+        <div class="value">{{ live.dn5_pct|floatformat:1 }}%</div>
+        <div class="muted">why direction is yours to call</div></div>
+      <div class="stat"><div class="label">Median best moment</div>
+        <div class="value" style="color:var(--green);">+{{ live.med_high|floatformat:1 }}%</div>
+        <div class="muted">highest point in the window</div></div>
+      <div class="stat"><div class="label">Median worst moment</div>
+        <div class="value" style="color:var(--danger);">{{ live.med_low|floatformat:1 }}%</div>
+        <div class="muted">lowest point in the window</div></div>
+    </div>
+  {% elif live %}
+    <div style="margin-top:8px; line-height:1.6;">
+      <strong>{{ live.total }} pick{{ live.total|pluralize }} recorded, none scored yet.</strong>
+      A pick cannot be judged until its {{ horizon }} sessions have passed, so the first
+      numbers appear about a week after the first list. Nothing is shown as zero in the
+      meantime, because zero would read as a failure rather than as "not known yet".
+    </div>
+  {% else %}
+    <div style="margin-top:8px; line-height:1.6;">
+      <strong>Empty, and that is correct.</strong>
+      Nothing has been recorded live yet. This panel stays blank until the evening build
+      has run on the VM and written its first list &mdash; and it will only ever count picks
+      that were stored <em>before</em> their outcome existed. That is the whole point of it:
+      the panel below can be argued with, this one cannot.
+    </div>
+  {% endif %}
+</div>
+
+{# ---- 4. backtest -------------------------------------------------------- #}
+<div class="panel" style="border-color:#e5e7eb; background:#fafafa;">
+  <strong style="font-size:16px;">Backtest &mdash; history, not a track record</strong>
+  {% if backtest and backtest.has_results %}
+    <div class="muted" style="margin:6px 0 10px; line-height:1.6;">
+      {{ backtest.scored }} reconstructed picks, {{ backtest.symbols }} symbols,
+      {{ backtest.sessions }} sessions, {{ backtest.first_day|date:"M Y" }} &rarr;
+      {{ backtest.last_day|date:"M Y" }} &mdash; {{ backtest.per_day|floatformat:1 }} names a day.
+      <strong>These were computed after the fact.</strong> Nobody acted on them and no
+      claim is made that anyone could have. They are here to give the live panel above
+      something to be measured against.
+    </div>
+    <div class="grid">
+      <div class="stat"><div class="label">Moved 5%+</div>
+        <div class="value">{{ backtest.moved_pct|floatformat:1 }}%</div>
+        <div class="muted">any stock: {{ base_move|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Rose 5%+</div>
+        <div class="value">{{ backtest.up5_pct|floatformat:1 }}%</div>
+        <div class="muted">any stock: {{ base_up|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Rose 10%+</div>
+        <div class="value">{{ backtest.up10_pct|floatformat:1 }}%</div>
+        <div class="muted">the big ones</div></div>
+      <div class="stat"><div class="label">Fell 5%+</div>
+        <div class="value">{{ backtest.dn5_pct|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Median best moment</div>
+        <div class="value" style="color:var(--green);">+{{ backtest.med_high|floatformat:1 }}%</div></div>
+      <div class="stat"><div class="label">Median worst moment</div>
+        <div class="value" style="color:var(--danger);">{{ backtest.med_low|floatformat:1 }}%</div></div>
+    </div>
+
+    {% if backtest_monthly %}
+    <div class="muted" style="margin:14px 0 6px;">
+      Month by month, because an average hides the months that pay for it.
+    </div>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Month</th><th style="text-align:right;">Picks</th>
+        <th style="text-align:right;">Rose 5%+</th><th style="text-align:right;">Rose 10%+</th></tr></thead>
+      <tbody>
+        {% for row in backtest_monthly %}
+        <tr>
+          <td>{{ row.month|date:"M Y" }}</td>
+          <td style="text-align:right;" class="muted">{{ row.picks }}</td>
+          <td style="text-align:right; font-weight:700; color:{% if row.up5_pct < exp_up %}var(--danger){% else %}var(--green){% endif %};">
+            {{ row.up5_pct|floatformat:1 }}%</td>
+          <td style="text-align:right;">{{ row.up10_pct|floatformat:1 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  {% else %}
+    <div style="margin-top:8px; line-height:1.6;">
+      No history reconstructed yet. Run
+      <code>manage.py build_daily_shortlist --rebuild-history 400</code>.
+    </div>
+  {% endif %}
+</div>
+
+{# ---- 5. recent picks, scored -------------------------------------------- #}
+{% if recent %}
+<div class="panel">
+  <strong>The last {{ recent|length }} picks and what happened to them</strong>
+  <div class="muted" style="margin-bottom:10px;">
+    &ldquo;Best moment&rdquo; is the highest the stock reached at any point in the
+    {{ horizon }} sessions, not where it finished &mdash; it is what a well-timed exit
+    could have taken. &ldquo;Ended&rdquo; is where it actually closed.
+  </div>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>Session</th><th>Symbol</th><th class="muted">Source</th>
+      <th style="text-align:right;">Close</th>
+      <th style="text-align:right;">Best moment</th>
+      <th style="text-align:right;">Worst moment</th>
+      <th style="text-align:right;">Ended</th>
+      <th style="text-align:right;">5% up?</th>
+    </tr></thead>
+    <tbody>
+      {% for item in recent %}
+      <tr>
+        <td class="muted">{{ item.row.day|date:"d M y" }}</td>
+        <td><a href="{% url 'stock_option_detail' item.row.symbol %}"><strong>{{ item.row.symbol }}</strong></a></td>
+        <td class="muted" style="font-size:11px;">{{ item.row.get_source_display }}</td>
+        <td style="text-align:right;">&#8377;{{ item.close_text }}</td>
+        <td style="text-align:right; color:var(--green); font-weight:700;">+{{ item.high_pct|floatformat:1 }}%</td>
+        <td style="text-align:right; color:var(--danger);">{{ item.low_pct|floatformat:1 }}%</td>
+        <td style="text-align:right; font-weight:700; color:{% if item.close_move < 0 %}var(--danger){% else %}var(--green){% endif %};">
+          {{ item.close_move|floatformat:1 }}%</td>
+        <td style="text-align:right;">
+          {% if item.row.hit_up5 %}<span style="color:var(--green); font-weight:700;">yes</span>
+          {% else %}<span class="muted">no</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

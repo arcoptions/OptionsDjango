@@ -11,6 +11,13 @@ python manage.py collectstatic --noinput
 # database instead.
 if [ -n "${DHAN_TOKEN_FILE:-}" ]; then
 	python -u manage.py renew_dhan_token --daemon > /home/LogFiles/dhan-token.log 2>&1 &
+	# Same gate, same reason: building the shortlist means refreshing equity bars
+	# from Dhan, so it can only run where the token lives. It fires at 18:40 IST
+	# rather than straight after the close because the history API sheds load
+	# during the session and a half-downloaded day produces a list that looks
+	# ordinary and is wrong. App Service serves /shortlist/ from the rows the VM
+	# writes; it does not build them.
+	python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortlist.log 2>&1 &
 fi
 python -u manage.py collect_index_oi > /home/LogFiles/index-oi-collector.log 2>&1 &
 # The live strategy engine runs on the dedicated VM, not in the App Service.

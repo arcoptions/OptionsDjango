@@ -408,3 +408,71 @@ class BrokerPeriodSummary(models.Model):
     @property
     def net_realised(self):
         return self.gross_realised - self.charges
+
+
+class PickSource(models.TextChoices):
+    LIVE = "LIVE", "Recorded before the outcome existed"
+    BACKFILL = "BACKFILL", "Reconstructed from history"
+
+
+class DailyPick(models.Model):
+    """One name the shortlist put forward on one session's close.
+
+    The row exists so the model can be held to account. Every performance
+    number this project has had to withdraw was withdrawn because the result
+    was computed over trades chosen with hindsight, so a pick is written down
+    before its outcome exists and is never edited afterwards -- `created_at` is
+    the evidence of when it was known.
+
+    `source` is what keeps that guarantee usable. Reconstructing past picks
+    from history is worth doing, because it makes the screen useful on day one
+    and gives the live record something to be compared against, but it is a
+    backtest and must never be counted as a decision made in advance. LIVE and
+    BACKFILL therefore share a table and are never mixed in a statistic.
+    """
+
+    day = models.DateField(help_text="The session whose close produced the pick.")
+    symbol = models.CharField(max_length=40)
+    rank = models.PositiveSmallIntegerField(default=0, help_text="Position by turnover.")
+    source = models.CharField(max_length=10, choices=PickSource.choices,
+                              default=PickSource.LIVE)
+
+    # The chart context as it stood at pick time, frozen so the screen shows
+    # what was actually seen rather than what the numbers look like today.
+    close = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    atr_pct = models.DecimalField(max_digits=8, decimal_places=5, null=True, blank=True)
+    dollar_vol = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    pos20 = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    mom5 = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Filled once the five sessions have passed. Null means "not yet known",
+    # which is a different thing from zero and is displayed differently.
+    scored_on = models.DateField(null=True, blank=True)
+    sessions_scored = models.PositiveSmallIntegerField(default=0)
+    fwd_high_pct = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    fwd_low_pct = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    fwd_close_pct = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    hit_up5 = models.BooleanField(null=True, blank=True)
+    hit_dn5 = models.BooleanField(null=True, blank=True)
+    hit_up10 = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-day", "rank", "symbol"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["day", "symbol", "source"], name="unique_daily_pick"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["source", "-day"], name="idx_pick_source_day"),
+            models.Index(fields=["symbol", "-day"], name="idx_pick_symbol_day"),
+        ]
+
+    def __str__(self):
+        return "{} {} ({})".format(self.day, self.symbol, self.source)
+
+    @property
+    def is_scored(self):
+        return self.scored_on is not None
