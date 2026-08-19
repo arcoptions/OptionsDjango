@@ -114,6 +114,24 @@ def price_rung(frame: pd.DataFrame, entries: set, rung: str) -> list[dict]:
     return out
 
 
+def non_overlapping(days: pd.Series, gap: int = 5) -> list:
+    """Entry days far enough apart that no two trades share a holding period.
+
+    Day-clustering handles entries that share a morning; it does nothing for
+    entries that share a *hold*. A five-session trade opened every session
+    overlaps its four neighbours, and the resulting t reads about sqrt(5) too
+    large -- the error that turned a t of +4.6 into +1.4 elsewhere in this
+    project. Taking every fifth entry day removes the overlap outright, which
+    costs sample but does not have to be argued about.
+    """
+    out, last = [], None
+    for day in sorted(pd.Series(days).unique()):
+        if last is None or (day - last) >= pd.Timedelta(days=gap * 7 / 5):
+            out.append(day)
+            last = day
+    return out
+
+
 def hurdle(v: pd.DataFrame) -> tuple[str, float, float, float]:
     """Accuracy needed to break even, plus what each side actually pays."""
     right, wrong = v[v["went_up"]], v[~v["went_up"]]
@@ -181,9 +199,10 @@ def main() -> None:
     log("\n" + "-" * 78)
     log("MATCHED: the {:,} entries where every rung filled".format(len(keys)))
     log("-" * 78)
-    log("\n  {:<7} {:>9} {:>11} {:>11} {:>7} {:>12} {:>9}".format(
-        "rung", "premium", "if right", "if wrong", "win%", "break-even", "day-t"))
-    log("  " + "-" * 70)
+    log("\n  {:<7} {:>9} {:>11} {:>11} {:>7} {:>12} {:>8} {:>8} {:>8}".format(
+        "rung", "premium", "if right", "if wrong", "win%", "break-even",
+        "mean", "t(day)", "t(5d)"))
+    log("  " + "-" * 88)
     matched = {}
     for rung in RUNGS:
         f = frames[rung]
@@ -193,13 +212,29 @@ def main() -> None:
         # Two arrays, not a frame and a column name -- the earlier call passed
         # the wrong shape, the bare except swallowed it, and every t read nan.
         t = day_t(m["ret"].values, m["day"].values)
-        log("  {:<7} {:>8.2f} {:>10.1f}% {:>10.1f}% {:>6.1f}% {:>12} {:>+9.2f}".format(
-            rung, m["cost"].median(), med_r, med_w,
-            (m["ret"] > 0).mean() * 100, need, t))
+        spaced = m[m["day"].isin(non_overlapping(m["day"]))]
+        t5 = day_t(spaced["ret"].values, spaced["day"].values)
+        log("  {:<7} {:>8.2f} {:>10.1f}% {:>10.1f}% {:>6.1f}% {:>12} {:>+7.1f}% {:>+8.2f} {:>+8.2f}"
+            .format(rung, m["cost"].median(), med_r, med_w,
+                    (m["ret"] > 0).mean() * 100, need,
+                    m["ret"].mean() * 100, t, t5))
 
     log("\n  'if right' is the median return when the stock did rise 5%; 'if wrong'")
     log("  when it did not. 'break-even' is the share of reads that must be right")
     log("  for the median trade to stop losing. Blind picking gives 48.4%.")
+    log("")
+    log("  READ THE LAST THREE COLUMNS TOGETHER OR NOT AT ALL. The t columns test")
+    log("  the MEAN, and the mean of an option trade is not the median: a handful")
+    log("  of calls that run 5x drag it positive while most of the book bleeds. A")
+    log("  positive t beside a negative median is a lottery, not an edge -- the")
+    log("  same shape as the expiry-day gamma result.")
+    log("")
+    log("  t(day) clusters same-morning entries, which fixes trades that share a")
+    log("  market but NOT trades that share a HOLD. Every entry here is held five")
+    log("  sessions and sampled daily, so each overlaps its four neighbours and")
+    log("  t(day) is inflated by roughly sqrt(5). t(5d) re-runs it on entries")
+    log("  spaced five sessions apart, which removes the overlap by construction")
+    log("  at the cost of a fifth of the sample. t(5d) is the honest one.")
 
     base = matched[RUNGS[0]]
     _, _, _, need_atm = hurdle(base)

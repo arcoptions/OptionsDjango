@@ -1,0 +1,54 @@
+==============================================================================
+DOES A CHEAPER STRIKE LOWER THE HURDLE?
+==============================================================================
+
+3,684,578 CALL bars, 189 symbols. Entry at the next session's open, held
+125 bars (~5 sessions). Cost includes the tick and statutory charges.
+  ATM    3,388 trades priced
+  ATM+1  2,074 trades priced
+  ATM+2  4,104 trades priced
+
+------------------------------------------------------------------------------
+ALL TRADES AT EACH RUNG (different samples -- see the matched table below)
+------------------------------------------------------------------------------
+
+  rung     trades   premium    if right    if wrong    win%   break-even
+  ----------------------------------------------------------------------
+  ATM       3,388    25.70       73.7%      -54.4%   45.1%        56.8%
+  ATM+1     2,074    18.83       80.1%      -52.4%   48.0%        56.6%
+  ATM+2     4,104    15.70       42.2%     -100.3%   36.4%        74.3%
+
+------------------------------------------------------------------------------
+MATCHED: the 1,437 entries where every rung filled
+------------------------------------------------------------------------------
+
+  rung      premium    if right    if wrong    win%   break-even     mean   t(day)    t(5d)
+  ----------------------------------------------------------------------------------------
+  ATM        25.75       85.2%      -36.7%   52.3%        49.6%   +65.9%    +2.91    +1.73
+  ATM+1      20.05       78.4%      -46.3%   48.6%        57.0%   +87.1%    +2.99    +1.23
+  ATM+2      14.70       62.1%     -100.3%   45.5%        63.1%  +111.7%    +2.37    +0.29
+
+  'if right' is the median return when the stock did rise 5%; 'if wrong'
+  when it did not. 'break-even' is the share of reads that must be right
+  for the median trade to stop losing. Blind picking gives 48.4%.
+
+  READ THE LAST THREE COLUMNS TOGETHER OR NOT AT ALL. The t columns test
+  the MEAN, and the mean of an option trade is not the median: a handful
+  of calls that run 5x drag it positive while most of the book bleeds. A
+  positive t beside a negative median is a lottery, not an edge -- the
+  same shape as the expiry-day gamma result.
+
+  t(day) clusters same-morning entries, which fixes trades that share a
+  market but NOT trades that share a HOLD. Every entry here is held five
+  sessions and sampled daily, so each overlaps its four neighbours and
+  t(day) is inflated by roughly sqrt(5). t(5d) re-runs it on entries
+  spaced five sessions apart, which removes the overlap by construction
+  at the cost of a fifth of the sample. t(5d) is the honest one.
+
+------------------------------------------------------------------------------
+VERDICT
+------------------------------------------------------------------------------
+
+  No rung beats ATM. The cheaper contract's bigger multiple when
+  right does not cover what it gives up when the move is slow or
+  partial, so the shipped model keeps the ATM strike.
