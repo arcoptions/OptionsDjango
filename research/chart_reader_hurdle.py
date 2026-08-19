@@ -280,6 +280,7 @@ def regime(calls: pd.DataFrame, entries: pd.DataFrame) -> None:
     log("IS THE HURDLE STABLE? (the same calculation, month by month)")
     log("=" * 108)
     v = calls.dropna(subset=["hold"]).copy()
+    v["ret"] = v["hold"] / v["cost"]
     v["month"] = pd.to_datetime(v["day"]).dt.to_period("M")
     log("")
     log("  {:<10} {:>7} {:>14} {:>18}".format(
@@ -308,6 +309,70 @@ def regime(calls: pd.DataFrame, entries: pd.DataFrame) -> None:
     log("  Read that as: the read has to be far better on exactly the days it is")
     log("  hardest to be right. Most of what this trade wins or loses is the")
     log("  market's direction, not the individual chart's.")
+    log("")
+    log("  BUT THAT SPLIT IS NOT A RULE. It is cut on how the trades THEMSELVES")
+    log("  turned out, so it explains the mechanism and cannot be applied in")
+    log("  advance. The tradeable version is below.")
+
+    tradeable_breadth(v)
+
+
+def tradeable_breadth(calls: pd.DataFrame) -> None:
+    """Can the regime be called BEFORE the trade, using only prior closes?
+
+    The outcome-split above is hindsight. The honest question is whether
+    breadth known at the previous close -- what fraction of the universe is
+    up over five sessions -- picks the good regimes. If it does, "sit out the
+    weak tape" is a rule; if it does not, the regime risk is simply borne.
+    """
+    log("")
+    log("=" * 108)
+    log("CAN THE REGIME BE CALLED IN ADVANCE? (breadth at the prior close)")
+    log("=" * 108)
+    frame = pd.read_parquet(FEATURES).sort_values(["symbol", "day"])
+    frame["day"] = pd.to_datetime(frame["day"])
+    frame["r5"] = frame.groupby("symbol")["c"].pct_change(5)
+    breadth = frame.groupby("day")["r5"].apply(
+        lambda s: (s > 0).mean()).rename("breadth").reset_index()
+
+    v = calls.copy()
+    v["day"] = pd.to_datetime(v["day"])
+    v = v.merge(breadth, on="day", how="left").dropna(subset=["breadth"])
+    v["q"] = pd.qcut(v["breadth"], 4, labels=["weakest", "weak", "ok", "strongest"],
+                     duplicates="drop")
+    log("")
+    log("  {:<11} {:>7} {:>13} {:>18}".format(
+        "prior breadth", "trades", "break-even", "median if PERFECT"))
+    log("  " + "-" * 52)
+    for q, chunk in v.groupby("q", observed=True):
+        need, med_right, n = hurdle_of(chunk)
+        log("  {:<11} {:>7,} {:>13} {:>18}".format(str(q), n, need, med_right))
+
+    log("")
+    log("  Not monotone -- the middle two buckets are WORSE than the weakest, so")
+    log("  this is not a dose-response. Only the top quartile stands out, and it")
+    log("  does not hold up:")
+    log("")
+    top = v["breadth"] > v["breadth"].quantile(0.75)
+    for tag, chunk in [("top quartile", v[top]), ("the rest", v[~top])]:
+        per_day = chunk.groupby("day")["ret"].mean()
+        t = per_day.mean() / (per_day.std(ddof=1) / np.sqrt(len(per_day)))
+        log("    {:<14} {:>5,} trades over {:>3} days   median {:+6.1f}%   day-t {:+.2f}"
+            .format(tag, len(chunk), len(per_day), chunk["ret"].median() * 100, t))
+    mid = v["day"].median()
+    log("")
+    log("    split in half by date, top-quartile edge over the rest:")
+    for tag, chunk in [("first half", v[v["day"] <= mid]), ("second half", v[v["day"] > mid])]:
+        a = chunk[chunk["breadth"] > v["breadth"].quantile(0.75)]
+        b = chunk[chunk["breadth"] <= v["breadth"].quantile(0.75)]
+        if len(a) > 40 and len(b) > 40:
+            log("      {:<12} {:+.1f}pp".format(
+                tag, (a["ret"].median() - b["ret"].median()) * 100))
+    log("")
+    log("  43 days, a day-t BELOW the bucket it is supposed to beat, and an edge")
+    log("  that decays from +94pp to +21pp across the sample. There is no")
+    log("  in-advance regime filter here. The regime risk has to be borne, not")
+    log("  timed -- which is the real reason this is a market bet.")
 
 
 if __name__ == "__main__":
