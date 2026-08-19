@@ -1,0 +1,37 @@
+[10:05:15] otm: 189 stocks, 2025-02-18 -> 2026-08-17, offsets ['ATM+1', 'ATM-1', 'ATM+2', 'ATM-2', 'ATM+3', 'ATM-3']
+[10:05:16] rolling: 29484 windows queued
+[10:05:47]   ! NATIONALUM ATM+1:CALL:1 2025-08-17: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:05:50]   ! NATIONALUM ATM+1:CALL:1 2025-10-01: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:05:53]   ! NATIONALUM ATM+1:CALL:1 2025-12-30: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:06:15]   ! NATIONALUM ATM+1:CALL:1 2026-02-13: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:07:07]   ! HINDZINC ATM+1:CALL:1 2026-02-13: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:07:37]   ! IREDA ATM+1:CALL:1 2025-08-17: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:07:42]   ! IREDA ATM+1:CALL:1 2025-11-15: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:07:43]   ! IREDA ATM+1:CALL:1 2025-12-30: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:08:12]   ! IREDA ATM+1:CALL:1 2026-05-14: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:08:36]   ! DIXON ATM+1:CALL:1 2025-08-17: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:08:36]   ! DIXON ATM+1:CALL:1 2025-10-01: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:08:37]   ! DIXON ATM+1:CALL:1 2025-11-15: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[10:20:25]   rolling: 200/29484 windows, 57,664 bars, 91 failed
+[10:36:31]   rolling: 400/29484 windows, 111,634 bars, 199 failed
+[10:57:36]   rolling: 600/29484 windows, 166,171 bars, 305 failed
+[11:14:08]   rolling: 800/29484 windows, 217,099 bars, 416 failed
+[11:30:44]   rolling: 1000/29484 windows, 272,264 bars, 524 failed
+[11:47:28]   rolling: 1200/29484 windows, 315,172 bars, 643 failed
+[12:03:55]   rolling: 1400/29484 windows, 359,854 bars, 754 failed
+[12:20:45]   rolling: 1600/29484 windows, 410,201 bars, 868 failed
+[12:37:38]   rolling: 1800/29484 windows, 457,708 bars, 979 failed
+[12:52:56]   rolling: 2000/29484 windows, 501,412 bars, 1082 failed
+[13:07:16]   rolling: 2200/29484 windows, 544,963 bars, 1179 failed
+[13:23:58]   rolling: 2400/29484 windows, 587,201 bars, 1289 failed
+[13:40:28]   rolling: 2600/29484 windows, 634,679 bars, 1398 failed
+[13:56:58]   rolling: 2800/29484 windows, 677,141 bars, 1508 failed
+[14:14:19]   rolling: 3000/29484 windows, 723,264 bars, 1626 failed
+[14:40:05]   rolling: 3200/29484 windows, 769,714 bars, 1742 failed
+[14:57:11]   rolling: 3400/29484 windows, 816,867 bars, 1858 failed
+[15:14:23]   rolling: 3600/29484 windows, 861,811 bars, 1976 failed
+[15:31:09]   rolling: 3800/29484 windows, 899,010 bars, 2092 failed
+[15:49:34]   rolling: 4000/29484 windows, 941,909 bars, 2213 failed
+[16:05:22]   rolling: 4200/29484 windows, 987,681 bars, 2322 failed
+[16:21:01]   rolling: 4400/29484 windows, 1,023,993 bars, 2431 failed
+[16:54:38]   rolling: 4600/29484 windows, 1,065,818 bars, 2531 failed

@@ -1,0 +1,914 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+
+<div class="panel" style="border-color:#fecaca; background:#fff7f7;">
+  <div style="font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#991b1b;">The finding</div>
+  <div style="font-size:26px; font-weight:800; line-height:1.35; margin:6px 0 12px;">
+    {{ tested|add:"-2" }} of the {{ tested }} buy-side strategies tested lose money after the spread.
+    One clears it &mdash; and it was not on my list.
+  </div>
+  <p style="margin:0 0 10px; line-height:1.7; font-size:15px;">
+    Fourteen entry signals &times; five exits, run against real fixed-strike option paths with the
+    tick charged both ways. Momentum, breakouts, OI surges, IV rank, moneyness bands &mdash; on
+    every signal with a real sample the answer is 0.75&ndash;0.89&times; per rupee committed.
+    Then following the <em>data</em> rather than my signal ideas landed on expiry-day at-the-money
+    calls with a trailing stop: <strong style="color:#166534;">1.041&times;</strong> across 21,693
+    entries. Section&nbsp;7 is that trade and everything wrong with it.
+  </p>
+  <p style="margin:0; line-height:1.7; font-size:15px;">
+    Your observation was correct. UNIONBANK 190&nbsp;CE really did go 0.70 to 5.00, and
+    {{ run_count }} contract-cycles here ran 3&times; or more off their own low. The moves are real.
+    What is not there is a way to know in advance <em>which</em> option is about to be one of them
+    &mdash; section&nbsp;5 is the finding that generalises past anything I happened to test.
+  </p>
+</div>
+
+<div class="panel" style="border-color:#fdba74; background:#fffaf5;">
+  <div style="font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#9a3412;">
+    0. Read this before the rest &mdash; what this data cannot answer
+  </div>
+  <p style="margin:8px 0 12px; line-height:1.7; font-size:15px;">
+    I found this <em>after</em> writing everything below, and it changes how three sections should
+    be read. Every option bar in the cache was pulled at Dhan's
+    <code>relative_strike='ATM'</code>, front month only. The feed re-centres on the money
+    continuously, so a strike is only present while the stock is standing on it &mdash;
+    <strong>86.7% of bars sit within 1% of the strike</strong>, and 100% of the
+    {{ run_count }} big runs fall inside &plusmn;2%.
+  </p>
+  <p style="margin:0 0 12px; line-height:1.7; font-size:15px;">
+    UNIONBANK is the clean illustration: the stock ranged <strong>&#8377;106.87 to
+    &#8377;205.14</strong> over the eighteen months, and the 190&nbsp;CE exists in this cache for
+    exactly <strong>121 bars</strong> &mdash; every one of them with spot between 188.76 and 191.24.
+    The moment spot left that band, the contract left the data.
+  </p>
+  <div class="grid" style="grid-template-columns:repeat(2,1fr); gap:14px;">
+    <div>
+      <div style="font-weight:700; color:#166534; margin-bottom:6px;">Stands, untouched</div>
+      <ul style="margin:0; padding-left:18px; line-height:1.65; font-size:14px;">
+        <li>The <strong>base rate</strong> &mdash; correct, for ATM options.</li>
+        <li>The <strong>exit finding</strong> &mdash; same paths either way.</li>
+        <li>The <strong>expiry-day result</strong> &mdash; it <em>required</em>
+            |moneyness|&nbsp;&le;&nbsp;1.5%, which is exactly where this data lives.
+            The limitation cannot touch it.</li>
+        <li>The <strong>Chartink</strong> work &mdash; equity only.</li>
+      </ul>
+    </div>
+    <div>
+      <div style="font-weight:700; color:#991b1b; margin-bottom:6px;">Withdrawn or narrowed</div>
+      <ul style="margin:0; padding-left:18px; line-height:1.65; font-size:14px;">
+        <li><strong>&ldquo;OTM 2&ndash;6% + momentum&rdquo; was never really tested</strong> &mdash;
+            only <strong>0.68%</strong> of call bars sit in that band, by accidental drift. Those
+            305 trades are a scrap sample.</li>
+        <li><strong>&ldquo;Median moneyness zero&rdquo; was circular</strong> &mdash; nothing else
+            was in the dataset. Section&nbsp;6 is rewritten; the days-to-expiry half survives.</li>
+        <li><strong>&ldquo;No entry filter can exist&rdquo;</strong> is now a claim about
+            <em>ATM</em> options only.</li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin:12px 0 0; line-height:1.7; font-size:15px; border-top:1px solid #fed7aa; padding-top:10px;">
+    <strong>So the honest position on your UNIONBANK thesis:</strong> buying a 190&nbsp;CE at
+    &#8377;0.70 with spot near &#8377;175 is a deep-OTM lottery ticket, and this dataset contains no
+    such trade. I cannot tell you it works and I cannot tell you it fails.
+    <strong>ATM&plusmn;1, &plusmn;2, &plusmn;3 is downloading now</strong>
+    (<code>research/fetch_otm.py</code>, live progress in <code>research/fetch_otm.log</code>)
+    &mdash; with two caveats, both mine to own:
+  </p>
+  <ul style="margin:8px 0 0; padding-left:18px; line-height:1.65; font-size:14px;">
+    <li><strong>It is slow.</strong> 29,484 windows at ~13/minute is roughly <strong>36 hours</strong>,
+        not overnight &mdash; the first-pass ATM job is still running and competing for the same
+        rate limit, and ~13% of requests come back 504 and get retried. Offsets are fetched
+        nearest-first, so it degrades gracefully: ATM&plusmn;1 across the whole universe lands in
+        the first few hours and on its own roughly doubles moneyness coverage, enough for a first
+        real answer on the 2&ndash;6% band.</li>
+    <li><strong>Even finished, it will not reach your example.</strong> On a 2.5-point strike ladder
+        ATM&plusmn;3 is only ~&plusmn;4% on a &#8377;190 name. A &#8377;0.70 premium there means
+        spot was ~8% away &mdash; outside what the rolling feed serves at any offset. That needs the
+        <strong>ladder feed</strong> (real contract security ids), a separate pull, and it is the
+        honest next step for your specific thesis.</li>
+  </ul>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(4,minmax(160px,1fr));">
+  <div class="stat">
+    <div class="label">Buy-side strategies tested</div>
+    <div class="value">{{ tested }}</div>
+    <div class="muted">14 signals &times; 5 exits</div>
+  </div>
+  <div class="stat">
+    <div class="label">Base rate, random entry</div>
+    <div class="value" style="color:var(--danger);">0.77&times;</div>
+    <div class="muted">2-session hold, net of costs</div>
+  </div>
+  <div class="stat">
+    <div class="label">Best verified rule</div>
+    <div class="value" style="color:var(--green);">1.041&times;</div>
+    <div class="muted">expiry-day ATM + trail</div>
+  </div>
+  <div class="stat">
+    <div class="label">Contracts that ran 3&times;+</div>
+    <div class="value" style="color:var(--gold);">{{ run_count }}</div>
+    <div class="muted">2.7% of all contract-cycles</div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">1. What the base rate actually is</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Before any strategy, the ground truth. A stock option bought at a random bar and held two
+    sessions is worth <strong>0.77&times;</strong> when you sell it. It touches 2&times; at some point
+    <strong>0.62%</strong> of the time. Not 62%, not 6% &mdash; six-tenths of one percent.
+    This is the number every rule below has to beat, and it is the reason the account bled:
+    the default outcome of buying an option is losing about a fifth of the premium every two days.
+  </p>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="stat"><div class="label">Random entry, 2-session hold</div>
+      <div class="value" style="color:var(--danger);">0.77&times;</div>
+      <div class="muted">what comes back per rupee</div></div>
+    <div class="stat"><div class="label">Touches 2&times; while held</div>
+      <div class="value">0.62%</div>
+      <div class="muted">of all entries</div></div>
+    <div class="stat"><div class="label">Win rate</div>
+      <div class="value">16.9%</div>
+      <div class="muted">trades that end above cost</div></div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">2. Every strategy tried, ranked</strong>
+  <div class="muted" style="margin:6px 0 12px; line-height:1.6;">
+    <strong>Net</strong> is the mean multiple returned per rupee committed, after crossing a full
+    5-paise tick going in, another coming out, and 0.28% of turnover in taxes. 1.000 is break-even.
+    The two half-sample columns are the honesty check: a rule that only works in one half of the
+    data is a description of that half, not a strategy. Rows are green only if they clear 1.000.
+    <br><strong style="color:#9a3412;">One row to discount:</strong> any signal mentioning
+    <em>OTM 2&ndash;6%</em> ran against only 0.68% of the call bars (see section&nbsp;0), so its
+    ~305 trades are incidental drift rather than a real test of buying out of the money.
+  </div>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>Exit</th><th>Entry signal</th>
+      <th style="text-align:right;">Trades</th>
+      <th style="text-align:right;">Net</th>
+      <th style="text-align:right;">Edge</th>
+      <th style="text-align:right;">Win %</th>
+      <th style="text-align:right;">1st half</th>
+      <th style="text-align:right;">2nd half</th>
+    </tr></thead>
+    <tbody>
+      {% for row in strategies %}
+      <tr{% if row.trades < 500 %} style="opacity:.55;"{% endif %}>
+        <td class="muted">{{ row.exit }}</td>
+        <td><strong>{{ row.signal }}</strong>{% if row.trades < 500 %}
+          <span class="muted" style="font-size:11px;"> &middot; thin sample</span>{% endif %}</td>
+        <td style="text-align:right;">{{ row.trades }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if row.profitable %}var(--green){% else %}var(--danger){% endif %};">
+          {{ row.net|floatformat:3 }}</td>
+        <td style="text-align:right; color:{% if row.profitable %}var(--green){% else %}var(--danger){% endif %};">
+          {{ row.edge_pct|floatformat:1 }}%</td>
+        <td style="text-align:right;">{{ row.win_rate|floatformat:1 }}%</td>
+        <td style="text-align:right;" class="muted">{% if row.first_half %}{{ row.first_half|floatformat:3 }}{% else %}&mdash;{% endif %}</td>
+        <td style="text-align:right;" class="muted">{% if row.second_half %}{{ row.second_half|floatformat:3 }}{% else %}&mdash;{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="muted" style="margin-top:10px; line-height:1.6;">
+    The greyed rows have fewer than 500 trades. Both rows that clear 1.000 are in that group
+    &mdash; 99 and 77 trades, all inside a single stretch of the sample, with nothing in the other
+    half to check them against. They are noise wearing a strategy's clothes.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">3. The exit mattered more than any entry</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Read the table above by <em>exit</em> rather than by signal and a pattern appears that no
+    entry rule produced. Holding for two sessions returns 0.773&times;. The identical entries with a
+    trailing stop 30% off the peak return 0.882&times;. That is <strong>eleven paise on the rupee</strong>
+    recovered by changing nothing but when you sell &mdash; larger than the spread between the best
+    and worst entry signal in the whole study. It is the same lesson the NIFTY work landed on:
+    the exit is the lever.
+  </p>
+  <table>
+    <thead><tr><th>Exit rule</th><th style="text-align:right;">Best net achieved</th><th>With which entry</th></tr></thead>
+    <tbody>
+      {% for row in exits %}
+      <tr>
+        <td><strong>{{ row.exit }}</strong></td>
+        <td style="text-align:right; font-weight:700; color:{% if row.profitable %}var(--green){% else %}var(--danger){% endif %};">{{ row.net|floatformat:3 }}</td>
+        <td class="muted">{{ row.signal }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="muted" style="margin-top:10px;">
+    It still does not reach 1.000. A better exit shrinks the loss; it does not create an edge.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">4. The Chartink scans</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Both scans were measured from their own backtest exports, so there is no risk of my reading
+    of the rule differing from Chartink's. Two corrections change the answer completely.
+    First, <strong>Chartink stamps a trigger with the candle's start, not its close</strong> &mdash;
+    both exports contain 09:15 triggers and no candle has finished at the opening bell. Entering
+    at the stamped bar means buying with the breakout candle's own move already in hand. Second,
+    a breakout scan fires when the whole market is moving, so every trigger is compared against
+    what the average stock in the same 172-name universe did over the identical clock window.
+    <strong>Excess</strong> is that difference, and it is the only column that says anything.
+  </p>
+  {% for scan in chartink %}
+  <div style="margin-bottom:14px;">
+    <strong>{{ scan.label }}</strong>
+    <span class="muted">&mdash; {{ scan.triggers }} usable triggers, {{ scan.symbols }} symbols,
+      {{ scan.days }} trading days</span>
+    {% if scan.signal_move %}
+    <div class="muted" style="margin:4px 0 6px;">
+      The signal candle itself moved {{ scan.signal_move|floatformat:3 }}% on average.
+      That part is not tradeable &mdash; it has already happened when the scan tells you.
+    </div>
+    {% endif %}
+    <table>
+      <thead><tr><th>Horizon</th><th style="text-align:right;">Raw return</th>
+        <th style="text-align:right;">Excess vs universe</th>
+        <th style="text-align:right;">Beat universe</th></tr></thead>
+      <tbody>
+        {% for row in scan.horizons %}
+        <tr>
+          <td>{{ row.horizon }}</td>
+          <td style="text-align:right;">{{ row.raw|floatformat:3 }}%</td>
+          <td style="text-align:right; font-weight:700; color:{% if row.excess > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.excess|floatformat:3 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.beat|floatformat:1 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  <div class="muted" style="line-height:1.6;">
+    Neither scan has a usable edge once drift is removed and entry is placed where a person could
+    actually have bought. The 15-minute scan's small positive at 1 hour comes almost entirely from
+    5 of its 270 triggers. Both samples are short &mdash; 7 and 23 trading days &mdash; so this is
+    "not demonstrated", not "disproved". But it is certainly not demonstrated.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+{% if chartink_ce %}
+<div class="panel" style="border-color:#c7d2fe; background:#fafaff;">
+  <strong style="font-size:16px;">4b. Chartink &rarr; stock &rarr; CE: the workflow, priced end to end</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Section 4 asks whether the trigger moves the <em>stock</em>. This asks the question you
+    actually care about: the scan names a stock, we buy its call, we exit with a gain &mdash;
+    how much money does that make? The answer is
+    <strong style="color:var(--danger);">
+      {% if chartink_ce.trail %}&minus;&#8377;{{ chartink_ce.trail.pnl|slice:"1:" }}
+      on &#8377;{{ chartink_ce.trail.deployed }} deployed{% else %}negative at every horizon{% endif %}</strong>,
+    and the interesting part is <em>why</em>.
+  </p>
+
+  <div style="margin-bottom:16px;">
+    <strong>Stage 1 &mdash; does the trigger move the stock?</strong>
+    <span class="muted">&mdash; {{ chartink_ce.triggers }} triggers pooled across both scans,
+      {{ chartink_ce.days }} trading days. Merged sample, including the second
+      <code>arc15min</code> export that section 4 did not have.</span>
+    <table>
+      <thead><tr><th>Horizon</th><th style="text-align:right;">Raw</th>
+        <th style="text-align:right;">Excess vs universe</th>
+        <th style="text-align:right;">t (day-clustered)</th></tr></thead>
+      <tbody>
+        {% for row in chartink_ce.stage1_pooled %}
+        <tr>
+          <td>{{ row.horizon }}</td>
+          <td style="text-align:right;" class="muted">{{ row.raw|floatformat:3 }}%</td>
+          <td style="text-align:right; font-weight:700;">{{ row.excess|floatformat:3 }}%</td>
+          <td style="text-align:right;">{{ row.t|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      Null. The strongest t-statistic anywhere in the grid, across both scans and every horizon,
+      is <strong>{{ chartink_ce.best_t|floatformat:2 }}</strong>. The median trigger is down
+      0.13% by the close.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>Stage 2 &mdash; buy the ATM call on the same bar anyway</strong>
+    <span class="muted">&mdash; strike pinned at entry and followed as one contract, 5-paise tick
+      crossed each way plus 0.28% turnover tax.</span>
+    <table>
+      <thead><tr><th>Exit</th><th style="text-align:right;">Mean &times;</th>
+        <th style="text-align:right;">Median &times;</th>
+        <th style="text-align:right;">Win rate</th>
+        <th style="text-align:right;">t</th><th style="text-align:right;">n</th></tr></thead>
+      <tbody>
+        {% for row in chartink_ce.stage2 %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right; font-weight:700; color:{% if row.mean > 1 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.mean|floatformat:3 }}</td>
+          <td style="text-align:right;">{{ row.median|floatformat:3 }}</td>
+          <td style="text-align:right;" class="muted">{{ row.win|floatformat:1 }}%</td>
+          <td style="text-align:right;">{{ row.t|floatformat:2 }}</td>
+          <td style="text-align:right;" class="muted">{{ row.n }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      Note the shape: <strong>the loss grows monotonically with holding time.</strong> That is the
+      signature of pure carrying cost. If the entry carried any directional edge, holding longer
+      would recover some of it. It does not. The 30% trail &mdash; the best exit in the base-rate
+      study above &mdash; is here worse than simply getting out after half an hour, because a
+      trail only helps when there are winners to ride.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>In rupees, at real lot sizes</strong>
+    <table>
+      <thead><tr><th>Exit</th><th style="text-align:right;">Trades</th>
+        <th style="text-align:right;">Deployed</th><th style="text-align:right;">P&amp;L</th>
+        <th style="text-align:right;">Per trade</th><th style="text-align:right;">Worst</th></tr></thead>
+      <tbody>
+        {% for row in chartink_ce.money %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right;" class="muted">{{ row.trades }}</td>
+          <td style="text-align:right;">&#8377;{{ row.deployed }}</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            &#8377;{{ row.pnl }} ({{ row.pct|floatformat:1 }}%)</td>
+          <td style="text-align:right;">&#8377;{{ row.mean }}</td>
+          <td style="text-align:right;" class="muted">&#8377;{{ row.worst }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>The control &mdash; is it the scan, or is it calls?</strong>
+    <p class="muted" style="line-height:1.7; margin:6px 0 8px;">
+      A losing table does not convict the scan, because buying at-the-money calls loses money from
+      a <em>random</em> bar too. So for every symbol-day that produced a trigger, the same trade is
+      priced from <strong>every other bar of that same session</strong> &mdash; same stock, same
+      day, same contract, same exits. The only difference is when you pressed the button.
+    </p>
+    <table>
+      <thead><tr><th>Exit</th><th style="text-align:right;">Trigger bar</th>
+        <th style="text-align:right;">Random bar, same day</th>
+        <th style="text-align:right;">Difference</th><th style="text-align:right;">t</th></tr></thead>
+      <tbody>
+        {% for row in chartink_ce.control %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right;">{{ row.trigger|floatformat:3 }}</td>
+          <td style="text-align:right;">{{ row.control|floatformat:3 }}</td>
+          <td style="text-align:right; font-weight:700;">{{ row.difference|floatformat:3 }}</td>
+          <td style="text-align:right;" class="muted">{{ row.t|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      <strong>The trigger adds nothing.</strong> Every difference is inside noise and the sign is
+      mildly <em>against</em> the scan. This control also independently reproduces the base rate at
+      the top of this report: a random at-the-money call held two sessions returns
+      <strong>{{ chartink_ce.base_rate|floatformat:3 }}&times;</strong> here, against 0.77&times;
+      measured on a different date window and a different symbol set.
+    </div>
+  </div>
+
+  <div>
+    <strong>Why it cannot work: the hurdle</strong>
+    <p class="muted" style="line-height:1.7; margin:6px 0 8px;">
+      Costs are not the problem &mdash; tick plus tax needs about +0.03% of stock movement to clear.
+      Theta is the problem. Working back from the measured decay at a delta of roughly 0.5:
+    </p>
+    <table>
+      <thead><tr><th>Horizon</th><th style="text-align:right;">Stock must move</th>
+        <th style="text-align:right;">Median trigger delivers</th>
+        <th style="text-align:right;">Triggers that clear it</th></tr></thead>
+      <tbody>
+        {% for row in chartink_ce.hurdle %}
+        <tr>
+          <td>{{ row.horizon }}</td>
+          <td style="text-align:right; font-weight:700;">+{{ row.need|floatformat:2 }}%</td>
+          <td style="text-align:right; color:var(--danger);">{{ row.delivered|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.cleared|floatformat:1 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      Roughly <strong>7 in 10 triggers fail to clear the bar</strong>, and the median one moves the
+      wrong way. A directional option buyer has to be right about <em>magnitude</em>, not just
+      direction &mdash; and these scans are not even demonstrably right about direction.
+      The hurdle column is also a design spec: a scan worth buying calls on needs to find
+      +1% by the close, not just "up".
+    </div>
+  </div>
+
+  <div style="margin-top:14px; padding:12px; background:#fff; border:1px solid #e5e7eb; border-radius:6px;">
+    <strong>One caveat on this section, and one bug worth knowing about.</strong>
+    <div class="muted" style="line-height:1.65; margin-top:6px;">
+      <code>StockOptionCandle</code> stores <code>expiry_code=1</code> &mdash; front month &mdash;
+      but never the expiry <em>date</em>. The first run of this test followed a fixed strike forward
+      and silently walked out of the dying July contract into the freshly-rolled August one, at a
+      fraction of the price. It printed a <strong>228&times; on KALYANKJIL</strong>: a 610&nbsp;CE
+      bought at &#8377;0.05 on 28 July, "sold" at &#8377;11 two days later as a different contract.
+      The tell was a 2.84&times; mean against a 0.83&times; median.
+      <code>find_expiries()</code> now reads the boundary off the data &mdash; median ATM premium
+      collapses to 0.29% of spot on 28 July 2026, then opens at 3.33% the next session &mdash; and
+      caps every hold there. All numbers above are post-fix. The ATM&plusmn;3 download is still
+      running, so counts grow slightly on each re-run; three re-runs have moved the conclusions by
+      less than a paise.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel" style="border-color:#fde68a; background:#fffdf5;">
+  <strong style="font-size:16px;">5. Were the big winners recognisable beforehand? No.</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    This is the most important test in the study, because it does not depend on my choice of
+    signals. Take the 3,203 trades that doubled, take the 459,622 that did not, and compare what
+    was <em>observable at the moment of entry</em>. Open interest: identical. Volume surge:
+    identical. Implied vol: near identical. Stock momentum in the prior hour: the doublers were
+    marginally <em>weaker</em>. A stock breakout was in progress for 2.3% of doublers and 4.4% of
+    everything else &mdash; the breakout pointed the wrong way.
+  </p>
+  <p style="line-height:1.7; margin:0 0 12px;">
+    Only two things separated them, and both are arithmetic rather than edge.
+    <strong>Premium</strong>: doublers started at &#8377;5.25 against &#8377;28.75, because a
+    cheap option needs fewer rupees to double. <strong>Days to expiry</strong>: doublers had a
+    median of 3 against 15. Which brings us to the real shape of the thing.
+  </p>
+  <div class="muted">
+    If the winners cannot be told apart from the losers at entry, no entry filter can exist &mdash;
+    not the fourteen tried here, and not the fifteenth.
+    <strong>Scope (section&nbsp;0):</strong> this is a statement about <em>at-the-money</em> options.
+    Within that population it is solid &mdash; 3,203 doublers against 459,622 non-doublers is a
+    large, clean comparison. It is not a statement about OTM options, whose entry characteristics
+    I have not observed.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">6. What the 2&ndash;3&times; moves really are</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Here are the {{ run_count }} biggest runs in the data, largest first. Look at the
+    <strong>DTE at low</strong> column. Median days-to-expiry at the low: <strong>2</strong>, and
+    the distribution is bimodal &mdash; 205 of the {{ run_count }} (59%) were within three days of
+    expiry, 124 were freshly-rolled front-month contracts at 31&ndash;34 days. Because DTE ranged
+    freely from 0 to 34, this half of the finding is real: the largest single cluster of 3&times;+
+    runs starts on or within days of expiry day.
+  </p>
+  <p style="line-height:1.7; margin:0 0 12px; padding:10px 12px; background:#fffaf5; border-left:3px solid #fdba74;">
+    The <strong>Moneyness</strong> column needs the section&nbsp;0 caveat. Every one of these
+    {{ run_count }} sits within &plusmn;2% of the money &mdash; but so does <em>all</em> the data,
+    so that is the boundary of the cache, not a discovered property of big movers. I originally
+    read &ldquo;median moneyness zero&rdquo; as a finding. It was circular, and it is withdrawn.
+  </p>
+  <p style="line-height:1.7; margin:0 0 12px;">
+    For the near-expiry 59%, the mechanism is not in doubt: at-the-money options with hours left,
+    where all remaining value is gamma and a 1% move in the stock is a 10&times; move in the option.
+    That is the machine that produced the UNIONBANK chart you remembered. Whether the <em>same</em>
+    multiples are available further out of the money is exactly what this data cannot say, and
+    exactly what the download running now is for.
+  </p>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>Symbol</th><th>Type</th><th style="text-align:right;">Strike</th>
+      <th style="text-align:right;">From</th><th style="text-align:right;">To</th>
+      <th style="text-align:right;">Multiple</th><th style="text-align:right;">DTE at low</th>
+      <th style="text-align:right;">Moneyness</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a href="{% url 'stock_option_detail' run.symbol %}"><strong>{{ run.symbol }}</strong></a></td>
+        <td class="muted">{{ run.type }}</td>
+        <td style="text-align:right;">{{ run.strike|floatformat:0 }}</td>
+        <td style="text-align:right;">&#8377;{{ run.from_price|floatformat:2 }}</td>
+        <td style="text-align:right;">&#8377;{{ run.to_price|floatformat:2 }}</td>
+        <td style="text-align:right; font-weight:700; color:var(--gold);">{{ run.multiple|floatformat:1 }}&times;</td>
+        <td style="text-align:right; font-weight:700;">{{ run.dte|floatformat:0 }}</td>
+        <td style="text-align:right;" class="muted">{{ run.moneyness|floatformat:1 }}%</td>
+        <td class="muted">{{ run.start|date:"d M Y" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="muted" style="margin-top:10px; line-height:1.6;">
+    The catch is in the same table. Every one of these is measured from the contract's own low,
+    and a low is only visible as a low afterwards. At the moment of that low these options were
+    indistinguishable from the hundreds of others expiring the same afternoon that went to zero
+    instead &mdash; same moneyness, same time to expiry, same prior-hour stock move.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel" style="border-color:#bbf7d0; background:#f6fff9;">
+  <strong style="font-size:16px;">7. The one thing that cleared break-even &mdash; and what is wrong with it</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Section 6 pointed somewhere specific, so it got tested on its own terms:
+    <strong>expiry-day (DTE 0&ndash;1) at-the-money calls, exited on a 30% trail off the peak.</strong>
+    21,693 entries across 23 expiry sessions and 87 symbols. Net expectancy
+    <strong style="color:var(--green); font-size:18px;">1.041&times;</strong> &mdash; the only rule
+    in the study to clear 1.0 on a serious sample.
+  </p>
+  <p style="line-height:1.7; margin:0 0 12px;">
+    I expected a settlement artefact. The 15:15 slot alone printed 1.42&times;, F&amp;O runs to
+    15:39 on quotes nobody can fill, and that is exactly how a fake edge looks. So it got the
+    hostile treatment instead of a victory lap:
+  </p>
+  <table>
+    <thead><tr><th>Check</th><th style="text-align:right;">Result</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Drop every entry from 14:00 onward</td>
+        <td style="text-align:right; font-weight:700; color:var(--green);">1.033&times;</td>
+        <td class="muted">survives &mdash; not a closing-bell artefact</td></tr>
+      <tr><td>First half of the sample</td>
+        <td style="text-align:right; font-weight:700; color:var(--green);">1.029&times;</td>
+        <td class="muted">survives</td></tr>
+      <tr><td>Second half of the sample</td>
+        <td style="text-align:right; font-weight:700; color:var(--green);">1.054&times;</td>
+        <td class="muted">survives</td></tr>
+      <tr><td>Drop the best 5 of 23 expiry sessions</td>
+        <td style="text-align:right; font-weight:700; color:var(--danger);">0.966&times;</td>
+        <td class="muted"><strong>fails</strong></td></tr>
+      <tr><td>Drop the best 1% of trades</td>
+        <td style="text-align:right; font-weight:700; color:var(--danger);">0.939&times;</td>
+        <td class="muted"><strong>fails</strong></td></tr>
+    </tbody>
+  </table>
+  <p style="line-height:1.7; margin:12px 0;">
+    So it is neither an artefact nor a one-half fluke. It is also not a reliable edge, and the
+    reason is in the rest of the numbers: <strong>median trade 0.847&times;</strong>,
+    <strong>win rate 26.1%</strong>, <strong>9 of 23 expiry sessions profitable</strong>,
+    <strong>day-clustered t = 1.11</strong>.
+  </p>
+  <div class="grid" style="grid-template-columns:repeat(4,1fr);">
+    <div class="stat"><div class="label">Mean</div>
+      <div class="value" style="color:var(--green);">1.041&times;</div></div>
+    <div class="stat"><div class="label">Median trade</div>
+      <div class="value" style="color:var(--danger);">0.847&times;</div></div>
+    <div class="stat"><div class="label">Trades that win</div>
+      <div class="value">26.1%</div></div>
+    <div class="stat"><div class="label">Expiry days that win</div>
+      <div class="value">39%</div></div>
+  </div>
+  <p style="line-height:1.7; margin:12px 0 0;">
+    That is a positive-expectancy <strong>lottery</strong>: the entire mean lives in the top 1% of
+    trades. Real, and tradeable &mdash; but the opposite of what it feels like to trade. You lose
+    on three trades in four and on three expiry days in five, and the money arrives in rare violent
+    bursts. Sizing it like a normal trade guarantees the account is gone before the tail shows up.
+    And 23 expiry sessions cannot distinguish a real fat tail from a lucky one.
+    <strong>The correct next step is a small fixed-size forward test on every expiry, with no
+    discretion &mdash; not a reallocation.</strong>
+  </p>
+  <div class="muted" style="margin-top:10px; line-height:1.6;">
+    This is also the honest answer to the UNIONBANK question. The 2&ndash;3&times; moves are real,
+    they are catchable, and the structure that produces them is expiry-day gamma. What they are not
+    is <em>easy</em> &mdash; the same structure that produced 31&times; on SRF produces a 0.85&times;
+    median and a 74% loss rate, and nothing observable at entry tells you which one you are in.
+  </div>
+</div>
+
+<div class="panel">
+  <strong style="font-size:16px;">8. Where the edge sits structurally</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Every buyer's 0.77&times; is somebody's 1.23&times;. Mirroring all 462,825 trades to the sell side:
+    the seller collects <strong>+19.4% per rupee of premium sold</strong> and wins
+    <strong>79.8%</strong> of the time. That is not a discovery, it is the same measurement read
+    from the other end &mdash; but it is where the money in this dataset went.
+  </p>
+  <p style="line-height:1.7; margin:0 0 12px;">
+    It is also not a recommendation to sell naked. The worst 1% of those short trades average
+    <strong>&minus;474% of premium collected</strong>: one gap wipes out a hundred good weeks, and
+    margin on a naked stock-option short is roughly 15% of contract value, so return on
+    <em>capital</em> is nothing like return on premium. The honest version of this finding is
+    <strong>defined-risk spreads</strong> &mdash; keep the decay, cap the tail.
+  </p>
+  <div class="muted">
+    That has now been built and tested. <strong>It does not work</strong>, and section 9 is as much
+    about <em>why the first version of it said the opposite</em> as about the verdict.
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+{% if spreads %}
+<div class="panel" style="border-color:#fecaca; background:#fffafa;">
+  <strong style="font-size:16px;">9. Defined-risk spreads &mdash; tested, and how the answer flipped</strong>
+  <p style="line-height:1.7; margin:8px 0 12px;">
+    Sell the ATM call, buy the ATM+1: collect a credit, cap the loss at the strike gap minus the
+    credit. Section 8 called this the next thing worth building, and the cache already had what it
+    needed &mdash; 434,903 ATM/ATM+1 call pairs quoted at the same instant, 189 symbols, 366
+    sessions.
+    {% if spreads.five_day %}It returns
+    <strong style="color:var(--danger);">{{ spreads.five_day.imputed|floatformat:1 }}% on the
+    capital at risk</strong> at a five-day hold,{% else %}It loses money at every horizon,{% endif %}
+    and loses in {{ spreads.months_down }} of {{ spreads.months }} months.
+  </p>
+  <p style="line-height:1.7; margin:0 0 14px; padding:10px 12px; background:#fff; border-left:3px solid #f87171;">
+    <strong>For most of a day it did not.</strong> The near-expiry version showed +18% of risk with
+    every expiry cycle profitable, and it had already survived a non-overlap test, a cost
+    decomposition and a check that it was not a disguised direction bet. All of it was one bug, and
+    that bug is a property of this data rather than of this strategy &mdash; so it is the part of
+    this section worth reading.
+  </p>
+
+  <div style="margin-bottom:16px;">
+    <strong>The bug &mdash; exits go missing only in the losing direction</strong>
+    <p class="muted" style="line-height:1.7; margin:6px 0 8px;">
+      <code>relative_strike</code> is ATM-<em>relative</em>. Both legs are correctly pinned as fixed
+      contracts at entry &mdash; but a pinned strike only stays <em>in the cache</em> while spot
+      stays near it. So an exit that fails to price is not missing at random: it is missing
+      precisely because <strong>the market ran away from the strike</strong>, and for a short call
+      spread, spot running up is the losing direction. Dropping unpriceable exits deletes the
+      losers, and only the losers.
+    </p>
+    <table>
+      <thead><tr><th>Exit horizon</th>
+        <th style="text-align:right;">Both legs still quoted</th>
+        <th style="text-align:right;">Quoted only</th>
+        <th style="text-align:right;">Exits repaired</th>
+        <th style="text-align:right;">n</th></tr></thead>
+      <tbody>
+        {% for row in spreads.summary %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right;" class="muted">{{ row.coverage|floatformat:1 }}%</td>
+          <td style="text-align:right; color:{% if row.quoted > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.quoted|floatformat:2 }}%</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            {{ row.imputed|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.n }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      The repair: at expiry an option <em>is</em> its intrinsic value, so a vanished leg is worth
+      max(spot &minus; strike, 0) with no quote at all, and every trade stays in the sample.
+      That premise is load-bearing, so it was checked rather than asserted &mdash; against the 3,482
+      strikes that <em>were</em> still quoted at an expiry-day bell, quote minus intrinsic has a
+      median of <strong>+&#8377;0.05</strong>, exactly one tick, with 63% inside 50 paise.
+      (<code>bell_intrinsic_check.py</code>.)
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>What it does to the finding that started this</strong>
+    <span class="muted">&mdash; held five sessions, split by days to expiry at entry.</span>
+    <table>
+      <thead><tr><th>DTE at entry</th><th style="text-align:right;">Quoted only</th>
+        <th style="text-align:right;">Exits repaired</th>
+        <th style="text-align:right;">Quoted</th><th style="text-align:right;">n</th></tr></thead>
+      <tbody>
+        {% for row in spreads.dte %}
+        <tr>
+          <td>{{ row.bucket }}</td>
+          <td style="text-align:right; color:{% if row.quoted > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.quoted|floatformat:2 }}%</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            {{ row.imputed|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.coverage|floatformat:1 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.n }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      The left column is a clean monotonic theta gradient &mdash; stronger the closer expiry gets,
+      exactly what option theory predicts, which is why it was chased. The right column is noise
+      around a loss. It was differential <em>survival</em>, not decay: the coverage column barely
+      moves across the buckets, so the gradient came from <em>which</em> trades survived, not how
+      many.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>Every near-expiry exit, both ways</strong>
+    <span class="muted">&mdash; 0&ndash;7 DTE at entry. Squaring off before the bell is the version
+      a retail account can trade, because these are physically settled.</span>
+    <table>
+      <thead><tr><th>Exit</th><th style="text-align:right;">Quoted only</th>
+        <th style="text-align:right;">Exits repaired</th>
+        <th style="text-align:right;">Win</th>
+        <th style="text-align:right;">Worst 5%</th>
+        <th style="text-align:right;">Quoted</th></tr></thead>
+      <tbody>
+        {% for row in spreads.exits %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right; color:{% if row.quoted > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.quoted|floatformat:2 }}%</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            {{ row.imputed|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.win|floatformat:1 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.p5|floatformat:0 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.coverage|floatformat:1 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      Note the <strong>worst 5%</strong> column. A capped spread must be able to reach its maximum
+      loss, and the repaired version does &mdash; roughly &minus;105% of risk, which is max loss
+      plus costs. The quoted-only version bottomed out around &minus;31%, and that impossibility
+      was the tell.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>Cycle by cycle</strong>
+    <span class="muted">&mdash; squared off expiry day 14:00, one entry per symbol per expiry, so
+      no two holds share a path. Aug 2025 &ndash; Jun 2026 is the stretch the download never
+      reached, so this is six consecutive 2025 cycles plus two from 2026.</span>
+    <table>
+      <thead><tr><th>Expiry</th><th style="text-align:right;">Quoted only</th>
+        <th style="text-align:right;">Exits repaired</th>
+        <th style="text-align:right;">Win</th><th style="text-align:right;">n</th></tr></thead>
+      <tbody>
+        {% for row in spreads.cycles %}
+        <tr>
+          <td>{{ row.expiry }}</td>
+          <td style="text-align:right; color:{% if row.quoted > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.quoted|floatformat:2 }}%</td>
+          <td style="text-align:right; font-weight:700; color:{% if row.imputed > 0 %}var(--green){% else %}var(--danger){% endif %};">
+            {{ row.imputed|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.win|floatformat:1 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.n }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      <strong>{{ spreads.cycles_quoted_up }} of {{ spreads.cycles|length }} cycles profitable
+      becomes {{ spreads.cycles_up }} of {{ spreads.cycles|length }}</strong>, and the worst one is
+      &minus;91%.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>Slippage, the assumption most likely to be wrong</strong>
+    <p class="muted" style="line-height:1.7; margin:6px 0 8px;">
+      Everything above assumes a 5-paise tick crossed on each leg each way. That is an
+      <em>index</em>-option assumption; stock options in expiry week are thinner, and a spread
+      crosses <strong>four</strong> tick boundaries per round trip rather than two. "Openable" is
+      the share of entries still worth a credit at that spread &mdash; the rest simply vanish
+      rather than being counted as losses.
+    </p>
+    <table>
+      <thead><tr><th>Half-spread per leg</th><th style="text-align:right;">ROI on risk</th>
+        <th style="text-align:right;">Win</th><th style="text-align:right;">&#8377;/spread</th>
+        <th style="text-align:right;">Still openable</th></tr></thead>
+      <tbody>
+        {% for row in spreads.slippage %}
+        <tr>
+          <td>&#8377;{{ row.cost|floatformat:2 }}</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            {{ row.roi|floatformat:2 }}%</td>
+          <td style="text-align:right;" class="muted">{{ row.win|floatformat:1 }}%</td>
+          <td style="text-align:right;">&#8377;{{ row.rupees|floatformat:2 }}</td>
+          <td style="text-align:right;" class="muted">{{ row.openable|floatformat:0 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="line-height:1.6; margin-top:6px;">
+      Slippage never gets a chance to matter. The trade is already negative at the friendliest
+      assumption available, so there is no cost level at which it turns.
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px;">
+    <strong>In rupees, at real lot sizes</strong>
+    <span class="muted">&mdash; every entry the data allows, which is not a tradeable size. It is
+      here to show the sign is not a small-sample artefact.</span>
+    <table>
+      <thead><tr><th>Exit</th><th style="text-align:right;">Spreads</th>
+        <th style="text-align:right;">Capital at risk</th><th style="text-align:right;">P&amp;L</th>
+        </tr></thead>
+      <tbody>
+        {% for row in spreads.money %}
+        <tr>
+          <td>{{ row.exit }}</td>
+          <td style="text-align:right;" class="muted">{{ row.trades }}</td>
+          <td style="text-align:right;">&#8377;{{ row.risk }}</td>
+          <td style="text-align:right; font-weight:700; color:var(--danger);">
+            &#8377;{{ row.pnl }} ({{ row.pct|floatformat:1 }}%)</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="padding:12px; background:#fff; border:1px solid #e5e7eb; border-radius:6px;">
+    <strong>Three things this closes off.</strong>
+    <div class="muted" style="line-height:1.65; margin-top:6px;">
+      <strong>It is a direction bet after all.</strong> Correlation between monthly return and the
+      monthly spot move is
+      <strong>{{ spreads.correlation|floatformat:2 }}</strong> across
+      {{ spreads.months }} months. The earlier reading of +0.01 &mdash; the check that had convinced
+      me this was structural rather than directional &mdash; was itself survivorship: with the
+      adverse moves deleted, there was no direction left to correlate against.<br><br>
+      <strong>The mirror is not a lead.</strong> Negating the short spread makes the long (debit)
+      call spread look positive, at +&#8377;4.69 to +&#8377;7.12 per spread. That is the same
+      direction bet read backwards, over a sample in which Indian stocks rose. It is a bullish
+      position, not an edge, and it has not been tested as one.<br><br>
+      <strong>Delivery would have bitten too.</strong> These are physically settled: spot finishes
+      above the short strike 53.3% of the time, and in the dangerous band &mdash; short in the
+      money, long expiring worthless, so shares must actually be delivered &mdash; 22.7%. Squaring
+      off before the bell avoids all of it, which is why every exit tested here does so.
+      <br><br>
+      Two smaller bugs were found in the same pass and neither changes the verdict:
+      <code>groupby.first()</code> is <em>column-wise</em>, so every "one trade per symbol-expiry"
+      row was a composite of one bar's entry and another bar's exit (now <code>head(1)</code>); and
+      the expiry-day clock exits were not required to fall after the entry, so a 15:00 entry could
+      be handed an exit priced at 10:00 that same morning.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ------------------------------------------------------------------ -->
+
+<div class="panel">
+  <strong style="font-size:16px;">Method, so you can attack it</strong>
+  <ul style="line-height:1.9; margin:8px 0 0; padding-left:20px;">
+    <li><strong>Fixed strike, one expiry cycle.</strong> Dhan's rolling feed is ATM-<em>relative</em>:
+      ask for "ATM" and each bar hands back whatever strike was at the money at that moment, changing
+      every five bars or so. Buying "ATM" Monday and selling "ATM" Friday is not a trade &mdash; it
+      swaps contracts underneath you and manufactures returns. Every series here is rebuilt as a
+      fixed strike inside a single monthly cycle.</li>
+    <li><strong>Stale quotes removed by self-contradiction.</strong> A freshly-rolled contract that
+      has not traded is quoted at a nominal five paise: TRENT 4700 CALL showed &#8377;0.05 with spot
+      4673 and thirty days left, when it was plainly worth about &#8377;150. Those quotes invent
+      thousand-baggers two bars later. Dhan publishes its own IV on the same bar, so each option is
+      priced from that IV and quotes disagreeing by more than 3&times; either way are dropped. The
+      filter keeps 91.4% of bars and cut the measured 2&times; rate from 7.64% to 0.88%.</li>
+    <li><strong>Entry is the next bar's open.</strong> Never the signal bar's close.</li>
+    <li><strong>Missing exits are repaired, not dropped.</strong> The same ATM-relative feed means a
+      pinned strike stops being quoted once spot walks away from it &mdash; so an exit that will not
+      price is missing <em>because the market moved</em>, which is a direction. Dropping those
+      trades silently deletes one tail; section 9 is what that costs. Any test that follows a fixed
+      strike forward values a vanished leg at max(spot &minus; strike, 0) instead.</li>
+    <li><strong>Corporate actions are cut on the strike, not on the move.</strong> That repair has
+      its own fault: a split re-bases <em>spot</em> but not the recorded <em>strike</em>, so
+      max(spot &minus; strike, 0) subtracts two different price scales. It is rare and it dominates
+      &mdash; 1.17% of five-day exits carried 70% of the measured loss. The cut is taken on how far
+      the strike sits from spot (a scale check, direction-neutral) and never on how far spot moved,
+      which would delete the adverse outcomes and manufacture a positive. Threshold 0.30, chosen off
+      a plateau: the result barely moves between 0.50 and 0.15.</li>
+    <li><strong>Stops win ties.</strong> When a 15-minute bar's high and low would both trigger,
+      the stop is taken &mdash; the bar cannot say which came first, and assuming the good one is
+      how backtests lie.</li>
+    <li><strong>Costs at the tick.</strong> One full 5-paise tick each way plus 0.28% turnover tax.
+      On a 70-paisa option that tick is 7% a side, which is exactly why the cheap options that
+      double most often still lose the most money.</li>
+    <li><strong>Significance clustered by day.</strong> Overlapping entries on one name in one hour
+      are one bet wearing many hats.</li>
+  </ul>
+  <div class="muted" style="margin-top:12px; line-height:1.6;">
+    Scripts: <code>research/option_moves.py</code> (base rates),
+    <code>research/option_strategy.py</code> (this table),
+    <code>research/option_diagnostics.py</code> (sections 5 and 7),
+    <code>research/option_expiry_day.py</code> (the expiry-day steelman),
+    <code>research/option_expiry_verify.py</code> (the hostile check in section 7),
+    <code>research/chartink_study.py</code> (section 4),
+    <code>research/chartink_options.py</code> and <code>research/chartink_control.py</code>
+    (section 4b),
+    <code>research/option_spreads.py</code>, <code>research/spread_near_expiry.py</code>,
+    <code>research/bell_intrinsic_check.py</code> and <code>research/spread_tables.py</code>
+    (section 9).
+    Page rendered {{ generated|date:"d M Y, H:i" }} from the CSVs those scripts wrote, so it moves
+    when they are re-run.
+  </div>
+</div>
+{% endblock %}

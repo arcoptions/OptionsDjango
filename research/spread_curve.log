@@ -1,0 +1,44 @@
+[22:14:03] 189 tracked symbols, expiry 2026-08-25
+[22:16:04]   25/189 symbols, 1,421 quotes
+[22:18:05]   50/189 symbols, 2,842 quotes
+[22:20:10]   75/189 symbols, 4,383 quotes
+[22:22:05]   100/189 symbols, 5,864 quotes
+[22:24:08]   125/189 symbols, 7,461 quotes
+[22:26:00]   150/189 symbols, 8,629 quotes
+[22:28:03]   175/189 symbols, 9,979 quotes
+[22:29:07] wrote research/spread_curve.csv -- 10,617 quotes, 182 symbols
+
+================================================================================================
+CALLS -- round-trip friction by moneyness
+  A buyer crosses half the spread in and half out, so the spread IS
+  the round trip. Compare against the multiple the trade targets.
+================================================================================================
+    OTM band         quotes   med prem  med spread    75th pct    90th pct     med OI
+      -2%..+2%        570      17.11        4.9%        8.4%       22.1%    372,000
+      +2%..+5%        443       4.12        6.9%       11.8%       21.5%    636,750
+      +5%..+8%        422       1.51       12.6%       23.7%       52.1%    470,738
+      +8%..+12%       550       0.80       28.6%       66.7%      116.5%    216,400
+     +12%..+20%       694       0.40       52.2%      103.9%      151.0%    109,575
+
+================================================================================================
+PUTS -- round-trip friction by moneyness
+  A buyer crosses half the spread in and half out, so the spread IS
+  the round trip. Compare against the multiple the trade targets.
+================================================================================================
+    OTM band         quotes   med prem  med spread    75th pct    90th pct     med OI
+      -2%..+2%        573      15.95        5.7%       12.9%       23.9%    297,500
+      +2%..+5%        428       3.73        9.7%       20.7%       64.1%    261,850
+      +5%..+8%        437       1.32       33.3%       78.3%      127.3%    171,000
+      +8%..+12%       524       0.80       66.7%      116.5%      162.8%     81,775
+     +12%..+20%       721       0.53       89.6%      143.5%      176.5%     33,575
+
+================================================================================================
+WHERE DOES THE SPREAD STOP BEING PAYABLE?
+  Share of quotes whose round trip exceeds a given fraction of premium.
+================================================================================================
+    OTM band              >5%       >10%       >20%       >50%
+      -2%..+2%         48%        21%        11%         2%
+      +2%..+5%         72%        32%        12%         4%
+      +5%..+8%         90%        62%        32%        11%
+      +8%..+12%        96%        84%        62%        31%
+     +12%..+20%        99%        96%        85%        50%

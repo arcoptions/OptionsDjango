@@ -16,6 +16,9 @@ def layout_shell(request):
 
     nav_items = [
         ("Options Tracker", reverse("options_tracker")),
+        ("Stock Options", reverse("stock_options")),
+        ("Strategy Report", reverse("research_report")),
+        ("Breakeven", reverse("breakeven")),
         ("NIFTY Live", reverse("nifty_live")),
         ("Scanners", reverse("scanners")),
         ("Telegram Feed", reverse("telegram_feed")),

@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 *.db
 .env
 .venv/
@@ -12,6 +14,25 @@ staticfiles/
 # candidate/feature pools built from it (entry_pool_wide.pkl alone is 1.1 GB).
 research/cache/
 research/*.pkl
+research/*.parquet
+# Per-trade dumps, kept only for ad-hoc digging. The small aggregate CSVs the
+# /research/ page renders from ARE tracked; these are not (spread_trades.csv
+# alone is 140 MB, and spread_tables.py rebuilds the page tables from them).
+research/spread_trades.csv
+research/spread_nearexpiry_trades.csv
+research/chartink_options_trades.csv
+# Downloaded market data, not results. Every one of these is rebuilt by the
+# script named after it, and together they are ~110 MB -- scrip_master is a
+# fresh Dhan download each run, stock_intraday is 49 symbols of 1-min bars, and
+# the premove_*.csv are per-contract dumps behind the aggregates in the report.
+options_tracker/data/scrip_master.csv
+research/scrip_master.csv
+research/stock_intraday.csv
+research/premove_otm.csv
+research/premove_direction.csv
+research/premove_deconfound.csv
+research/premove_sidepicker.csv
+research/premove_ce.csv
 brief_output.txt
 .sweep.log
 

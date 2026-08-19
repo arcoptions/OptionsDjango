@@ -1,0 +1,136 @@
+loaded 1,774,990 ATM/ATM+1 call bars, 189 symbols
+18 expiries detected, 2025-02-27 -> 2026-07-28
+  50/189 symbols, 146,844 spreads
+  100/189 symbols, 304,097 spreads
+  150/189 symbols, 457,217 spreads
+
+577,286 raw spread entries, 189 symbols, 368 sessions, 2025-02-17 -> 2026-08-18
+median gap Rs10.0, credit Rs4.90 (43% of gap), risk Rs7.15, spot Rs1,067
+
+============================================================================================
+SHORT CALL SPREAD -- RAW, no quality filter
+  Includes entries whose long leg may be a stale quote. Not the headline.
+============================================================================================
+  exit    P&L/sprd   ROI/risk     win%   p10 ROI    t(day) cal.days        n
+  2h        -0.510     -2.94%    27.2%    -23.1%     -8.61        0   316481
+  EOD       -0.253     -1.60%    32.5%    -23.0%     -5.35        1   189334
+  2d        -0.019     -0.13%    35.5%    -22.9%     -1.68        2   127705
+  5d        +0.345      2.47%    42.7%    -22.0%     +0.18        7    64120
+
+quality filter: long leg >= Rs0.50, risk >= Rs1.00, both legs traded -> 508,659 of 577,286 entries survive (88%)
+corporate actions: 4,579 of 376,490 5-day exits blanked (1.22%) -- a split re-bases spot but not the recorded strike, so intrinsic straddles two price scales.
+
+============================================================================================
+SHORT CALL SPREAD -- both legs actually traded
+  Sell ATM call, buy ATM+1 call. NOT the headline: see below.
+============================================================================================
+  exit    P&L/sprd   ROI/risk     win%   p10 ROI    t(day) cal.days        n
+  2h        -0.549     -3.24%    27.9%    -19.2%     -5.75        0   282048
+  EOD       -0.249     -1.51%    33.7%    -19.6%     -5.29        1   171194
+  2d        -0.016     -0.10%    37.3%    -19.5%     -1.30        2   115451
+  5d        +0.391      2.70%    45.1%    -18.6%     +0.68        7    57652
+
+--------------------------------------------------------------------------------------------
+SURVIVORSHIP -- why the table above cannot be read at face value.
+`relative_strike` is ATM-RELATIVE, so a strike pinned at entry is only quoted
+while spot stays near it. An exit that fails to price is missing BECAUSE the
+market ran away from the strike -- and for a SHORT call spread, spot running up
+is the losing direction. Below, how much of the sample that quietly removes:
+--------------------------------------------------------------------------------------------
+  exit      quoted%     n quoted    n imputed
+  2h          56.3%      282,048      501,228
+  EOD         35.0%      171,194      489,328
+  2d          25.1%      115,451      459,713
+  5d          15.5%       57,652      371,911
+
+  The repair: at expiry an option IS its intrinsic, so a vanished leg is worth
+  max(spot - strike, 0) with no quote at all. Checked against the strikes that
+  WERE still quoted at the bell, that rule lands within one tick (median
+  Rs+0.05) -- see bell_intrinsic_check.py.
+
+============================================================================================
+SHORT CALL SPREAD -- MISSING LEGS IMPUTED AT INTRINSIC
+  This is the headline. Same trades, none of them dropped.
+============================================================================================
+  exit    P&L/sprd   ROI/risk     win%   p10 ROI    t(day) cal.days        n
+  2h        -1.125     -5.35%    37.3%   -102.7%     -7.92        0   501228
+  EOD       -1.455     -6.90%    43.5%   -103.6%     -3.93        1   489328
+  2d        -2.031     -9.71%    44.5%   -104.5%     -5.03        2   459713
+  5d        -3.245    -15.41%    44.4%   -106.4%     -6.31        7   371911
+
+--------------------------------------------------------------------------------------------
+BY MONTH, at 5 days -- the horizon where the pooled number turns positive.
+A short call spread is bearish; if the P&L just tracks the market falling,
+it is a direction bet, not an edge.
+--------------------------------------------------------------------------------------------
+  month       ROI/risk   spot move      win%        n
+  2025-02        7.92%      +0.06%     56.0%    10883
+  2025-03      -21.63%      +2.08%     34.2%    45453
+  2025-04      -33.53%      +1.80%     33.7%    44851
+  2025-05      -17.95%      +1.01%     40.8%    54949
+  2025-06      -10.07%      +0.22%     47.0%    58797
+  2025-07        1.79%      -0.85%     57.3%    63058
+  2025-08      -34.12%      +1.41%     37.7%    18657
+  2025-09      -31.99%      +1.94%     32.6%      840
+  2025-10      -69.27%      +0.56%     41.2%     1132
+  2025-11       -0.86%      -0.22%     49.5%     1011
+  2025-12      -52.94%      +2.61%     23.1%     1167
+  2026-01      -35.97%      +1.08%     38.7%      501
+  2026-02      -26.06%      +1.04%     45.9%      536
+  2026-04      -69.85%      +4.49%     18.6%      774
+  2026-05      -65.05%      +0.71%     45.3%     1052
+  2026-06       35.41%      -4.60%     73.6%      798
+  2026-07      -11.63%      +0.08%     47.3%    46457
+  2026-08      -29.92%      -0.56%     47.7%    20970
+
+  months profitable: 3/18    correlation(ROI, spot move) = -0.75
+
+--------------------------------------------------------------------------------------------
+WHERE THE MONEY GOES -- gross is the same trade with no tick and no tax.
+If gross is positive and net is not, the structure works and the costs eat it.
+--------------------------------------------------------------------------------------------
+  exit    gross ROI     net ROI   cost drag         n
+  2h         +0.83%      -3.24%      -4.07%   282,048
+  EOD        +2.54%      -1.51%      -4.05%   171,194
+  2d         +4.08%      -0.10%      -4.18%   115,451
+  5d         +7.19%      +2.70%      -4.49%    57,652
+
+--------------------------------------------------------------------------------------------
+BY DAYS TO EXPIRY AT ENTRY, held 5 days -- theta accelerates into expiry,
+so a real short-premium edge should get STRONGER as the contract dies.
+This was the finding that sent the study near-expiry; note what the two
+columns do to it once the dropped exits are put back.
+--------------------------------------------------------------------------------------------
+  dte           quoted ROI     imputed  quoted n    imp. n    quoted%
+  0-7 days         +33.78%      -8.78%     2,387    16,539      14.4%
+  8-14 days        +11.20%     -12.16%    15,887   102,348      15.5%
+  15-21 days        -0.54%     -21.59%    15,640   112,840      13.9%
+  22+ days          -4.42%      -8.63%    18,626   110,886      16.8%
+
+--------------------------------------------------------------------------------------------
+NON-OVERLAPPING -- one entry per symbol per week, so no two holds share a
+path. Repeated at four entry times, because 'the first bar of the week' is
+always Monday's open and that is its own bias.
+--------------------------------------------------------------------------------------------
+  entry           2d ROI      5d ROI   5d win% 5d t(day)        n
+  09:45          -10.97%     -15.99%     44.3%     -3.13    3,626
+  11:15          -12.35%     -17.94%     43.8%     -2.66    3,616
+  13:00          -11.50%     -17.27%     44.6%     -2.82    3,599
+  14:30          -10.09%     -17.08%     44.4%     -2.20    3,626
+
+--------------------------------------------------------------------------------------------
+RUPEES -- at real lot sizes. Note this weights by lot, so cheap high-lot
+names dominate; the per-spread table above weights every trade equally.
+--------------------------------------------------------------------------------------------
+  2h    501228 spreads   risk Rs5,556,302,422   P&L Rs-227,879,499 (-4.10%)   worst Rs -273,033
+  EOD   489328 spreads   risk Rs5,602,225,754   P&L Rs-269,509,553 (-4.81%)   worst Rs -348,262
+  2d    459713 spreads   risk Rs5,340,629,172   P&L Rs-371,238,302 (-6.95%)   worst Rs -302,260
+  5d    371911 spreads   risk Rs4,554,526,832   P&L Rs-440,241,059 (-9.67%)   worst Rs-1,492,392
+
+LONG call spread (buy ATM, sell ATM+1) -- the mirror, paying costs again:
+  2h    P&L/spread   +0.925   win  55.9%   n=501,228
+  EOD   P&L/spread   +1.255   win  52.3%   n=489,328
+  2d    P&L/spread   +1.831   win  52.4%   n=459,713
+  5d    P&L/spread   +3.045   win  53.6%   n=371,911
+
+written: spread_summary.csv, spread_money.csv, spread_months.csv, spread_trades.csv

@@ -1,0 +1,134 @@
+loaded 1,948,041 bars; 18 expiries
+built 474,936 spread entries
+
+corporate actions: 22,074 of 736,243 imputed exits blanked (3.00%) -- a split re-bases spot but not the recorded strike.
+
+128,975 entries at 0-7 days to expiry
+  across 180 symbols, 18 expiry cycles, 1219 symbol-expiry pairs
+  median entry volume: short leg 38,125, long leg 44,550
+
+----------------------------------------------------------------------------------------------
+SURVIVORSHIP -- read this before anything below it.
+A strike pinned at entry is only quoted while spot stays near it, so an exit
+that fails to price is missing BECAUSE the market ran away from the strike.
+Moneyness is spot at the bell in units of the strike gap above the short
+strike: 0 means it finished at the short strike, >1 means both legs are ITM
+and the spread closed at its maximum loss.
+----------------------------------------------------------------------------------------------
+  exit                       quoted%    n quoted   money|quoted   money|dropped
+  5 sessions                    1.9%       2,434          +0.16           +0.12
+  close day before expiry      18.1%      23,309          +0.04           +0.16
+  expiry day 10:00             22.2%      28,641          +0.15           +0.10
+  expiry day 12:00             24.7%      31,829          +0.10           +0.15
+  expiry day 14:00             25.3%      32,608          +0.10           +0.20
+  expiry day 15:00             23.6%      30,395          +0.05           +0.51
+  ride into the bell           22.0%      28,338          +0.04           +0.55
+
+  Where 'money|dropped' sits above 'money|quoted', the missing exits are the
+  losers. Imputing them at intrinsic is what the second table below does.
+
+==============================================================================================
+0-7 DTE -- QUOTED ONLY (both legs really traded). Flattered.
+==============================================================================================
+  exit                       ROI/risk      win%     p5 ROI    t(day)          n
+  5 sessions                  +35.14%     83.1%     -22.7%     +3.34      2,434
+  close day before expiry     +14.90%     72.1%     -26.0%     +6.07     23,309
+  expiry day 10:00            +14.63%     72.7%     -26.8%     +0.44     28,641
+  expiry day 12:00            +16.49%     75.0%     -24.7%     +6.43     31,829
+  expiry day 14:00            +16.35%     76.2%     -30.7%     +8.04     32,608
+  expiry day 15:00            +20.26%     79.8%     -33.9%     +7.33     30,395
+  ride into the bell          +23.83%     81.5%     -40.7%     +9.83     28,338
+
+==============================================================================================
+0-7 DTE -- MISSING LEGS IMPUTED AT INTRINSIC. The honest one.
+==============================================================================================
+  exit                       ROI/risk      win%     p5 ROI    t(day)          n
+  5 sessions                   -7.06%     49.1%    -106.0%     -1.14     17,047
+  close day before expiry      -4.61%     55.1%    -104.5%     -1.28     90,703
+  expiry day 10:00             -0.36%     57.2%    -104.6%     -1.29    116,329
+  expiry day 12:00             -2.06%     57.2%    -104.5%     -0.70    120,758
+  expiry day 14:00             -4.52%     56.3%    -104.8%     -1.33    124,134
+  expiry day 15:00             -6.62%     55.3%    -104.7%     -1.61    123,317
+  ride into the bell           -6.95%     55.2%    -104.9%     -2.21    121,881
+
+----------------------------------------------------------------------------------------------
+DELIVERY EXPOSURE -- these are physically settled. A short call left in the
+money at expiry is an obligation to deliver shares, not a cash debit. Measured
+on every entry whose expiry-day bell exists: whether OUR cache quoted the
+strike has nothing to do with whether the exchange exercises it.
+----------------------------------------------------------------------------------------------
+  median spot at the bell Rs1,262 vs short strike Rs1,280 (gap to long strike Rs20.0)
+  spot finishes above the SHORT strike 53.0% of the time
+  spot finishes above the LONG strike too 30.4% -- both legs exercise and the deliveries net
+  the dangerous band, short ITM with the long expiring worthless: 22.7%
+  where the bell lands, in units of the strike gap above the short strike:
+      p5      -6.34 gaps
+      p25     -1.04 gaps
+      p50     +0.12 gaps
+      p75     +1.34 gaps
+      p95     +5.51 gaps
+  squaring off before the bell avoids all of it, by construction.
+
+----------------------------------------------------------------------------------------------
+ONE ENTRY PER SYMBOL PER EXPIRY -- the overlapping bars are one bet, not many.
+head(1), not first(): groupby.first() is column-wise and would stitch one
+bar's entry onto another bar's exit.
+----------------------------------------------------------------------------------------------
+
+==============================================================================================
+0-7 DTE, imputed, one trade per symbol-expiry
+==============================================================================================
+  exit                       ROI/risk      win%     p5 ROI    t(day)          n
+  5 sessions                   -2.48%     52.9%    -106.0%     -0.89        732
+  close day before expiry      -9.67%     51.0%    -107.1%     -0.69      1,122
+  expiry day 10:00             -6.39%     50.8%    -107.1%     -0.89      1,195
+  expiry day 12:00             -7.18%     50.3%    -107.2%     -0.39      1,188
+  expiry day 14:00             -7.96%     50.8%    -107.3%     -0.46      1,188
+  expiry day 15:00             -9.10%     50.8%    -107.2%     +0.22      1,172
+  ride into the bell           -9.76%     50.0%    -107.7%     -0.31      1,155
+
+----------------------------------------------------------------------------------------------
+BY EXPIRY CYCLE -- squared off on expiry day at 14:00, one trade per
+symbol-expiry. Two good months would show here as two good months.
+----------------------------------------------------------------------------------------------
+  expiry            imputed  quoted only      win%         n
+  2025-02-27        +47.57%      +36.33%     80.9%       141
+  2025-03-27        -21.15%      +16.54%     39.4%       142
+  2025-04-24        -92.70%       -1.42%     10.4%       144
+  2025-05-29        -13.07%      +27.72%     44.4%       151
+  2025-06-26        -18.17%      +34.79%     31.0%       155
+  2025-07-31         +0.10%      +31.18%     75.8%       165
+  2026-06-30        -15.85%       +7.81%     64.3%       129
+  2026-07-28        +32.30%      +28.56%     61.2%       129
+
+  cycles profitable: 3/8   median cycle -14.46%   worst -92.70%
+  NOTE the gap in the cycle list: Aug 2025 - Jun 2026 is the stretch the
+  download never reached, so this is six consecutive 2025 cycles plus two
+  from 2026, not a clean 18-month run.
+
+----------------------------------------------------------------------------------------------
+SLIPPAGE -- everything above assumes a 5-paise tick crossed on each leg each
+way. That is an INDEX-option assumption. Stock options in expiry week are
+thinner, and half-crossing a wider quote is where results like this usually
+die. Re-priced on the imputed 14:00 exit:
+----------------------------------------------------------------------------------------------
+  half-spread/leg         ROI/risk      win%  Rs/spread    t(day)   openable
+  Rs0.05                    -7.96%     50.8%      -1.54     -0.46       100%
+  Rs0.25                    -9.48%     46.4%      -1.88     -0.85        97%
+  Rs0.50                   -12.90%     39.6%      -2.70     -1.32        94%
+  Rs1.00                   -16.74%     34.6%      -4.22     -1.39        77%
+  Rs1.50                   -19.15%     31.9%      -5.72     -1.47        64%
+
+  Median credit Rs4.85 against Rs7.20 of risk, so each extra 25 paise of
+  half-spread costs Rs1.00 across the four crossings. 'openable' is the share
+  of entries still worth a credit at that spread -- the rest simply vanish.
+
+----------------------------------------------------------------------------------------------
+RUPEES -- one spread per symbol per expiry, squared off expiry day 14:00,
+imputed, at a 5-paise tick. Divide through by the slippage table above.
+----------------------------------------------------------------------------------------------
+  1,188 spreads   max risk Rs8,679,777   P&L Rs-1,079,399 (-12.44% of risk)
+  per spread: mean Rs-909, median Rs+0, worst Rs-126,446
+  margin blocked per spread ~ Rs5,369 median, Rs10,663 at the 90th percentile
+
+written: spread_nearexpiry_trades.csv, spread_cycles.csv, spread_slippage.csv

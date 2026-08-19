@@ -1,0 +1,95 @@
+C:\Users\abhiramnarla\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\numpy\lib\_function_base_impl.py:4596: RuntimeWarning: invalid value encountered in subtract
+  diff_b_a = b - a
+C:\Users\abhiramnarla\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\numpy\lib\_function_base_impl.py:4596: RuntimeWarning: invalid value encountered in subtract
+  diff_b_a = b - a
+C:\Users\abhiramnarla\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\numpy\lib\_function_base_impl.py:4596: RuntimeWarning: invalid value encountered in subtract
+  diff_b_a = b - a
+34,776 scored stock-days, 3,496 signals, 184 test sessions
+3,015,526 CALL bars, 189 symbols, 2025-02-17 -> 2026-08-18, offsets ATM, ATM+1, ATM+2
+
+======================================================================================================
+RUNG ATM -- buy the morning after the signal, hold 5 sessions
+======================================================================================================
+19,803 trades, 187 symbols, 184 sessions. Median premium Rs25.5 = 2.52% of spot. Quoted 34% of held bars.
+signal: 1,997 trades / 155 sessions   no signal: 17,806 / 184
+
+  measure                          SIGNAL    no signal        gap
+  pooled sum(pnl)/sum(cost)          7.1%       -11.9%     +19.0pp
+  equal-weighted mean               13.9%        24.3%     -10.4pp
+  median trade                     -37.2%       -45.6%      +8.4pp
+  win rate                          36.7%        31.8%      +4.9pp
+  per-session mean                  15.7%        19.0%      -3.3pp
+  per-session median               -30.3%       -22.2%      -8.1pp
+  positive sessions                 34.8%        38.6%      -3.7pp
+  premium as % of spot               3.5%         2.4%      +1.1pp
+
+  tail on a perfect exit           SIGNAL    no signal        gap
+  >=2x                              30.9%        28.3%      +2.7pp
+  >=3x                              13.8%        17.3%      -3.6pp
+  >=5x                               4.4%         7.8%      -3.4pp
+  >=10x                              1.3%         2.4%      -1.2pp
+
+  day-clustered t on the signal column: -0.92
+
+======================================================================================================
+RUNG ATM+1 -- buy the morning after the signal, hold 5 sessions
+======================================================================================================
+11,623 trades, 185 symbols, 184 sessions. Median premium Rs17.2 = 1.98% of spot. Quoted 38% of held bars.
+signal: 874 trades / 139 sessions   no signal: 10,749 / 184
+
+  measure                          SIGNAL    no signal        gap
+  pooled sum(pnl)/sum(cost)         -6.9%       -17.6%     +10.8pp
+  equal-weighted mean               52.4%        36.9%     +15.4pp
+  median trade                     -37.0%       -65.0%     +28.1pp
+  win rate                          37.8%        27.0%     +10.8pp
+  per-session mean                   6.6%        14.4%      -7.8pp
+  per-session median               -53.3%       -29.2%     -24.1pp
+  positive sessions                 21.6%        29.9%      -8.3pp
+  premium as % of spot               2.8%         1.9%      +0.9pp
+
+  tail on a perfect exit           SIGNAL    no signal        gap
+  >=2x                              34.2%        25.3%      +8.9pp
+  >=3x                              17.6%        17.0%      +0.6pp
+  >=5x                               8.8%         9.6%      -0.8pp
+  >=10x                              4.6%         4.2%      +0.3pp
+
+  day-clustered t on the signal column: -0.64
+
+======================================================================================================
+RUNG ATM+2 -- buy the morning after the signal, hold 5 sessions
+======================================================================================================
+18,050 trades, 115 symbols, 184 sessions. Median premium Rs15.6 = 1.62% of spot. Quoted 32% of held bars.
+signal: 1,927 trades / 151 sessions   no signal: 16,123 / 184
+
+  measure                          SIGNAL    no signal        gap
+  pooled sum(pnl)/sum(cost)         -4.6%       -16.9%     +12.3pp
+  equal-weighted mean               51.4%        48.4%      +3.1pp
+  median trade                     -78.0%      -100.3%     +22.3pp
+  win rate                          30.5%        26.3%      +4.2pp
+  per-session mean                  52.2%        72.8%     -20.6pp
+  per-session median               -46.3%       -22.8%     -23.5pp
+  positive sessions                 39.1%        38.6%      +0.5pp
+  premium as % of spot               2.4%         1.6%      +0.8pp
+
+  tail on a perfect exit           SIGNAL    no signal        gap
+  >=2x                              30.4%        27.1%      +3.3pp
+  >=3x                              18.2%        19.0%      -0.8pp
+  >=5x                               7.2%        12.2%      -5.0pp
+  >=10x                              3.1%         5.9%      -2.8pp
+
+  day-clustered t on the signal column: -0.47
+
+======================================================================================================
+THE LADDER -- does going cheaper convert the same move into a bigger
+multiple, and does the signal survive out there?
+======================================================================================================
+  rung       n signal per-sess med     pos sess       >=2x       >=3x       >=5x
+  ATM           1,997        -8.1pp        -3.7pp      +2.7pp      -3.6pp      -3.4pp
+  ATM+1           874       -24.1pp        -8.3pp      +8.9pp      +0.6pp      -0.8pp
+  ATM+2         1,927       -23.5pp        +0.5pp      +3.3pp      -0.8pp      -5.0pp
+
+  Every cell is SIGNAL minus NO-SIGNAL at that rung. A working cheap-strike
+  story needs the gaps to grow as the rung goes out. Flat or shrinking means
+  the OTM skew prices the move exactly as ATM does.
+
+wrote premove_otm.csv, premove_otm_summary.csv

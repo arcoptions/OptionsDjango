@@ -1,0 +1,44 @@
+[00:32:28] otm: 189 stocks, 2025-02-18 -> 2026-08-17, 15-day windows (37 per leg)
+[00:32:28] otm: 4 legs queued -- ATM+2 CALL, ATM-1 PUT, ATM+3 CALL, ATM-2 PUT
+[00:32:28] otm: leg 1/4 -- ATM+2 CALL
+[00:32:29] rolling: 247 windows queued
+[00:43:20]   rolling: 200/247 windows, 47,988 bars, 0 failed
+[00:44:55]   ! UNOMINDA ATM+2:CALL:1 2026-02-13: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[00:45:50] otm: leg 1/4 done -- 55,769 bars, 1 failed
+[00:45:50] otm: leg 2/4 -- ATM-1 PUT
+[00:45:51] rolling: 6993 windows queued
+[01:00:25]   rolling: 200/6993 windows, 47,523 bars, 0 failed
+[01:17:55]   rolling: 400/6993 windows, 96,741 bars, 0 failed
+[09:22:03]   ! MCX ATM-1:PUT:1 2025-02-18: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! MCX ATM-1:PUT:1 2025-03-20: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! KAYNES ATM-1:PUT:1 2026-07-28: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! KAYNES ATM-1:PUT:1 2026-06-28: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! MCX ATM-1:PUT:1 2025-04-04: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! MCX ATM-1:PUT:1 2025-04-19: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:03]   ! MCX ATM-1:PUT:1 2025-05-04: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:04]   ! MCX ATM-1:PUT:1 2025-03-05: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:04]   ! MCX ATM-1:PUT:1 2025-06-03: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:04]   ! MCX ATM-1:PUT:1 2025-05-19: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:04]   rolling: 600/6993 windows, 130,615 bars, 10 failed
+[09:22:04]   ! MCX ATM-1:PUT:1 2025-06-18: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:04]   ! MCX ATM-1:PUT:1 2025-07-03: HTTP 401: {"errorType":"Invalid_Authentication","errorCode":"DH-901","errorMessage":"Client ID or user generat
+[09:22:06]   rolling: 800/6993 windows, 130,615 bars, 210 failed
+[09:22:09]   rolling: 1000/6993 windows, 130,615 bars, 410 failed
+[09:22:11]   rolling: 1200/6993 windows, 130,615 bars, 610 failed
+[09:22:13]   rolling: 1400/6993 windows, 130,615 bars, 810 failed
+[09:22:15]   rolling: 1600/6993 windows, 130,615 bars, 1010 failed
+[09:22:17]   rolling: 1800/6993 windows, 130,615 bars, 1210 failed
+[09:22:18]   rolling: 2000/6993 windows, 130,615 bars, 1410 failed
+[09:22:20]   rolling: 2200/6993 windows, 130,615 bars, 1610 failed
+[09:22:22]   rolling: 2400/6993 windows, 130,615 bars, 1810 failed
+[09:22:24]   rolling: 2600/6993 windows, 130,615 bars, 2010 failed
+[09:22:26]   rolling: 2800/6993 windows, 130,615 bars, 2210 failed
+[09:22:28]   rolling: 3000/6993 windows, 130,615 bars, 2410 failed
+[09:22:30]   rolling: 3200/6993 windows, 130,615 bars, 2610 failed
+[09:22:32]   rolling: 3400/6993 windows, 130,615 bars, 2810 failed
+[09:22:34]   rolling: 3600/6993 windows, 130,615 bars, 3010 failed
+[09:22:37]   rolling: 3800/6993 windows, 130,615 bars, 3210 failed
+[09:22:39]   rolling: 4000/6993 windows, 130,615 bars, 3410 failed
+[09:22:41]   rolling: 4200/6993 windows, 130,615 bars, 3610 failed
+[09:22:43]   rolling: 4400/6993 windows, 130,615 bars, 3810 failed
+[09:22:45]   rolling: 4600/6993 windows, 130,615 bars, 4010 failed

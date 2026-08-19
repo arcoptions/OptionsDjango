@@ -1,0 +1,157 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<div class="panel">
+  <div class="row" style="justify-content:space-between;">
+    <div>
+      <strong style="font-size:20px;">{{ symbol }}</strong>
+      <div class="muted">
+        {% if stock %}rank {{ stock.priority }} by turnover &middot; lot {{ stock.lot_size }} &middot;
+        strike step {{ stock.strike_step|floatformat:"-2" }} &middot; brokers {{ stock.brokers }}{% endif %}
+      </div>
+    </div>
+    <a class="btn secondary" href="{% url 'stock_options' %}">&larr; All stocks</a>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="label">Last close</div><div class="value">{{ spot|floatformat:2 }}</div>
+    <div class="muted">{% if last_bar %}{{ last_bar|date:"d M y H:i" }}{% endif %}</div></div>
+  <div class="stat"><div class="label">Equity bars</div><div class="value">{{ bar_count }}</div>
+    <div class="muted">{% if first_bar %}from {{ first_bar|date:"d M y" }}{% endif %}</div></div>
+  <div class="stat"><div class="label">Contracts traded</div><div class="value">{{ trade_count }}</div></div>
+  <div class="stat"><div class="label">Realised on this name</div>
+    <div class="value" style="font-size:19px;">{{ traded_pnl }}</div></div>
+</div>
+
+{% if price_json != "[]" %}
+<div class="card">
+  <div class="muted" style="margin-bottom:6px;">Most recent 15-minute closes</div>
+  <canvas id="price" height="90" style="width:100%;"></canvas>
+</div>
+{% endif %}
+
+<div class="panel">
+  <strong>Strike ladder &mdash; live expiries</strong>
+  <div class="muted" style="margin-bottom:10px;">
+    Real contracts pulled per security id, so these are the actual strikes with the
+    actual open interest. Range is high&divide;low over every bar held, which is the
+    ceiling a perfectly-timed trade could have caught &mdash; not what was catchable.
+  </div>
+  {% if ladder %}
+  <div style="overflow-x:auto; max-height:520px; overflow-y:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th><th style="text-align:right;">Strike</th><th style="text-align:right;">Moneyness</th>
+        <th style="text-align:right;">Last</th><th style="text-align:right;">OI</th>
+        <th style="text-align:right;">Volume</th><th style="text-align:right;">Low</th>
+        <th style="text-align:right;">High</th><th style="text-align:right;">Range</th>
+        <th style="text-align:right;">Bars</th><th>As of</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in ladder %}
+      <tr>
+        <td><span class="active-pill" style="background:{% if row.option_type == 'CALL' %}#ecfdf5;color:#166534{% else %}#fef2f2;color:#991b1b{% endif %};">{{ row.option_type }}</span></td>
+        <td style="text-align:right; font-weight:700;">{{ row.strike|floatformat:"-2" }}</td>
+        <td style="text-align:right;" class="muted">{{ row.moneyness|floatformat:1 }}%</td>
+        <td style="text-align:right;">{{ row.close|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ row.oi }}</td>
+        <td style="text-align:right;">{{ row.volume }}</td>
+        <td style="text-align:right;">{{ row.low|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ row.high|floatformat:2 }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if row.range_x >= 3 %}var(--green){% else %}var(--muted){% endif %};">
+          {% if row.range_x %}{{ row.range_x|floatformat:1 }}&times;{% else %}&mdash;{% endif %}
+        </td>
+        <td style="text-align:right;" class="muted">{{ row.bars }}</td>
+        <td class="muted">{% if row.as_of %}{{ row.as_of|date:"d M H:i" }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="msg warning">No ladder data yet for {{ symbol }} &mdash; the ladder feed only
+    covers expiries still listed in Dhan's scrip master, and it is queued behind the
+    equity and rolling feeds.</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <strong>ATM-relative history</strong>
+  <div class="muted" style="margin-bottom:10px;">
+    The rolling feed follows the money instead of a fixed strike, so it reaches back
+    18 months and carries IV and OI on every bar. Only ATM&plusmn;3 exists &mdash; Dhan
+    returns nothing beyond that.
+  </div>
+  {% if rolling %}
+  <table>
+    <thead><tr><th>Type</th><th>Strike</th><th style="text-align:right;">Bars</th>
+      <th style="text-align:right;">Avg OI</th><th style="text-align:right;">Avg IV</th><th>Last bar</th></tr></thead>
+    <tbody>
+      {% for row in rolling %}
+      <tr>
+        <td>{{ row.option_type }}</td>
+        <td><strong>{{ row.relative_strike }}</strong></td>
+        <td style="text-align:right;">{{ row.bars }}</td>
+        <td style="text-align:right;">{{ row.avg_oi|floatformat:0 }}</td>
+        <td style="text-align:right;">{{ row.avg_iv|floatformat:1 }}</td>
+        <td class="muted">{{ row.last|date:"d M y H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="msg warning">No rolling option data for {{ symbol }} yet.</div>
+  {% endif %}
+</div>
+
+{% if trades %}
+<div class="panel">
+  <strong>What was actually traded on {{ symbol }}</strong>
+  <div class="muted" style="margin-bottom:10px;">{{ trade_count }} contracts, best to worst. Top 60 shown.</div>
+  <div style="overflow-x:auto; max-height:420px; overflow-y:auto;">
+  <table>
+    <thead><tr><th>Contract</th><th>Broker</th><th style="text-align:right;">Qty</th>
+      <th style="text-align:right;">Buy</th><th style="text-align:right;">Sell</th>
+      <th style="text-align:right;">Realised</th></tr></thead>
+    <tbody>
+      {% for trade in trades %}
+      <tr>
+        <td>{{ trade.raw_symbol }}</td>
+        <td class="muted">{{ trade.broker }}</td>
+        <td style="text-align:right;">{{ trade.quantity }}</td>
+        <td style="text-align:right;">{{ trade.buy_value|floatformat:0 }}</td>
+        <td style="text-align:right;">{{ trade.sell_value|floatformat:0 }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if trade.realised_pnl < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ trade.pnl_text }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  const series = {{ price_json|safe }};
+  const canvas = document.getElementById("price");
+  if (canvas && series.length > 1) {
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth, height = canvas.height;
+    canvas.width = width * dpr; canvas.height = height * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const values = series.map(point => point.c);
+    const low = Math.min(...values), high = Math.max(...values);
+    const span = (high - low) || 1;
+    const x = index => (index / (series.length - 1)) * (width - 8) + 4;
+    const y = value => height - 8 - ((value - low) / span) * (height - 16);
+    ctx.beginPath();
+    series.forEach((point, index) => index ? ctx.lineTo(x(index), y(point.c)) : ctx.moveTo(x(index), y(point.c)));
+    ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.lineTo(x(series.length - 1), height); ctx.lineTo(x(0), height); ctx.closePath();
+    ctx.fillStyle = "rgba(37,99,235,0.08)"; ctx.fill();
+  }
+</script>
+{% endblock %}

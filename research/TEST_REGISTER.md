@@ -186,6 +186,7 @@ against the modelled ones. It is not something to switch on for day one.
 |---|---|
 | Is the ₹200 upper bound real? | **No.** The bands either side of it disagree at random. Removed; the floor is the whole finding. |
 | Does the previous-day break combine with the shipped strategy? | **Yes, and it adds beyond the sum of the parts** — but it is decaying and it is fragile to live-fill delay, so it is not in the finalised config. Full analysis in the section above. |
+| Can a stock-option buying strategy catch the 2–10x moves? | **No, and the reason is now measured rather than argued.** A 2x is present in 44.7% of real deep-OTM contracts and delivered by a placeable rule on 7.0% of entries; a 10x is present in 4.3% and delivered on 0.1%. A hindsight-perfect exit closes none of the 10x gap, so the exit is not the missing piece. A predictor *was* built and works (AUC 0.703 on stock motion, 2.36–3.12x lift) but re-targeted at the option's own profit it collapses to AUC 0.519 — the predictable part of the problem is not the part that decides the money. ₹1L returns +110.5% over 56 sessions and **−69.2% with three July sessions removed**. Full analysis in `DEEP_OTM_REPORT.md`. |
 
 ---
 
@@ -230,4 +231,4 @@ against the modelled ones. It is not something to switch on for day one.
 
 ---
 
-*Last updated: 2026-08-16*
+*Last updated: 2026-08-19*

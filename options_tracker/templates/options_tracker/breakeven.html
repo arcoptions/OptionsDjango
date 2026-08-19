@@ -1,0 +1,183 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<div class="panel" style="border-color:#fecaca; background:#fff7f7;">
+  <div class="row" style="justify-content:space-between; align-items:flex-end;">
+    <div>
+      <div class="muted">Total hole to fill &mdash; realised, net of every charge, plus open positions</div>
+      <div style="font-size:44px; font-weight:800; color:var(--danger); line-height:1.1;">&#8377;{{ hole_text }}</div>
+      <div class="muted">{{ contracts }} contracts across {{ periods|length }} statement periods, Apr 2025 &rarr; Aug 2026</div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(150px,1fr)); min-width:330px;">
+      <div class="stat"><div class="label">Gross realised</div>
+        <div class="value" style="font-size:19px; color:var(--danger);">&#8377;{{ gross_text }}</div></div>
+      <div class="stat"><div class="label">Charges paid</div>
+        <div class="value" style="font-size:19px;">&#8377;{{ charges_text }}</div></div>
+      <div class="stat"><div class="label">Net realised</div>
+        <div class="value" style="font-size:19px; color:var(--danger);">&#8377;{{ net_text }}</div></div>
+      <div class="stat"><div class="label">Open positions</div>
+        <div class="value" style="font-size:19px;">&#8377;{{ unrealised_text }}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="border-color:#fde68a; background:#fffdf5;">
+  <strong style="font-size:16px;">The charges are not what did this</strong>
+  <p style="margin:8px 0 12px; line-height:1.6;">
+    You asked to see the hole including STT and the rest, so here it is measured
+    rather than assumed. Across &#8377;{{ turnover_text }} of turnover the brokers took
+    &#8377;{{ charges_text }} &mdash; <strong>{{ charge_rate_pct|floatformat:3 }}% of turnover</strong>,
+    or &#8377;{{ charge_per_lakh }} per lakh traded. That is
+    <strong>{{ charge_share_of_loss|floatformat:1 }}%</strong> of the gross loss.
+    The other {{ charge_share_of_loss|floatformat:1 }}%-complement came from the trades themselves:
+    the gross edge was <strong style="color:var(--danger);">{{ gross_edge_pct|floatformat:2 }}% of turnover</strong>.
+    Cutting brokerage to zero would have left roughly &#8377;{{ gross_text }} of the
+    loss standing. The edge is the problem; costs are a rounding error on top of it.
+  </p>
+  <div class="grid">
+    {% for line in charge_lines %}
+    <div class="stat">
+      <div class="label">{{ line.name }}</div>
+      <div class="value" style="font-size:17px;">&#8377;{{ line.text }}</div>
+      <div class="muted">{{ line.share|floatformat:1 }}% of charges</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <strong>What it takes to climb out</strong>
+  <div class="muted" style="margin-bottom:10px;">
+    Turnover required to clear &#8377;{{ hole_text }} at a given <em>net</em> edge &mdash;
+    net meaning after the {{ charge_rate_pct|floatformat:3 }}% charge drag is already paid.
+    The right-hand column is the honest one: it compares the required turnover with
+    everything traded so far.
+  </div>
+  <table>
+    <thead><tr>
+      <th>Net edge on turnover</th>
+      <th style="text-align:right;">Turnover needed</th>
+      <th style="text-align:right;">Charges on that turnover</th>
+      <th style="text-align:right;">vs. turnover to date</th>
+    </tr></thead>
+    <tbody>
+      {% for row in ladder %}
+      <tr>
+        <td><strong>{{ row.edge }}%</strong></td>
+        <td style="text-align:right;">&#8377;{{ row.turnover_text }}</td>
+        <td style="text-align:right;" class="muted">&#8377;{{ row.charges }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if row.vs_past > 1 %}var(--danger){% else %}var(--green){% endif %};">
+          {{ row.vs_past|floatformat:2 }}&times;
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="muted" style="margin-top:8px;">
+    For scale: the account's realised edge over this whole period was
+    <strong style="color:var(--danger);">{{ gross_edge_pct|floatformat:2 }}%</strong>. Every row
+    above assumes that sign flips first.
+  </div>
+</div>
+
+<div class="panel">
+  <strong>Same hole, as a monthly grind</strong>
+  <div class="muted" style="margin-bottom:10px;">
+    If the edge does flip, this is how long &#8377;{{ hole_text }} takes to recover at a
+    steady monthly return on working capital. No compounding assumed &mdash; withdrawals
+    to fill the hole are what pay it back.
+  </div>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>Working capital</th><th style="text-align:right;">Monthly return</th>
+      <th style="text-align:right;">Monthly profit</th><th style="text-align:right;">Months</th>
+      <th style="text-align:right;">Years</th></tr></thead>
+    <tbody>
+      {% for plan in capital_plans %}
+      <tr>
+        <td>&#8377;{{ plan.capital_text }}</td>
+        <td style="text-align:right;">{{ plan.monthly_pct }}%</td>
+        <td style="text-align:right;">&#8377;{{ plan.monthly_text }}</td>
+        <td style="text-align:right; font-weight:700;">{{ plan.months|floatformat:0 }}</td>
+        <td style="text-align:right; color:{% if plan.years > 5 %}var(--danger){% else %}var(--green){% endif %};">{{ plan.years|floatformat:1 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="panel">
+  <strong>By broker</strong>
+  <table style="margin-top:8px;">
+    <thead><tr><th>Broker</th><th style="text-align:right;">Gross</th>
+      <th style="text-align:right;">Charges</th><th style="text-align:right;">Net</th></tr></thead>
+    <tbody>
+      {% for row in broker_rows %}
+      <tr>
+        <td><strong>{{ row.broker }}</strong></td>
+        <td style="text-align:right; color:{% if row.gross < 0 %}var(--danger){% else %}var(--green){% endif %};">&#8377;{{ row.gross_text }}</td>
+        <td style="text-align:right;">&#8377;{{ row.charges_text }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if row.net < 0 %}var(--danger){% else %}var(--green){% endif %};">&#8377;{{ row.net_text }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="muted" style="margin-top:10px;">Statement periods, so you can check the arithmetic against the source files:</div>
+  <table style="margin-top:6px;">
+    <thead><tr><th>Broker</th><th>Period</th><th>File</th>
+      <th style="text-align:right;">Gross</th><th style="text-align:right;">Charges</th>
+      <th style="text-align:right;">Net</th></tr></thead>
+    <tbody>
+      {% for period in periods %}
+      <tr>
+        <td>{{ period.broker }}</td>
+        <td class="muted">{{ period.period_from|date:"d M y" }} &rarr; {{ period.period_to|date:"d M y" }}</td>
+        <td class="muted" style="font-size:11px;">{{ period.source_file }}</td>
+        <td style="text-align:right;">{{ period.gross_realised|floatformat:0 }}</td>
+        <td style="text-align:right;">{{ period.charges|floatformat:0 }}</td>
+        <td style="text-align:right; font-weight:700;">{{ period.net_realised|floatformat:0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 1fr;">
+  <div class="panel">
+    <strong style="color:var(--danger);">Where the money went</strong>
+    <div class="muted" style="margin-bottom:8px;">
+      The worst twelve names account for &#8377;{{ concentration_text }} &mdash;
+      {{ concentration_pct|floatformat:0 }}% of the entire gross loss.
+    </div>
+    <table>
+      <thead><tr><th>Symbol</th><th style="text-align:right;">Realised</th><th style="text-align:right;">Turnover</th></tr></thead>
+      <tbody>
+        {% for stock in worst %}
+        <tr>
+          <td><a href="{% url 'stock_option_detail' stock.symbol %}"><strong>{{ stock.symbol }}</strong></a></td>
+          <td style="text-align:right; color:var(--danger); font-weight:700;">{{ stock.pnl_text }}</td>
+          <td style="text-align:right;" class="muted">{{ stock.turnover_text }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <strong style="color:var(--green);">What actually worked</strong>
+    <div class="muted" style="margin-bottom:8px;">Net-positive names, biggest first.</div>
+    <table>
+      <thead><tr><th>Symbol</th><th style="text-align:right;">Realised</th><th style="text-align:right;">Turnover</th></tr></thead>
+      <tbody>
+        {% for stock in best %}
+        <tr>
+          <td><a href="{% url 'stock_option_detail' stock.symbol %}"><strong>{{ stock.symbol }}</strong></a></td>
+          <td style="text-align:right; color:var(--green); font-weight:700;">{{ stock.pnl_text }}</td>
+          <td style="text-align:right;" class="muted">{{ stock.turnover_text }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

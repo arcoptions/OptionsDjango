@@ -1,0 +1,65 @@
+C:\Users\abhiramnarla\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\django\db\models\fields\__init__.py:1612: RuntimeWarning: DateTimeField StockEquityCandle.timestamp received a naive datetime (2026-04-01 00:00:00) while time zone support is active.
+  warnings.warn(
+[22:48:04] spot range known for 189 tracked symbols
+[22:48:04]   6,366 with data, 8,914 known-empty
+[22:48:04] 15,280 contracts already on disk -- they will be skipped
+[22:48:06] 12,838 contracts to pull across 181 symbols, 2 expiries
+[22:48:06] bands: calls 0.98-1.25 x spot, puts 0.75-1.02 x spot
+[22:48:52]   250/12,838 contracts, 172 with data, 3,022 bars, 78 empty
+[22:49:38]   500/12,838 contracts, 332 with data, 5,848 bars, 168 empty
+[22:50:28]   750/12,838 contracts, 505 with data, 8,779 bars, 245 empty
+[22:51:12]   1,000/12,838 contracts, 664 with data, 11,402 bars, 336 empty
+[22:51:53]   1,250/12,838 contracts, 834 with data, 14,451 bars, 416 empty
+[22:52:36]   1,500/12,838 contracts, 992 with data, 17,145 bars, 508 empty
+[22:53:20]   1,750/12,838 contracts, 1,160 with data, 20,114 bars, 590 empty
+[22:54:04]   2,000/12,838 contracts, 1,310 with data, 22,716 bars, 690 empty
+[22:54:46]   2,250/12,838 contracts, 1,458 with data, 25,370 bars, 792 empty
+[22:55:08]   shard -> research/deep_otm.part4.parquet
+[22:55:28]   2,500/12,838 contracts, 1,598 with data, 27,868 bars, 902 empty
+[22:56:12]   2,750/12,838 contracts, 1,748 with data, 30,656 bars, 1,002 empty
+[22:56:56]   3,000/12,838 contracts, 1,900 with data, 33,274 bars, 1,100 empty
+[22:57:40]   3,250/12,838 contracts, 2,044 with data, 35,896 bars, 1,206 empty
+[22:58:23]   3,500/12,838 contracts, 2,176 with data, 38,398 bars, 1,324 empty
+[22:59:07]   3,750/12,838 contracts, 2,311 with data, 40,975 bars, 1,439 empty
+[22:59:52]   4,000/12,838 contracts, 2,435 with data, 43,237 bars, 1,565 empty
+[23:00:46]   4,250/12,838 contracts, 2,570 with data, 45,627 bars, 1,680 empty
+[23:01:35]   4,500/12,838 contracts, 2,701 with data, 48,090 bars, 1,799 empty
+[23:02:19]   4,750/12,838 contracts, 2,821 with data, 50,274 bars, 1,929 empty
+[23:03:03]   5,000/12,838 contracts, 2,933 with data, 52,144 bars, 2,067 empty
+[23:03:38]   shard -> research/deep_otm.part5.parquet
+[23:03:47]   5,250/12,838 contracts, 3,044 with data, 54,107 bars, 2,206 empty
+[23:04:31]   5,500/12,838 contracts, 3,150 with data, 56,074 bars, 2,350 empty
+[23:05:16]   5,750/12,838 contracts, 3,233 with data, 57,405 bars, 2,517 empty
+[23:06:02]   6,000/12,838 contracts, 3,314 with data, 58,924 bars, 2,686 empty
+[00:05:23]   6,250/12,838 contracts, 3,388 with data, 60,468 bars, 2,862 empty
+[00:06:08]   6,500/12,838 contracts, 3,450 with data, 61,764 bars, 3,050 empty
+[00:06:53]   6,750/12,838 contracts, 3,502 with data, 62,811 bars, 3,248 empty
+[00:07:38]   7,000/12,838 contracts, 3,545 with data, 63,660 bars, 3,455 empty
+[00:08:22]   7,250/12,838 contracts, 3,565 with data, 64,164 bars, 3,685 empty
+[00:09:04]   7,500/12,838 contracts, 3,595 with data, 64,880 bars, 3,905 empty
+[00:09:49]   7,750/12,838 contracts, 3,612 with data, 65,322 bars, 4,138 empty
+[00:10:33]   8,000/12,838 contracts, 3,624 with data, 65,608 bars, 4,376 empty
+[00:11:17]   8,250/12,838 contracts, 3,651 with data, 66,365 bars, 4,599 empty
+[00:12:00]   8,500/12,838 contracts, 3,667 with data, 66,734 bars, 4,833 empty
+[00:12:50]   8,750/12,838 contracts, 3,687 with data, 67,283 bars, 5,063 empty
+[00:13:32]   9,000/12,838 contracts, 3,705 with data, 67,705 bars, 5,295 empty
+[00:14:16]   9,250/12,838 contracts, 3,719 with data, 68,001 bars, 5,531 empty
+[00:17:26]   9,500/12,838 contracts, 3,725 with data, 68,139 bars, 5,775 empty
+[00:18:22]   9,750/12,838 contracts, 3,736 with data, 68,421 bars, 6,014 empty
+[00:19:06]   10,000/12,838 contracts, 3,747 with data, 68,790 bars, 6,253 empty
+[00:19:50]   10,250/12,838 contracts, 3,760 with data, 69,211 bars, 6,490 empty
+[00:20:33]   10,500/12,838 contracts, 3,770 with data, 69,410 bars, 6,730 empty
+[00:21:16]   10,750/12,838 contracts, 3,783 with data, 69,746 bars, 6,967 empty
+[00:22:01]   11,000/12,838 contracts, 3,792 with data, 70,024 bars, 7,208 empty
+[00:22:44]   11,250/12,838 contracts, 3,800 with data, 70,212 bars, 7,450 empty
+[00:23:27]   11,500/12,838 contracts, 3,803 with data, 70,292 bars, 7,697 empty
+[00:24:13]   11,750/12,838 contracts, 3,805 with data, 70,342 bars, 7,945 empty
+[00:24:57]   12,000/12,838 contracts, 3,813 with data, 70,547 bars, 8,187 empty
+[00:25:40]   12,250/12,838 contracts, 3,817 with data, 70,676 bars, 8,433 empty
+[00:26:24]   12,500/12,838 contracts, 3,821 with data, 70,811 bars, 8,679 empty
+[00:27:14]   12,750/12,838 contracts, 3,827 with data, 70,976 bars, 8,923 empty
+[00:27:38] 17,924 listed-but-never-traded strikes recorded in research/deep_otm_empty.csv
+[00:27:39] dropped 114,138 duplicate bars (37.7%)
+[00:27:39] wrote research/deep_otm.parquet -- 188,850 bars, 10,194 contracts, 181 symbols
+[00:27:39] span 2026-05-27 .. 2026-08-17
+[00:27:39] 9,010 listed strikes never traded (70% of the chain we asked for)

@@ -1,0 +1,51 @@
+[15:37:04] otm: 189 stocks, 2025-02-18 -> 2026-08-17, 15-day windows (37 per leg)
+[15:37:04] otm: 4 legs queued -- ATM+2 CALL, ATM-1 PUT, ATM+3 CALL, ATM-2 PUT
+[15:37:04] otm: leg 1/4 -- ATM+2 CALL
+[15:37:04] fetching Dhan scrip master
+[15:37:09] rolling: 6993 windows queued
+[15:37:43]   ! NATIONALUM ATM+2:CALL:1 2025-09-01: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:37:45]   ! NATIONALUM ATM+2:CALL:1 2025-09-16: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:44:14]   ! DIXON ATM+2:CALL:1 2025-09-16: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:45:20]   ! DIXON ATM+2:CALL:1 2026-01-29: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:49:36]   ! BEL ATM+2:CALL:1 2025-09-16: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:49:36]   rolling: 200/6993 windows, 44,895 bars, 5 failed
+[15:50:42]   ! BEL ATM+2:CALL:1 2026-01-29: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:52:15]   ! LAURUSLABS ATM+2:CALL:1 2025-09-01: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:52:20]   ! LAURUSLABS ATM+2:CALL:1 2025-09-16: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:53:11]   ! LAURUSLABS ATM+2:CALL:1 2025-12-30: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[15:53:25]   ! LAURUSLABS ATM+2:CALL:1 2026-01-29: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[16:01:47]   rolling: 400/6993 windows, 92,469 bars, 10 failed
+[16:10:10]   rolling: 600/6993 windows, 128,739 bars, 10 failed
+[16:21:08]   rolling: 800/6993 windows, 177,758 bars, 10 failed
+[16:49:12]   rolling: 1000/6993 windows, 221,328 bars, 10 failed
+[16:58:31]   rolling: 1200/6993 windows, 269,567 bars, 10 failed
+[17:00:24]   ! TRENT ATM+2:CALL:1 2025-09-01: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[17:00:30]   ! TRENT ATM+2:CALL:1 2025-09-16: HTTP 504: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd
+[17:12:44]   rolling: 1400/6993 windows, 310,507 bars, 35 failed
+[17:24:26]   rolling: 1600/6993 windows, 356,608 bars, 41 failed
+[17:32:49]   rolling: 1800/6993 windows, 401,434 bars, 41 failed
+[17:39:07]   rolling: 2000/6993 windows, 450,302 bars, 41 failed
+[17:44:39]   rolling: 2200/6993 windows, 496,184 bars, 41 failed
+[18:55:34]   rolling: 2400/6993 windows, 543,688 bars, 41 failed
+[19:00:01]   rolling: 2600/6993 windows, 592,123 bars, 41 failed
+[19:04:06]   rolling: 2800/6993 windows, 638,086 bars, 41 failed
+[19:08:40]   rolling: 3000/6993 windows, 686,762 bars, 41 failed
+[19:13:53]   rolling: 3200/6993 windows, 732,293 bars, 41 failed
+[19:19:51]   rolling: 3400/6993 windows, 776,673 bars, 41 failed
+[19:24:01]   rolling: 3600/6993 windows, 816,981 bars, 41 failed
+[19:29:42]   rolling: 3800/6993 windows, 863,300 bars, 41 failed
+[19:35:22]   rolling: 4000/6993 windows, 911,020 bars, 41 failed
+[19:40:57]   rolling: 4200/6993 windows, 959,290 bars, 41 failed
+[19:48:51]   rolling: 4400/6993 windows, 1,005,951 bars, 41 failed
+[19:58:39]   rolling: 4600/6993 windows, 1,053,672 bars, 41 failed
+[20:08:18]   rolling: 4800/6993 windows, 1,093,210 bars, 47 failed
+[20:15:12]   rolling: 5000/6993 windows, 1,139,989 bars, 47 failed
+[20:27:39]   rolling: 5200/6993 windows, 1,186,635 bars, 54 failed
+[20:38:47]   rolling: 5400/6993 windows, 1,229,314 bars, 57 failed
+[20:45:57]   rolling: 5600/6993 windows, 1,263,662 bars, 57 failed
+[20:54:30]   rolling: 5800/6993 windows, 1,306,085 bars, 57 failed
+[21:01:18]   rolling: 6000/6993 windows, 1,347,637 bars, 57 failed
+[21:06:27]   rolling: 6200/6993 windows, 1,386,064 bars, 57 failed
+[21:12:32]   rolling: 6400/6993 windows, 1,430,059 bars, 57 failed
+[21:21:14]   rolling: 6600/6993 windows, 1,474,414 bars, 57 failed
+[21:32:11]   rolling: 6800/6993 windows, 1,514,367 bars, 67 failed

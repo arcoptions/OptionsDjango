@@ -58,6 +58,17 @@ DATABASES = {
     )
 }
 
+# The bulk downloaders write from four threads at once, and stock SQLite locks
+# the whole file for each of them. WAL lets readers through while a write is in
+# flight, and the timeout makes a contended writer wait instead of raising
+# "database is locked" and losing the window.
+if DATABASES["default"]["ENGINE"].endswith("sqlite3"):
+    DATABASES["default"].setdefault("OPTIONS", {}).update({
+        "timeout": 60,
+        "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+        "transaction_mode": "IMMEDIATE",
+    })
+
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = "en-us"

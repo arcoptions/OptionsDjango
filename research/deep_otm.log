@@ -1,0 +1,32 @@
+[21:41:04] spot known for 189 tracked symbols
+[21:41:07] 15,280 contracts to pull across 181 symbols, 2 expiries
+[21:41:07] bands: calls 0.98-1.25 x spot, puts 0.75-1.02 x spot
+[21:41:56]   250/15,280 contracts, 185 with data, 3,282 bars, 65 empty
+[21:43:26]   750/15,280 contracts, 544 with data, 9,239 bars, 206 empty
+[21:44:13]   1,000/15,280 contracts, 722 with data, 12,372 bars, 278 empty
+[21:46:27]   1,750/15,280 contracts, 1,277 with data, 22,214 bars, 473 empty
+[21:47:35]   shard -> research/deep_otm.part0.parquet
+[21:48:37]   2,500/15,280 contracts, 1,803 with data, 32,158 bars, 697 empty
+[21:50:05]   3,000/15,280 contracts, 2,156 with data, 38,564 bars, 844 empty
+[21:50:50]   3,250/15,280 contracts, 2,322 with data, 41,788 bars, 928 empty
+[21:51:40]   3,500/15,280 contracts, 2,504 with data, 45,118 bars, 996 empty
+[21:52:23]   3,750/15,280 contracts, 2,674 with data, 48,361 bars, 1,076 empty
+[21:53:05]   4,000/15,280 contracts, 2,843 with data, 51,759 bars, 1,157 empty
+[21:53:48]   4,250/15,280 contracts, 3,016 with data, 55,064 bars, 1,234 empty
+[21:53:55]   shard -> research/deep_otm.part1.parquet
+[21:55:17]   4,750/15,280 contracts, 3,359 with data, 61,106 bars, 1,391 empty
+[21:56:01]   5,000/15,280 contracts, 3,536 with data, 64,319 bars, 1,464 empty
+[21:56:50]   5,250/15,280 contracts, 3,703 with data, 67,579 bars, 1,547 empty
+[21:59:51]   6,250/15,280 contracts, 4,342 with data, 79,454 bars, 1,908 empty
+[22:00:35]   6,500/15,280 contracts, 4,499 with data, 82,505 bars, 2,001 empty
+[22:00:45]   shard -> research/deep_otm.part2.parquet
+[22:10:23]   8,250/15,280 contracts, 5,165 with data, 94,868 bars, 3,085 empty
+[22:22:31]   9,750/15,280 contracts, 5,398 with data, 99,401 bars, 4,352 empty
+[22:23:48]   10,000/15,280 contracts, 5,467 with data, 100,753 bars, 4,533 empty
+[22:24:35]   10,250/15,280 contracts, 5,559 with data, 102,552 bars, 4,691 empty
+[22:29:58]   11,000/15,280 contracts, 5,663 with data, 104,583 bars, 5,337 empty
+[22:34:42]   shard -> research/deep_otm.part3.parquet
+[22:42:40]   15,000/15,280 contracts, 6,346 with data, 119,823 bars, 8,654 empty
+[22:43:34] wrote research/deep_otm.parquet -- 120,281 bars, 6,366 contracts, 181 symbols
+[22:43:34] span 2026-05-27 .. 2026-08-17
+[22:43:34] 8,914 listed strikes never traded (58% of the chain we asked for)

@@ -1,0 +1,100 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<div class="panel">
+  <div class="row" style="justify-content:space-between;">
+    <div>
+      <strong style="font-size:16px;">Tracked stock universe</strong>
+      <div class="muted">Every underlying the account has traded across Zerodha, Sahi and Dhan since Apr 2025. Nothing here is a watchlist &mdash; it is the record.</div>
+    </div>
+    <form method="get" class="row" style="margin:0; gap:8px;">
+      <input type="search" name="q" value="{{ query }}" placeholder="Symbol" style="width:160px;" />
+      <input type="hidden" name="sort" value="{{ sort }}" />
+      <button class="btn secondary" type="submit">Find</button>
+    </form>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="label">Stocks tracked</div><div class="value">{{ total_stocks }}</div>
+    <div class="muted">{{ winners }} net positive, {{ losers }} net negative</div></div>
+  <div class="stat"><div class="label">Equity bars</div><div class="value">{{ equity_bars }}</div>
+    <div class="muted">{{ covered }}/{{ total_stocks }} stocks have 15-min history</div></div>
+  <div class="stat"><div class="label">Option bars</div><div class="value">{{ option_bars }}</div>
+    <div class="muted">{{ option_covered }}/{{ total_stocks }} stocks have option history</div></div>
+  <div class="stat"><div class="label">Won / lost by name</div>
+    <div class="value" style="font-size:16px;">
+      <span style="color:var(--green);">{{ won }}</span> /
+      <span style="color:var(--danger);">{{ lost }}</span>
+    </div>
+    <div class="muted">gross realised, before charges</div></div>
+</div>
+
+{% if job_table %}
+<div class="card">
+  <div class="muted" style="margin-bottom:8px;">Download progress by feed</div>
+  <div class="row">
+    {% for job in job_table %}
+      <span class="active-pill">{{ job.kind }}: {{ job.DONE }} done{% if job.FAIL %}, {{ job.FAIL }} failed{% endif %}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="tabs" style="margin-bottom:10px;">
+    <a href="?sort=priority&q={{ query }}" class="{% if sort == 'priority' %}active{% endif %}">By turnover rank</a>
+    <a href="?sort=loss&q={{ query }}" class="{% if sort == 'loss' %}active{% endif %}">Biggest losers</a>
+    <a href="?sort=pnl&q={{ query }}" class="{% if sort == 'pnl' %}active{% endif %}">Biggest winners</a>
+    <a href="?sort=edge&q={{ query }}" class="{% if sort == 'edge' %}active{% endif %}">Worst edge</a>
+    <a href="?sort=bars&q={{ query }}" class="{% if sort == 'bars' %}active{% endif %}">Most data</a>
+    <a href="?sort=symbol&q={{ query }}" class="{% if sort == 'symbol' %}active{% endif %}">A&ndash;Z</a>
+  </div>
+
+  <div style="overflow-x:auto; max-height:640px; overflow-y:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Symbol</th><th>Brokers</th>
+        <th style="text-align:right;">Realised P&amp;L</th>
+        <th style="text-align:right;">Turnover</th>
+        <th style="text-align:right;">Edge (bps)</th>
+        <th style="text-align:right;">Contracts</th>
+        <th style="text-align:right;">Lot</th>
+        <th style="text-align:right;">Step</th>
+        <th style="text-align:right;">Equity bars</th>
+        <th style="text-align:right;">Option bars</th>
+        <th>Coverage</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="muted">{{ row.priority }}</td>
+        <td><a href="{% url 'stock_option_detail' row.symbol %}"><strong>{{ row.symbol }}</strong></a></td>
+        <td class="muted">{{ row.brokers }}</td>
+        <td style="text-align:right; color:{% if row.pnl < 0 %}var(--danger){% else %}var(--green){% endif %}; font-weight:700;">{{ row.pnl_text }}</td>
+        <td style="text-align:right;">{{ row.turnover_text }}</td>
+        <td style="text-align:right; color:{% if row.edge_bps < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ row.edge_bps|floatformat:0 }}</td>
+        <td style="text-align:right;">{{ row.contracts }}</td>
+        <td style="text-align:right;">{{ row.lot_size }}</td>
+        <td style="text-align:right;">{{ row.strike_step|floatformat:"-2" }}</td>
+        <td style="text-align:right;">{{ row.equity_bars }}</td>
+        <td style="text-align:right;">{{ row.option_bars }}</td>
+        <td class="muted">
+          {% if row.first_bar %}{{ row.first_bar|date:"M y" }} &rarr; {{ row.last_bar|date:"d M y" }}{% else %}&mdash;{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="12" class="muted">No stocks match.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="muted" style="margin-top:8px;">
+    Edge is realised P&amp;L per &#8377;10,000 of turnover. It is the honest per-trade
+    number: a name can lose a lot simply by being traded a lot, and this separates
+    the two.
+  </div>
+</div>
+{% endblock %}

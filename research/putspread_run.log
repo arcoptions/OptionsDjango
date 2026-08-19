@@ -1,0 +1,78 @@
+loaded 1,080,003 ATM/ATM+1 PUT bars, 189 symbols, 2025-02-17 -> 2026-08-18
+18 expiries detected from the call series, 2025-02-27 -> 2026-07-28
+
+439,158 raw bull put spreads, 175 symbols, 163 sessions, 2025-02-18 -> 2026-08-18
+median gap Rs20.0, credit Rs6.90 (53% of gap), risk Rs5.65
+
+quality filter -> 352,066 of 439,158 survive (80%)
+
+  exit      quoted%     n quoted    n imputed
+  2h          55.8%      193,553      346,997
+  EOD         34.4%      116,441      338,089
+  2d          24.6%       77,609      315,516
+  5d          15.3%       37,571      245,065
+
+============================================================================================
+BULL PUT SPREAD -- quoted exits only
+  Sell ATM+1 put, buy ATM put. Survivorship-bitten, shown for comparison.
+============================================================================================
+  exit    P&L/sprd   ROI/risk     win%   p10 ROI    t(day) cal.days        n
+  2h        -1.121     -8.45%    25.5%    -34.2%     -8.85        0   193553
+  EOD       -1.302     -9.95%    25.1%    -41.0%    -14.25        1   116441
+  2d        -1.529    -11.88%    23.5%    -45.6%    -10.83        2    77609
+  5d        -1.915    -15.37%    19.8%    -50.5%    -11.61        7    37571
+
+============================================================================================
+BULL PUT SPREAD -- missing legs imputed at intrinsic
+  The headline. Long delta over a rising sample, so a LOSS here cannot be blamed on direction.
+============================================================================================
+  exit    P&L/sprd   ROI/risk     win%   p10 ROI    t(day) cal.days        n
+  2h        -3.791    -22.90%    34.8%   -103.5%     -7.65        0   346997
+  EOD       -3.659    -21.93%    39.6%   -104.8%     -8.03        1   338089
+  2d        -3.306    -19.57%    43.2%   -105.7%     -6.42        2   315516
+  5d        -2.686    -15.37%    48.8%   -106.9%     -3.48        7   245065
+
+--------------------------------------------------------------------------------------------
+BY MONTH at 5 days. A bull put spread is LONG delta. If P&L tracks the
+market rising, it is the same direction bet the call spread was, reversed.
+--------------------------------------------------------------------------------------------
+  month       ROI/risk   spot move      win%        n
+  2025-02      -33.77%      +0.23%     42.8%     8242
+  2025-03       -4.58%      +2.16%     60.7%    36915
+  2025-04        0.92%      +1.92%     60.8%    37414
+  2025-05      -12.53%      +1.01%     51.0%    45879
+  2025-06      -22.75%      +0.26%     45.2%    48507
+  2025-07      -35.92%      -0.83%     33.8%    48293
+  2025-08        8.38%      +0.64%     54.0%     6178
+  2026-07       -9.53%      -0.26%     44.3%     8557
+  2026-08        7.74%      -0.28%     43.5%     5070
+
+  correlation(monthly ROI, monthly spot move) = +0.42
+
+============================================================================================
+BOX CHECK -- both spreads on the same symbol at the same instant.
+This is NOT a delta-neutral premium test, though it looks like one. Short
+C(k_low)/long C(k_high) plus short P(k_high)/long P(k_low) is short a forward
+at k_low and long one at k_high: a BOX, worth exactly the gap at every instant
+by put-call parity, with no delta, theta or vega. Its value is knowing the
+fair price with no model -- so what it measures is pure round-trip friction.
+============================================================================================
+call side: 508,821 clean spreads; put side: 352,066
+both openable at the same instant, same gap: 334,637 paired entries, 172 symbols, 2025-02-18 -> 2026-08-17
+
+  fair value of the box = the gap, Rs20.00 median. Credits sum to Rs18.25.
+  entry shortfall vs arbitrage-free: median Rs+0.25 (2.45% of the gap).
+
+  exit      call ROI     put ROI          BOX       win%   t(day)         n
+  2h          -4.11%     -20.56%      -11.54%      14.7%   -19.56   331,289
+  EOD         -5.62%     -19.93%      -12.12%      14.7%   -18.19   324,386
+  2d          -8.60%     -17.10%      -12.51%      14.0%   -17.41   303,311
+  5d         -15.00%     -13.09%      -14.10%      12.0%   -16.64   235,746
+
+  corr(box P&L, spot move): 2h +0.599, EOD +0.491, 2d +0.404, 5d +0.299
+  Near zero at every horizon, which is the box confirming itself. The BOX
+  column is therefore a friction measurement, not evidence about premium.
+  The two verdicts that DO stand are the call and put columns, separately:
+  opposite direction bets, both losing, which no direction story explains.
+
+wrote putspread_summary.csv, putspread_months.csv, putspread_paired.csv
