@@ -8,7 +8,7 @@ loading CALL...
   3,684,578 CALL bars, 189 symbols
 
 loading PUT...
-  1,680,284 PUT bars, 189 symbols
+  1,688,478 PUT bars, 189 symbols
 
 4,991 option trades priced
 
@@ -117,3 +117,33 @@ CAN THE REGIME BE CALLED IN ADVANCE? (breadth at the prior close)
   that decays from +94pp to +21pp across the sample. There is no
   in-advance regime filter here. The regime risk has to be borne, not
   timed -- which is the real reason this is a market bet.
+
+============================================================================================================
+DOES THE EXIT LOWER THE HURDLE? (no -- it breaks the measure)
+============================================================================================================
+
+  exit rule           break-even     median       mean     win%     day-t
+  ----------------------------------------------------------------------
+  hold to day 5            56.8%     -15.6%      49.0%    45.1%     +3.19
+  first touch 1.5x         31.0%      48.1%      -1.2%    57.4%     -5.34
+  first touch 2x           39.5%      20.5%      15.5%    53.2%     -0.30
+  first touch 3x           46.4%       0.6%      36.6%    50.1%     +3.13
+
+  Read the 1.5x row across: it looks like the hurdle collapses to 31%,
+  well BELOW the 48.4% a coin gives, with a +48.1% median at no skill.
+  That would be a money machine. Its day-t is -5.34. The target caps
+  every winner at +50% while the losers still go to -100%, so more than
+  half the trades finish positive and the average still loses. Do not
+  use the hurdle on a capped payoff.
+
+  And the hold column's own +49.0% mean does not survive either. It is
+  a 5-day return sampled every day, so its windows overlap:
+
+    naive day-clustered t   +3.19   (295 days)
+    overlap-safe t          +1.46   (~59 independent 5-day blocks)
+    top 1% of trades carry +17.4pp of that mean; the median is -15.6%
+    and only 40.0% of days are positive.
+
+  So no-skill call buying on the scan is NOT quietly profitable. The
+  positive mean is payoff shape, and once the overlap is removed it is
+  not significant. Consistent with the buying null, not against it.

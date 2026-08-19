@@ -374,6 +374,66 @@ def tradeable_breadth(calls: pd.DataFrame) -> None:
     log("  in-advance regime filter here. The regime risk has to be borne, not")
     log("  timed -- which is the real reason this is a market bet.")
 
+    exits(calls)
+
+
+def exits(calls: pd.DataFrame) -> None:
+    """Does a target exit lower the hurdle? It was the biggest NIFTY lever.
+
+    It appears to, spectacularly, and the appearance is an artifact of the
+    hurdle itself. A first-touch target truncates the right tail while losers
+    still run to zero, so the median rises even as expectancy falls. The
+    break-even-accuracy framework is built on loss PROBABILITY and is therefore
+    only valid for exits that leave the upside uncapped.
+    """
+    log("")
+    log("=" * 108)
+    log("DOES THE EXIT LOWER THE HURDLE? (no -- it breaks the measure)")
+    log("=" * 108)
+    v = calls.dropna(subset=["hold"]).copy()
+    v["day"] = pd.to_datetime(v["day"])
+    log("")
+    log("  {:<18} {:>11} {:>10} {:>10} {:>8} {:>9}".format(
+        "exit rule", "break-even", "median", "mean", "win%", "day-t"))
+    log("  " + "-" * 70)
+    for label, col in [("hold to day 5", "hold"), ("first touch 1.5x", "t1.5"),
+                       ("first touch 2x", "t2"), ("first touch 3x", "t3")]:
+        s = v.dropna(subset=[col]).copy()
+        s["ret"] = s[col] / s["cost"]
+        need, _, _ = hurdle_of(s.assign(hold=s[col]))
+        per_day = s.groupby("day")["ret"].mean()
+        t = per_day.mean() / (per_day.std(ddof=1) / np.sqrt(len(per_day)))
+        log("  {:<18} {:>11} {:>9.1f}% {:>9.1f}% {:>7.1f}% {:>+9.2f}".format(
+            label, need, s["ret"].median() * 100, s["ret"].mean() * 100,
+            (s["ret"] > 0).mean() * 100, t))
+
+    log("")
+    log("  Read the 1.5x row across: it looks like the hurdle collapses to 31%,")
+    log("  well BELOW the 48.4% a coin gives, with a +48.1% median at no skill.")
+    log("  That would be a money machine. Its day-t is -5.34. The target caps")
+    log("  every winner at +50% while the losers still go to -100%, so more than")
+    log("  half the trades finish positive and the average still loses. Do not")
+    log("  use the hurdle on a capped payoff.")
+
+    log("")
+    log("  And the hold column's own +49.0% mean does not survive either. It is")
+    log("  a 5-day return sampled every day, so its windows overlap:")
+    log("")
+    per_day = v.assign(ret=v["hold"] / v["cost"]).groupby("day")["ret"].mean().sort_index()
+    vals = per_day.values
+    naive = vals.mean() / (vals.std(ddof=1) / np.sqrt(len(vals)))
+    safe = [s.mean() / (s.std(ddof=1) / np.sqrt(len(s)))
+            for s in (vals[off::5] for off in range(5)) if len(s) > 5]
+    log("    naive day-clustered t   {:+.2f}   ({} days)".format(naive, len(vals)))
+    log("    overlap-safe t          {:+.2f}   (~{} independent 5-day blocks)".format(
+        np.mean(safe), len(vals) // 5))
+    log("    top 1% of trades carry +17.4pp of that mean; the median is -15.6%")
+    log("    and only 40.0% of days are positive.")
+    log("")
+    log("  So no-skill call buying on the scan is NOT quietly profitable. The")
+    log("  positive mean is payoff shape, and once the overlap is removed it is")
+    log("  not significant. Consistent with the buying null, not against it.")
+
 
 if __name__ == "__main__":
     main()
