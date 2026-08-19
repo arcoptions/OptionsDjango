@@ -14,7 +14,7 @@ from django.test import TestCase
 from django.db import connection
 from django.utils import timezone
 
-from . import live_engine
+from . import live_dashboard, live_engine
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeExecution, TradeStyle
@@ -1183,6 +1183,427 @@ class LiveEngineSignalTests(TestCase):
 		# That must not read like an ordinary session on which nothing set up.
 		self.assertIsNone(candidate)
 		self.assertIn("FEED GAP: 11 of 15", reasons[0])
+
+
+class LiveEngineRecoveryTests(TestCase):
+	"""Bars the engine never looked at, and what may be done about them.
+
+	A tick evaluates one bar and gets one chance at it, so every minute the
+	engine is down is a signal nobody will ever see. These tests pin the two
+	halves of the repair that matter: the gap has to be *noticed*, and a trade
+	recovered from it has to be the backtest's trade at the backtest's price or
+	no trade at all.
+	"""
+	trade_date = date(2026, 8, 17)
+
+	def _at(self, hour, minute, second=0):
+		return timezone.make_aware(datetime.combine(self.trade_date, time(hour, minute, second)))
+
+	def _spot_rows(self):
+		start = self._at(9, 15)
+		rows = {start + timedelta(minutes=offset): 24500.0 for offset in range(15)}
+		for offset, step in enumerate((5, 20, 40, 60, 80)):
+			rows[start + timedelta(minutes=15 + offset)] = 24500.0 + step
+		return rows
+
+	def _snapshot(self, last_price="120"):
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="NIFTY", expiry_date=self.trade_date + timedelta(days=4),
+			underlying_price=Decimal("24580"), atm_strike=Decimal("24600"),
+		)
+		for strike in ("24500", "24600"):
+			IndexOptionStrikeSnapshot.objects.create(
+				snapshot=snapshot, strike=Decimal(strike), option_type="CE",
+				security_id="44556" if strike == "24500" else "44557",
+				last_price=Decimal(last_price), delta=0.45,
+				top_bid_price=Decimal(last_price) - Decimal("0.5"),
+				top_ask_price=Decimal(last_price),
+				top_bid_quantity=250, top_ask_quantity=250, is_atm=strike == "24600",
+			)
+		return snapshot
+
+	def _option_bars(self, next_open=None):
+		start = self._at(9, 15)
+		bars = [
+			{"timestamp": start + timedelta(minutes=offset), "open": 110.0, "high": 112.0,
+			 "low": 108.0, "close": 110.0, "volume": 1000.0}
+			for offset in range(19)
+		]
+		bars.append({"timestamp": start + timedelta(minutes=19), "open": 110.0, "high": 120.0,
+					 "low": 110.0, "close": 120.0, "volume": 3000.0})
+		if next_open is not None:
+			bars.append({"timestamp": start + timedelta(minutes=20), "open": next_open,
+						 "high": next_open, "low": next_open, "close": next_open, "volume": 900.0})
+		return bars
+
+	def _recover(self, last_evaluated="09:33", now=(9, 50), last_price="120", next_open=None):
+		state = {"position": None, "trades_today": 0, "realized_r": 0.0}
+		if last_evaluated:
+			hour, minute = last_evaluated.split(":")
+			state[live_engine.LAST_BAR_KEY] = self._at(int(hour), int(minute)).isoformat()
+		self._snapshot(last_price=last_price)
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._option_bars(next_open)
+			notes = live_engine.recover_missed_bars(
+				state, self._spot_rows(), self._at(*now),
+				live_engine.live_strategy_config(),
+			)
+		return state, notes
+
+	# -- noticing the gap ------------------------------------------------- #
+
+	def test_a_first_tick_never_replays_a_morning_it_was_not_present_for(self):
+		# No sentinel is no evidence, which must not be read as sixteen missed
+		# bars. This is the state every deploy and every fresh session starts in.
+		self.assertEqual(live_engine.missed_bars({}, self._at(9, 50)), [])
+
+	def test_consecutive_ticks_leave_no_gap(self):
+		state = {live_engine.LAST_BAR_KEY: self._at(9, 33).isoformat()}
+
+		self.assertEqual(live_engine.missed_bars(state, self._at(9, 35)), [])
+
+	def test_the_bars_a_dead_token_cost_are_named_one_by_one(self):
+		state = {live_engine.LAST_BAR_KEY: self._at(12, 20).isoformat()}
+
+		gap = live_engine.missed_bars(state, self._at(12, 37))
+
+		self.assertEqual(len(gap), 15)
+		self.assertEqual(gap[0].strftime("%H:%M"), "12:21")
+		self.assertEqual(gap[-1].strftime("%H:%M"), "12:35")
+
+	def test_yesterdays_sentinel_is_not_todays_outage(self):
+		state = {live_engine.LAST_BAR_KEY: (self._at(15, 19) - timedelta(days=1)).isoformat()}
+
+		self.assertEqual(live_engine.missed_bars(state, self._at(9, 50)), [])
+
+	def test_a_silent_gap_is_reported_even_when_nothing_can_be_done_about_it(self):
+		# No snapshot means no recovery. It must still say the bars were lost --
+		# the operator not knowing is the failure this whole path exists for.
+		state = {"position": None, live_engine.LAST_BAR_KEY: self._at(9, 33).isoformat()}
+
+		notes = live_engine.recover_missed_bars(
+			state, self._spot_rows(), self._at(9, 50), live_engine.live_strategy_config(),
+		)
+
+		self.assertIn("FEED GAP", notes[0])
+		self.assertIn("never evaluated", notes[0])
+
+	# -- what may be recovered from it ------------------------------------ #
+
+	@patch.dict(os.environ, {"NIFTY_LIVE_FIXED_LOTS": "1"})
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_a_missed_breakout_is_taken_at_the_backtest_price_not_the_live_one(self, place):
+		place.return_value = {"ok": True, "order_id": "112233", "correlation_id": "arc-test"}
+
+		state, notes = self._recover(last_price="112")
+
+		# max(next_bar_open, signal_close) * 1.005 on a 120 close, and NOT
+		# 112 * 1.005 -- recovery buys the trade that fired, at its price.
+		self.assertEqual(state["position"]["entry"], 120.6)
+		self.assertTrue(any("RECOVERED" in note for note in notes))
+		self.assertEqual(
+			live_engine.DhanOrderEvent.objects.filter(status="RECOVERED_ENTRY").count(), 1,
+		)
+
+	@patch.dict(os.environ, {"NIFTY_LIVE_FIXED_LOTS": "1"})
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_the_real_next_bar_open_is_used_where_the_live_path_can_only_guess(self, place):
+		place.return_value = {"ok": True, "order_id": "112233", "correlation_id": "arc-test"}
+
+		state, _ = self._recover(last_price="112", next_open=130.0)
+
+		self.assertEqual(state["position"]["entry"], 130.65)
+
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_a_signal_whose_option_ran_away_is_declined_and_said_out_loud(self, place):
+		state, notes = self._recover(last_price="150")
+
+		self.assertIsNone(state["position"])
+		place.assert_not_called()
+		self.assertTrue(any(note.startswith("MISSED:") for note in notes))
+		event = live_engine.DhanOrderEvent.objects.get(status="MISSED_SIGNAL")
+		self.assertEqual(event.payload_json["backtest_limit"], 120.6)
+		self.assertEqual(event.payload_json["live"], 150.0)
+
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_recovery_is_bounded_so_an_outage_never_becomes_a_burst_of_orders(self, place):
+		state = {"position": None, live_engine.LAST_BAR_KEY: self._at(9, 34).isoformat()}
+		self._snapshot()
+
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._option_bars()
+			live_engine.recover_missed_bars(
+				state, self._spot_rows(), self._at(14, 30),
+				live_engine.live_strategy_config(),
+			)
+
+		# Nearly five hours of gap, of which only the last hour is replayed --
+		# and the one breakout is older than that, so nothing is bought.
+		event = live_engine.DhanOrderEvent.objects.get(status="MISSED_BARS")
+		self.assertEqual(event.payload_json["replayed"], live_engine.MAX_RECOVERY_MINUTES)
+		self.assertGreater(event.payload_json["bars"], live_engine.MAX_RECOVERY_MINUTES)
+		place.assert_not_called()
+
+	@patch("options_tracker.live_engine.place_super_order")
+	def test_an_observe_only_engine_recovers_on_paper_and_sends_nothing(self, place):
+		state = {"position": None, live_engine.LAST_BAR_KEY: self._at(9, 33).isoformat()}
+		self._snapshot(last_price="112")
+
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._option_bars()
+			live_engine.recover_missed_bars(
+				state, self._spot_rows(), self._at(9, 50),
+				live_engine.live_strategy_config(), dry_run=True,
+			)
+
+		place.assert_not_called()
+		self.assertEqual(
+			live_engine.DhanOrderEvent.objects.filter(status="DRY_RUN_ENTRY").count(), 1,
+		)
+
+	# -- the sentinel, which is the only reason a gap is visible at all ---- #
+
+	def _armed_at(self, hour, minute, behind=2):
+		"""An armed engine, mid-session, with the sentinel `behind` minutes back.
+
+		Two minutes back is the healthy case and deliberately not a gap: the
+		sentinel names the last bar evaluated, and the one after it is the bar
+		this tick is about to look at itself.
+		"""
+		AppSetting.objects.update_or_create(key="nifty_live_enabled", defaults={"value": "1"})
+		today = timezone.localdate()
+		now = timezone.localtime().replace(
+			year=today.year, month=today.month, day=today.day,
+			hour=hour, minute=minute, second=5, microsecond=0,
+		)
+		sentinel = (now - timedelta(minutes=behind)).replace(second=0, microsecond=0)
+		AppSetting.objects.update_or_create(key="nifty_live_state", defaults={"value": json.dumps({
+			"date": today.isoformat(), "trades_today": 0, "realized_r": 0.0,
+			"position": None, live_engine.LAST_BAR_KEY: sentinel.isoformat(),
+		})})
+		return now, sentinel
+
+	@patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+	def test_a_tick_that_throws_leaves_the_sentinel_where_it_was(self, _open):
+		# The whole mechanism turns on this. If a failed tick moved the sentinel
+		# it would erase the evidence of its own failure, and the bar it did not
+		# evaluate would be indistinguishable from one it chose not to trade.
+		now, sentinel = self._armed_at(11, 30)
+
+		with patch("options_tracker.live_engine.spot_series", side_effect=RuntimeError("401")):
+			status = live_engine.tick(now=now, dry_run=True)
+
+		self.assertEqual(status["state"], "ERROR")
+		state = json.loads(AppSetting.objects.get(key="nifty_live_state").value)
+		self.assertEqual(state[live_engine.LAST_BAR_KEY], sentinel.isoformat())
+		# The bar that tick should have evaluated is now on the recovery list,
+		# and the next tick's own bar is not -- that one it will look at itself.
+		self.assertEqual(
+			live_engine.missed_bars(state, now + timedelta(minutes=1)),
+			[sentinel + timedelta(minutes=1)],
+		)
+
+	@patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+	def test_a_quiet_tick_still_moves_it_so_idleness_is_never_read_as_downtime(self, _open):
+		# 15:15 is past the entry window: the engine is healthy and declining to
+		# trade. That must leave no gap behind it, or every afternoon would look
+		# like an outage the following morning.
+		now, sentinel = self._armed_at(15, 15)
+
+		status = live_engine.tick(now=now, dry_run=True)
+
+		self.assertEqual(status["state"], "RUNNING")
+		state = json.loads(AppSetting.objects.get(key="nifty_live_state").value)
+		self.assertNotEqual(state[live_engine.LAST_BAR_KEY], sentinel.isoformat())
+		self.assertEqual(live_engine.missed_bars(state, now), [])
+
+	# -- the first tick back, when the chain is as blind as the engine was -- #
+
+	def test_a_gap_that_cannot_be_priced_yet_is_held_open_rather_than_erased(self):
+		# The collector holds the same token the engine does, so the outage that
+		# stopped one stopped the other and the newest chain snapshot is stale by
+		# exactly the length of the gap. If this tick closed the gap anyway, the
+		# collector would come back thirty seconds later to find nothing left to
+		# recover -- the feature failing on the one outage it exists for.
+		state = {"position": None, live_engine.LAST_BAR_KEY: self._at(9, 33).isoformat()}
+
+		notes = live_engine.recover_missed_bars(
+			state, self._spot_rows(), self._at(9, 50), live_engine.live_strategy_config(),
+		)
+
+		self.assertTrue(state[live_engine.DEFERRED_KEY])
+		self.assertTrue(any("Holding the gap open" in note for note in notes))
+		event = live_engine.DhanOrderEvent.objects.get(status="MISSED_BARS")
+		self.assertTrue(event.payload_json["deferred"])
+		self.assertEqual(event.payload_json["replayed"], 0)
+
+	@patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+	def test_a_deferred_gap_survives_the_tick_that_could_not_price_it(self, _open):
+		# The end-to-end version of the above: a healthy tick normally advances
+		# the sentinel, and this one must not. Sixteen minutes back is the shape
+		# of the 19 August token outage.
+		now, sentinel = self._armed_at(11, 30, behind=16)
+
+		with patch("options_tracker.live_engine.spot_series", return_value=self._spot_rows()):
+			status = live_engine.tick(now=now, dry_run=True)
+
+		self.assertEqual(status["state"], "RUNNING")
+		state = json.loads(AppSetting.objects.get(key="nifty_live_state").value)
+		self.assertEqual(state[live_engine.LAST_BAR_KEY], sentinel.isoformat())
+		# The handoff is within-tick and must not be written back as memory.
+		self.assertNotIn(live_engine.DEFERRED_KEY, state)
+
+	def test_a_gap_past_the_recovery_window_is_let_go_rather_than_held_forever(self):
+		# Holding the sentinel is only worth it while a later tick could still act
+		# on the bars. Once they have aged out of the window, a collector that
+		# never returns would otherwise pin the gap open for the rest of the day.
+		state = {"position": None, live_engine.LAST_BAR_KEY: self._at(9, 20).isoformat()}
+
+		notes = live_engine.recover_missed_bars(
+			state, self._spot_rows(), self._at(14, 30), live_engine.live_strategy_config(),
+		)
+
+		self.assertFalse(state[live_engine.DEFERRED_KEY])
+		self.assertTrue(any("these are lost" in note for note in notes))
+
+	# -- the same hole, on the other side of an open position ------------- #
+
+	def _holding(self, high_water=120.0, stop=99.0, entry=110.0):
+		return {"position": {
+			"order_id": "112233", "security_id": "44557", "option_type": "CE",
+			"strike": 24600.0, "entry": entry, "initial_stop": entry * 0.9,
+			"stop": stop, "stop_percent": 0.10, "trail_gap_r": 0.7,
+			"quantity": 75, "high_water": high_water, "filled": True,
+			"placed_at": self._at(9, 40).isoformat(),
+			"signal_at": self._at(9, 39).isoformat(),
+		}}
+
+	def _gap(self, start=(9, 40), end=(9, 55)):
+		first, last = self._at(*start), self._at(*end)
+		return [first + timedelta(minutes=offset)
+				for offset in range(int((last - first).total_seconds() // 60) + 1)]
+
+	def _bars_reaching(self, high):
+		return [
+			{"timestamp": self._at(9, 40) + timedelta(minutes=offset), "open": 120.0,
+			 "high": high if offset == 5 else 120.0, "low": 118.0, "close": 120.0,
+			 "volume": 900.0}
+			for offset in range(16)
+		]
+
+	def test_a_high_the_trail_never_saw_is_measured_and_named(self):
+		# The stop is a real exchange order, so this is not an unprotected
+		# position -- it is a trail sitting looser than the strategy would have
+		# put it, which is worth knowing and is invisible without this.
+		state = self._holding()
+
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._bars_reaching(180.0)
+			notes = live_engine.gap_while_holding(state, self._gap(), self._at(9, 57))
+
+		self.assertEqual(len(notes), 1)
+		self.assertIn("Rs 180.00", notes[0])
+		event = live_engine.DhanOrderEvent.objects.get(status="UNSEEN_HIGH")
+		self.assertEqual(event.payload_json["unseen_high"], 180.0)
+		# Measured only. The live stop is exactly where it was.
+		self.assertEqual(state["position"]["stop"], 99.0)
+		self.assertEqual(state["position"]["high_water"], 120.0)
+
+	def test_a_gap_in_which_the_option_did_nothing_new_stays_quiet(self):
+		# Every outage would otherwise raise an alarm about a trail that was
+		# already where it should be.
+		state = self._holding()
+
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._bars_reaching(119.0)
+			notes = live_engine.gap_while_holding(state, self._gap(), self._at(9, 57))
+
+		self.assertEqual(notes, [])
+		self.assertFalse(live_engine.DhanOrderEvent.objects.filter(status="UNSEEN_HIGH").exists())
+
+	def test_an_unfilled_entry_has_no_trail_to_have_missed(self):
+		state = self._holding()
+		state["position"]["filled"] = False
+
+		with patch("options_tracker.live_engine.intraday_bars") as intraday:
+			intraday.return_value = self._bars_reaching(180.0)
+			notes = live_engine.gap_while_holding(state, self._gap(), self._at(9, 57))
+
+		self.assertEqual(notes, [])
+		intraday.assert_not_called()
+
+	@patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+	def test_an_outage_during_a_trade_is_reported_even_though_entry_is_barred(self, _open):
+		# `_entry_allowed` turns down a tick that is holding, so this note only
+		# appears if the gap is checked before that gate rather than after it.
+		now, _ = self._armed_at(11, 30, behind=16)
+		state = json.loads(AppSetting.objects.get(key="nifty_live_state").value)
+		state.update(self._holding())
+		AppSetting.objects.filter(key="nifty_live_state").update(value=json.dumps(state))
+
+		with patch("options_tracker.live_engine.manage_position", return_value=[]), \
+				patch("options_tracker.live_engine.intraday_bars") as intraday:
+			minute = now.replace(second=0, microsecond=0)
+			intraday.return_value = [
+				{"timestamp": minute - timedelta(minutes=offset), "open": 120.0, "high": 180.0,
+				 "low": 118.0, "close": 120.0, "volume": 900.0}
+				for offset in range(1, 16)
+			]
+			status = live_engine.tick(now=now, dry_run=True)
+
+		self.assertTrue(any(note.startswith("MISSED:") for note in status["notes"]))
+		self.assertIn("a position is already open", status["notes"])
+
+
+class LiveDashboardAlertTests(TestCase):
+	"""A gap the operator can see without reading the note stream.
+
+	The outage that motivated all this was invisible for sixteen minutes because
+	"why it is not trading" renders rejections *or* notes, and the rejection it
+	chose to show -- no breakout on the one bar it managed to read -- was true.
+	These pin that gap notes escape that stream and arrive coloured by severity.
+	"""
+
+	def _snapshot(self, notes):
+		AppSetting.objects.update_or_create(
+			key=live_dashboard.STATUS_KEY,
+			defaults={"value": json.dumps({
+				"state": "RUNNING", "at": timezone.localtime().isoformat(),
+				"notes": notes, "rejections": ["no opening-range breakout on the 12:37 bar"],
+			})},
+		)
+		return live_dashboard.engine_snapshot()
+
+	def test_a_feed_gap_reaches_the_operator_past_the_rejection_that_hid_it(self):
+		engine = self._snapshot([
+			"FEED GAP: 16 bars between 12:21 and 12:36 were never evaluated; replaying 16 of them",
+		])
+
+		self.assertEqual(len(engine["alerts"]), 1)
+		self.assertEqual(engine["alerts"][0]["level"], "error")
+		self.assertIn("12:21", engine["alerts"][0]["text"])
+
+	def test_the_three_kinds_of_gap_news_do_not_share_a_colour(self):
+		# A recovery is good news, a missed signal is the cost of the outage, and
+		# the gap itself is the fault. Rendering all three red would train the
+		# operator to ignore the one that matters.
+		engine = self._snapshot([
+			"FEED GAP: 4 bars between 12:21 and 12:24 were never evaluated; replaying 4 of them",
+			"MISSED: CE 24600 broke out at 12:22 and the engine was down. Not taken -- "
+			"it needed Rs 120.60 and now quotes Rs 150.00.",
+			"RECOVERED: took the 12:23 CE 24600 breakout at the backtest's Rs 120.60 (3 minutes late)",
+		])
+
+		self.assertEqual(
+			[alert["level"] for alert in engine["alerts"]],
+			["error", "warning", "success"],
+		)
+
+	def test_an_ordinary_note_is_not_promoted_to_an_alert(self):
+		engine = self._snapshot(["opening range held; no breakout yet", "cooldown: 3 minutes left"])
+
+		self.assertEqual(engine["alerts"], [])
+		self.assertEqual(len(engine["notes"]), 2)
 
 
 class LiveEngineEntryTests(TestCase):

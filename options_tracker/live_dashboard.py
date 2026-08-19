@@ -33,6 +33,32 @@ STATE_KEY = "nifty_live_state"
 STALE_AFTER_SECONDS = 120
 
 
+# Notes the operator must not have to go looking for. "Why it is not trading"
+# renders rejections *or* notes, so a note about sixteen unevaluated bars would
+# have been hidden behind "no breakout on the 12:37 bar" -- which is exactly how
+# the outage of 19 August stayed invisible while it was happening.
+#
+# The three read very differently and should not share a colour. A feed gap is
+# the engine blind; a missed signal is the gap costing a trade; a recovery is the
+# gap being paid back. Only the first is a fault.
+ALERT_LEVELS = (
+    ("FEED GAP", "error"),
+    ("MISSED:", "warning"),
+    ("RECOVERED:", "success"),
+)
+
+
+def _alerts(notes):
+    """Gap notes lifted out of the general stream, each with its severity."""
+    alerts = []
+    for note in notes:
+        for prefix, level in ALERT_LEVELS:
+            if note.startswith(prefix):
+                alerts.append({"level": level, "text": note})
+                break
+    return alerts
+
+
 def _load(key):
     raw = AppSetting.objects.filter(key=key).values_list("value", flat=True).first()
     try:
@@ -79,6 +105,7 @@ def engine_snapshot(now=None):
         "age_seconds": round(age) if age is not None else None,
         "stale": age is None or age > STALE_AFTER_SECONDS,
         "notes": status.get("notes") or [],
+        "alerts": _alerts(status.get("notes") or []),
         "rejections": status.get("rejections") or [],
         "session": status.get("session") or {},
         "error": status.get("error"),

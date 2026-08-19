@@ -95,6 +95,27 @@ MAX_QUOTE_AGE_SECONDS = 120
 # close the trade long before it did.
 TARGET_MULTIPLE = 3.0
 
+# Recovery of bars no tick ever evaluated. See `recover_missed_bars`.
+#
+# A tick looks at exactly one bar -- the minute that has just closed -- so the
+# engine advances with the wall clock and not with the data. Every minute it is
+# down is a bar nothing ever looked at, and on 19 August a lapsed token cost
+# sixteen consecutive ones while the dashboard reported, truthfully and
+# uselessly, that there was no breakout on the single bar it did see.
+#
+# The cap is what stops recovery becoming a different strategy. Past an hour the
+# gap is an outage to be told about, not a trade to chase; a restart, a redeploy
+# or a morning-long token failure must never replay half a session into a burst
+# of orders. Within the cap, staleness is still policed per bar by price rather
+# than by minutes -- see the entry gate in `recover_missed_bars`.
+MAX_RECOVERY_MINUTES = 60
+LAST_BAR_KEY = "last_evaluated_at"
+
+# Set when a gap was found but could not yet be priced, and consumed by `tick`
+# to hold the sentinel for one more attempt. It is a within-tick handoff rather
+# than remembered state, so it is popped, never read back from a later session.
+DEFERRED_KEY = "recovery_deferred"
+
 
 def _number(value, default=0.0):
     try:
@@ -330,12 +351,22 @@ def session_context(spot_rows, config):
     return context
 
 
-def detect_signal(now=None, spot_rows=None, snapshot=None, context=None):
-    """Evaluate the last completed 1-minute bar. Returns (candidate, reasons).
+def detect_signal(now=None, spot_rows=None, snapshot=None, context=None,
+                  signal_at=None, strike=None):
+    """Evaluate one completed 1-minute bar. Returns (candidate, reasons).
 
     Every filter is the one `strategy_backtest._candidate` applies, in the same
     order, against the same 1-minute data -- plus the liquidity gates, which the
     backtest could not see.
+
+    `signal_at` defaults to the minute that has just closed, which is the only
+    bar a live tick ever cares about. Recovery passes an older one, and takes
+    the same path through the same filters rather than a parallel copy of them
+    that could drift: a bar replayed twenty minutes late must be accepted or
+    rejected for exactly the reasons it would have been at the time. `strike`
+    exists for the same reason -- the snapshot's ATM is where the money is
+    *now*, which for a past bar is the wrong strike, so recovery passes the one
+    that was at the money then.
     """
     now = now or timezone.localtime()
     config = live_strategy_config()
@@ -370,15 +401,20 @@ def detect_signal(now=None, spot_rows=None, snapshot=None, context=None):
 
     # The signal bar is the last minute that has finished. Anything later is
     # still forming and the backtest would not have seen it.
-    signal_at = (now - timedelta(minutes=1)).replace(second=0, microsecond=0)
+    if signal_at is None:
+        signal_at = (now - timedelta(minutes=1)).replace(second=0, microsecond=0)
     sides = setups.get(signal_at, set())
     if not sides:
         return None, [f"no opening-range breakout on the {signal_at:%H:%M} bar"]
 
     if snapshot is None:
         snapshot = latest_snapshot(now=now)
-    if snapshot is None or snapshot.atm_strike is None:
+    if snapshot is None:
         return None, ["no fresh option-chain snapshot"]
+    strike = float(strike) if strike is not None else snapshot.atm_strike
+    if strike is None:
+        return None, ["no fresh option-chain snapshot"]
+    strike = float(strike)
 
     prior_spot = spot_rows.get(signal_at - timedelta(minutes=config.spot_trend_minutes))
     spot = spot_rows.get(signal_at)
@@ -400,7 +436,7 @@ def detect_signal(now=None, spot_rows=None, snapshot=None, context=None):
             )
             continue
 
-        row = quote_row(snapshot, snapshot.atm_strike, side)
+        row = quote_row(snapshot, strike, side)
         if not row or not row.security_id:
             reasons.append(f"{side}: no ATM contract in the snapshot")
             continue
@@ -444,9 +480,16 @@ def detect_signal(now=None, spot_rows=None, snapshot=None, context=None):
             "signal_at": signal_at,
             "option_type": side,
             "direction": Direction.CE if side == "CE" else Direction.PE,
-            "strike": float(snapshot.atm_strike),
+            "strike": float(strike),
             "security_id": row.security_id,
             "signal_close": premium,
+            # The bar after the signal, which is the one the backtest actually
+            # buys at. Live this is almost always None -- that minute is still
+            # forming, which is why `_entry_limit` has to stand the live price
+            # in for it. Replaying an old bar is the one case where the real
+            # open exists, and then the reconstruction is exact rather than a
+            # stand-in.
+            "next_open": (by_time.get(signal_at + timedelta(minutes=1)) or {}).get("open"),
             "volume_ratio": round(volume_ratio, 2),
             "spot": spot,
             "spot_move_percent": round(spot_move_percent, 3),
@@ -489,21 +532,31 @@ def size_position(equity, entry, stop_percent=None, lot_size=NIFTY_LOT_SIZE):
 # Entry
 # --------------------------------------------------------------------------- #
 
-def _entry_limit(candidate, snapshot, now):
+def _entry_limit(candidate, snapshot, now, override=None):
     """`max(next_bar_open, signal_close) * 1.005`, with the live price standing
-    in for the next bar's open -- we are a few seconds into that bar."""
+    in for the next bar's open -- we are a few seconds into that bar.
+
+    A recovered bar passes `override`, because for a bar that closed twenty
+    minutes ago the next bar's open is not a thing to be approximated: it has
+    already printed, and `recover_missed_bars` computes the backtest's limit
+    from it exactly. Substituting the live price there would be the one move
+    that turns recovery into a different strategy -- it would buy at today's
+    price a signal that fired at yesterday's.
+    """
     row = quote_row(snapshot, candidate["strike"], candidate["option_type"])
+    if override is not None:
+        return round(float(override), 2), row
     live = _number(row.last_price) if row else 0
     return round(max(live, candidate["signal_close"]) * 1.005, 2), row
 
 
-def open_position(candidate, state, now=None, dry_run=False):
+def open_position(candidate, state, now=None, dry_run=False, entry_override=None):
     now = now or timezone.localtime()
     snapshot = latest_snapshot(now=now)
     if snapshot is None:
         return None, ["no fresh option-chain snapshot at entry"]
 
-    entry, row = _entry_limit(candidate, snapshot, now)
+    entry, row = _entry_limit(candidate, snapshot, now, entry_override)
     config = live_strategy_config()
     stop = round(entry * (1 - config.stop_percent), 2)
     lots = size_position(live_capital(), entry, config.stop_percent)
@@ -773,6 +826,218 @@ def _entry_allowed(state, now, config):
     return True, ""
 
 
+def missed_bars(state, now):
+    """The bar minutes that closed while the engine was not looking.
+
+    The sentinel is advanced at the end of every healthy tick, not every
+    evaluated signal, so this measures engine downtime and not idleness: a
+    forty-minute position, a cooldown, or an afternoon outside the entry window
+    all leave it moving and produce no gap. Only a tick that threw -- or a
+    process that was not running -- leaves one.
+
+    Absent sentinel means no evidence, which is deliberately not the same as a
+    gap: the first tick of a session, and the first tick after this code ships,
+    must not replay a morning they simply were not present for.
+    """
+    last = state.get(LAST_BAR_KEY)
+    current = (now - timedelta(minutes=1)).replace(second=0, microsecond=0)
+    if not last:
+        return []
+    try:
+        previous = datetime.fromisoformat(last)
+    except (TypeError, ValueError):
+        return []
+    if previous.date() != current.date():
+        return []
+    gap = int((current - previous).total_seconds() // 60) - 1
+    if gap <= 0:
+        return []
+    return [previous + timedelta(minutes=offset) for offset in range(1, gap + 1)]
+
+
+def recover_missed_bars(state, spot_rows, now, config, dry_run=False):
+    """Replay the bars no tick evaluated, and take one only at the backtest's price.
+
+    THE HOLE THIS CLOSES.  A tick evaluates exactly one bar, the minute that has
+    just closed, and it gets exactly one chance. When a tick throws -- a lapsed
+    token, a Dhan 5xx, a redeploy, a network blip -- that bar is never looked at
+    again, because the engine advances with the wall clock rather than with the
+    data. The failure is silent by construction: the dashboard goes on reporting
+    that there was no breakout on the one bar it did see, which is true, and says
+    nothing whatever about the sixteen it did not.
+
+    WHY THE OBVIOUS FIX IS WRONG.  "Find the missed signal and buy it" is not the
+    strategy; it is a strategy with a variable and unmeasured delay bolted on.
+    The backtest buys at `max(next_bar_open, signal_close) * 1.005` on the bar
+    after the signal, and takes the trade only if the option trades there. Buying
+    a fifteen-minute-old signal at whatever the option costs now is a different
+    trade with a different edge, and nothing in `research/STRATEGY.md` speaks to
+    it.
+
+    SO RECOVERY RECONSTRUCTS THE PRICE RATHER THAN THE MOMENT.  For a bar that
+    has already closed the next bar's open is not an approximation -- it printed,
+    and `detect_signal` now carries it back. That gives the backtest's limit
+    exactly, and the trade is taken only if the option is *still* available at or
+    below it. That gate needs no new parameter, it can only ever decline a fill
+    and never invent a better one than was measured, and it decays on its own:
+    a signal whose option has run away simply does not fill, which is precisely
+    what the backtest's one-bar limit order would also have done, while one that
+    has not moved is the same trade at the same price.
+
+    WHAT IT WILL NOT DO.  It will not chase, it will not widen, and it will not
+    stay quiet when it fails. A breakout it finds but cannot take is logged as
+    MISSED_SIGNAL and surfaced on the dashboard, because the operator learning
+    that a signal was missed is worth more than the engine pretending none was.
+    """
+    notes, gap = [], missed_bars(state, now)
+    if not gap:
+        return notes
+
+    window = gap[-MAX_RECOVERY_MINUTES:]
+    snapshot = latest_snapshot(now=now)
+    span = (
+        f"{len(gap)} bar{'s' if len(gap) != 1 else ''} between "
+        f"{gap[0]:%H:%M} and {gap[-1]:%H:%M} were never evaluated"
+    )
+    _log("MISSED_BARS", {
+        "from": gap[0].isoformat(), "to": gap[-1].isoformat(), "bars": len(gap),
+        "replayed": 0 if snapshot is None else len(window), "at": now.isoformat(),
+        "deferred": snapshot is None,
+    })
+
+    if snapshot is None:
+        # Not "cannot" but "not yet": the collector holds the same token the
+        # engine does, so the outage that blinded one blinded the other and the
+        # chain is stale by exactly the length of the gap. While the gap is still
+        # inside the window a later tick can price it, so ask `tick` to hold the
+        # sentinel and try again. Past the window the oldest bars have aged out
+        # regardless, holding achieves nothing, and the gap is allowed to close.
+        retry = len(gap) <= MAX_RECOVERY_MINUTES
+        state[DEFERRED_KEY] = retry
+        notes.append(
+            f"FEED GAP: {span}, and no option-chain snapshot is fresh enough to "
+            + ("price them yet. Holding the gap open and retrying."
+               if retry else
+               "price them. The gap has outrun the recovery window; these are lost.")
+        )
+        return notes
+
+    notes.append(f"FEED GAP: {span}; replaying {len(window)} of them")
+
+    entry_window = config.entry_windows[0]
+    strikes = sorted({float(value) for value in snapshot.strikes.values_list("strike", flat=True)})
+    for minute in window:
+        if state.get("position"):
+            break
+        if not (entry_window[0] <= minute.time() <= entry_window[1]):
+            continue
+        spot = spot_rows.get(minute)
+        if spot is None or not strikes:
+            continue
+        # The strike that was at the money THEN. `snapshot.atm_strike` is where
+        # the money is now, and on a sixteen-minute gap those differ.
+        strike = min(strikes, key=lambda value: abs(value - spot))
+        candidate, _ = detect_signal(
+            now, spot_rows=spot_rows, snapshot=snapshot, signal_at=minute, strike=strike,
+        )
+        if not candidate:
+            continue
+
+        limit = round(max(_number(candidate["next_open"]), candidate["signal_close"]) * 1.005, 2)
+        row = quote_row(snapshot, strike, candidate["option_type"])
+        live = _number(row.last_price) if row else 0
+        if not live or live > limit:
+            _log("MISSED_SIGNAL", {
+                "signal_at": minute.isoformat(), "option_type": candidate["option_type"],
+                "strike": strike, "backtest_limit": limit, "live": live,
+                "why": "option no longer trades at the price the backtest paid"
+                       if live else "no live quote for the contract",
+            })
+            notes.append(
+                f"MISSED: {candidate['option_type']} {strike:.0f} broke out at "
+                f"{minute:%H:%M} and the engine was down. Not taken -- it needed "
+                f"Rs {limit:.2f} and now quotes Rs {live:.2f}."
+            )
+            continue
+
+        candidate["recovered_from"] = minute.isoformat()
+        position, entry_notes = open_position(candidate, state, now, dry_run, entry_override=limit)
+        notes.extend(entry_notes)
+        if position:
+            _log("RECOVERED_ENTRY", {
+                "signal_at": minute.isoformat(), "minutes_late": int((now - minute).total_seconds() // 60),
+                "backtest_limit": limit, "live": live, "strike": strike,
+                "option_type": candidate["option_type"],
+            })
+            notes.append(
+                f"RECOVERED: took the {minute:%H:%M} {candidate['option_type']} "
+                f"{strike:.0f} breakout at the backtest's Rs {limit:.2f} "
+                f"({int((now - minute).total_seconds() // 60)} minutes late)"
+            )
+    return notes
+
+
+def gap_while_holding(state, gap, now):
+    """What the open position's option did while no tick was watching it.
+
+    The other half of the same hole. The trail follows the running high, and the
+    backtest reads that high straight off the bar; live it is sampled from the
+    chain snapshot every tick or so. A gap is therefore a stretch of highs the
+    trail never saw, and the stop can be sitting lower than the strategy would
+    have put it -- not unprotected, because the stop is a real exchange-side
+    order that would have triggered on its own, but looser.
+
+    THIS ONLY MEASURES. Tightening a live stop from replayed data is a different
+    thing from recovering an entry, and it is not obviously right: where the
+    option spiked and came back, the reconstructed stop is already above the
+    market and would fire the instant it was sent, booking an exit at whatever
+    the price is now rather than at the trailed level the backtest recorded.
+    Both choices are wrong in different directions, the moment has passed either
+    way, and it is real money -- so the number is put in front of the operator
+    and nothing is moved.
+    """
+    position = state.get("position")
+    if not position or not position.get("filled"):
+        return []
+    try:
+        bars = intraday_bars(
+            position["security_id"], INDEX_CONFIG[UNDERLYING]["option_segment"],
+            "OPTIDX", now.date(),
+        )
+    except Exception as error:
+        return [
+            f"FEED GAP: {len(gap)} bars between {gap[0]:%H:%M} and {gap[-1]:%H:%M} "
+            f"went unwatched while holding {position['option_type']} "
+            f"{position['strike']:.0f}, and the option's own bars could not be "
+            f"read back: {error}"
+        ]
+
+    window = {bar["timestamp"] for bar in bars} & set(gap)
+    highs = [_number(bar["high"]) for bar in bars if bar["timestamp"] in window]
+    if not highs:
+        return []
+
+    unseen = max(highs)
+    if unseen <= position["high_water"]:
+        return []
+    would_be = _trailed_stop(position, unseen)
+    if would_be <= position["stop"]:
+        return []
+    _log("UNSEEN_HIGH", {
+        "from": gap[0].isoformat(), "to": gap[-1].isoformat(),
+        "high_water": position["high_water"], "unseen_high": unseen,
+        "stop": position["stop"], "would_be": would_be,
+        "order_id": position["order_id"],
+    }, order_id=position["order_id"])
+    return [
+        f"MISSED: {position['option_type']} {position['strike']:.0f} reached "
+        f"Rs {unseen:.2f} between {gap[0]:%H:%M} and {gap[-1]:%H:%M} while the "
+        f"engine was down. The trail would be at Rs {would_be:.2f}; it is at "
+        f"Rs {position['stop']:.2f}. Not moved -- replaying a stop is a decision, "
+        f"not a repair."
+    ]
+
+
 def tick(now=None, dry_run=False):
     """One pass of the engine. Safe to call as often as you like."""
     now = now or timezone.localtime()
@@ -801,10 +1066,30 @@ def tick(now=None, dry_run=False):
             _write_status(status)
             return status
 
+        context, spot_rows = {}, None
+        # A gap matters whether or not the engine may enter. `_entry_allowed`
+        # turns down a tick that is holding, so asking it first would hide every
+        # outage that happened during a trade -- the case where the money is
+        # already on the table.
+        gap = missed_bars(state, now)
+        if gap and state.get("position"):
+            status["notes"].extend(gap_while_holding(state, gap, now))
+
         allowed, blocker = _entry_allowed(state, now, config)
         if allowed:
-            context = {}
-            candidate, reasons = detect_signal(now, context=context)
+            # One spot fetch serves both the replay and the live bar. Recovery
+            # runs first: a breakout the engine slept through is older than the
+            # one forming now, and the backtest would have been in the trade
+            # already. If it takes one, `_entry_allowed` turns it down below --
+            # which is the position gate doing its job, not a rejection.
+            spot_rows = spot_series(now.date())
+            status["session"] = session_context(spot_rows, config)
+            status["notes"].extend(
+                recover_missed_bars(state, spot_rows, now, config, dry_run)
+            )
+            allowed, blocker = _entry_allowed(state, now, config)
+        if allowed:
+            candidate, reasons = detect_signal(now, spot_rows=spot_rows, context=context)
             status["rejections"] = reasons
             status["session"] = context
             if candidate:
@@ -819,6 +1104,20 @@ def tick(now=None, dry_run=False):
         else:
             status["notes"].append(blocker)
 
+        # Only a tick that got this far was healthy, so only this one may move
+        # the sentinel. Setting it before the work would make every failed tick
+        # look like a bar the engine had chosen not to trade.
+        #
+        # Unless recovery asked to keep it. The OI collector holds the same token
+        # the engine does, so the outage that blinded one blinded the other, and
+        # the first tick back finds a gap and no chain fresh enough to price it.
+        # Advancing here would erase that gap about thirty seconds before the
+        # collector catches up -- losing the recovery in precisely the outage it
+        # was built for. Holding the sentinel costs one more replay attempt.
+        if not state.pop(DEFERRED_KEY, False):
+            state[LAST_BAR_KEY] = (now - timedelta(minutes=1)).replace(
+                second=0, microsecond=0,
+            ).isoformat()
         status["state"] = "RUNNING"
     except Exception as error:
         status["state"] = "ERROR"

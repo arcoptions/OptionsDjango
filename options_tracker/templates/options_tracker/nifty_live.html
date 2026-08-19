@@ -75,6 +75,10 @@
 {% if tab == 'live' %}
   {% if engine.error %}<div class="msg error">Engine error: {{ engine.error }}</div>{% endif %}
 
+  {% for alert in engine.alerts %}
+    <div class="msg {{ alert.level }}">{{ alert.text }}</div>
+  {% endfor %}
+
   {% if engine.position %}
     <div class="panel">
       <h3 style="margin-top:0;">Open position &mdash; {{ engine.position.option }}</h3>
