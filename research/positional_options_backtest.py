@@ -1,11 +1,12 @@
 """Positional options-buying backtester for NSE F&O stocks.
 
-The system is deliberately split into three layers that know nothing about each
+The system is deliberately split into four layers that know nothing about each
 other, so a hundred stocks and four signal engines are the same amount of work:
 
     signal engine  ->  a boolean Series, one flag per daily bar
     risk model     ->  ATR-derived stop / target / breakeven trigger
     execution      ->  a bar-by-bar walk that resolves the exit
+    option model   ->  what that underlying move was actually worth to a buyer
 
 Indicators and signals are fully vectorised. Execution is not, and cannot be:
 a stop that moves to breakeven part-way through a trade is path-dependent, and
@@ -19,6 +20,21 @@ and 0.3.14b fails outright on numpy >= 2.0. A backtester's indicators have to be
 pinned and exact, so the ~40 lines below are worth more than the dependency. The
 pandas_ta equivalent is named in each docstring if you would rather swap it.
 
+On the option model: the brief specified a flat 0.50 delta, and that proxy is
+still available via ``Config(pricing="delta")`` for comparison. The default is
+Black-Scholes valuation of a real ATM monthly call at entry and at exit, because
+the flat proxy omits the two things that decide a bought option's fate -- theta,
+charged every calendar day whether the thesis works or not, and the delta drift
+that makes a winner accelerate and a loser go quiet. Both fall out of valuing
+the same contract twice. No historical options data is fetched.
+
+Costs are measured, not assumed. The half-spread comes from 10,617 live
+two-sided stock-option quotes in ``research/spread_curve.csv``; the charge stack
+mirrors ``options_tracker/capital_pnl.py``, including the STT step on
+1 April 2026. On this account's spreads that toll runs ~Rs 1,500-1,800 per
+round trip and is several times larger than the theta effect, so it, not the
+entry rule, is usually what decides the result.
+
 Run directly for a demo on synthetic data:
 
     python research/positional_options_backtest.py
@@ -26,8 +42,10 @@ Run directly for a demo on synthetic data:
 from __future__ import annotations
 
 import calendar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from math import erf, exp, sqrt
+from math import log as ln  # `log` is the trade log everywhere else in this file
 
 import numpy as np
 import pandas as pd
@@ -74,15 +92,49 @@ class Config:
     # which is the assumption that cannot flatter the result.
     pessimistic_intrabar: bool = True
 
-    # Options proxy. delta 0.50 is the ATM assumption from the brief.
+    # ---- Option model -----------------------------------------------------
+    #   bs    -- price a real ATM call at entry and at exit with Black-Scholes.
+    #            Delta drifts, gamma helps, theta bleeds, all of it falling out
+    #            of the same two valuations rather than being bolted on.
+    #   delta -- the brief's constant-0.50 proxy, kept for comparison.
+    pricing: str = "bs"
     delta: float = 0.50
-    lot_size: int = 1
 
-    # Per-day premium decay charged against the option proxy, as a fraction of
-    # the *entry* premium. 0.0 reproduces the brief exactly. See the note in
-    # `_option_pnl` before you leave it at zero.
-    theta_per_day: float = 0.0
-    entry_premium: float | None = None
+    risk_free: float = 0.065          # ~India 10y / MIBOR territory
+    vol_lookback: int = 20            # trailing close-to-close realised vol
+    iv_premium: float = 1.15          # options trade above realised; see notes
+    iv_floor: float = 0.15
+    iv_cap: float = 0.90
+    # Implied vol added at exit. Breakouts tend to buy an IV bid that fades,
+    # so a negative number here is the realistic direction -- left at zero
+    # because this account has not measured it yet.
+    iv_exit_shift: float = 0.0
+
+    # Buy the monthly contract with at least this many days left, otherwise
+    # roll to the next one. Holding a positional trade in a contract with two
+    # weeks of life is buying the steepest part of the decay curve.
+    min_dte: int = 15
+
+    # Contract multiplier. Leave at 0 to derive one from `lot_notional`, or set
+    # the symbol's real lot from the contract master. It matters more than it
+    # looks: a flat per-order brokerage spread over one notional unit is a
+    # crippling cost and over a real lot is a rounding error, so lot_size=1
+    # would have made every trade below look unprofitable for the wrong reason.
+    lot_size: int = 0
+    # NSE sizes stock F&O lots to a contract value in the Rs 5-10 lakh band
+    # (SEBI's 2015 revision; the Nov-2024 increase to Rs 15 lakh applies to
+    # index derivatives, not these). Midpoint, rounded to two significant
+    # figures the way a real lot ladder is rounded.
+    lot_notional: float = 750_000.0
+
+    # ---- Friction ---------------------------------------------------------
+    # MEASURED, not assumed: research/spread_curve.csv, 10,617 live two-sided
+    # stock-option quotes across 182 symbols. Near-ATM the median half-spread
+    # is 2.79% of premium, and above Rs10 of premium it flattens at 3.4-3.9%.
+    # 3.5% each way is ~7% round trip, paid whether the trade works or not.
+    half_spread_pct: float = 0.035
+    brokerage_per_leg: float = 20.0   # discount-broker flat rate
+    apply_charges: bool = True
 
     # NSE physical-delivery blackout: close everything this many calendar days
     # before the monthly expiry, and take no new entries inside the window.
@@ -277,27 +329,162 @@ def _month_groups(index: pd.DatetimeIndex) -> dict[tuple[int, int], list[int]]:
 
 
 # --------------------------------------------------------------------------- #
+# Option pricing
+# --------------------------------------------------------------------------- #
+#
+# The brief proxied the option at a flat 0.50 delta. That is fine for ranking
+# entry rules against each other and useless for deciding whether any of them
+# clears its costs, because it omits the two things that actually decide a
+# bought option's fate: theta, which is charged every calendar day whether the
+# thesis works or not, and the delta drift that makes a winner accelerate and a
+# loser go quiet. Both fall out of simply valuing the contract twice.
+
+
+def _norm_cdf(x: float) -> float:
+    """Standard normal CDF. Avoids a scipy dependency for one function."""
+    return 0.5 * (1.0 + erf(x / sqrt(2.0)))
+
+
+def black_scholes_call(spot: float, strike: float, years: float, sigma: float,
+                       rate: float) -> float:
+    """European call. Indian stock options are American, which for a *call* on
+    a non-dividend-paying underlying is worth the same -- early exercise is
+    never optimal, so the European price is not an approximation here.
+    """
+    if years <= 0 or sigma <= 0:
+        return max(spot - strike, 0.0)
+    d1 = (ln(spot / strike) + (rate + 0.5 * sigma * sigma) * years) / (
+        sigma * sqrt(years)
+    )
+    d2 = d1 - sigma * sqrt(years)
+    return spot * _norm_cdf(d1) - strike * exp(-rate * years) * _norm_cdf(d2)
+
+
+def strike_interval(spot: float) -> float:
+    """Approximate NSE strike ladder.
+
+    Real intervals are per-symbol and live in the contract master; this is the
+    shape of the ladder, which is enough to stop us pretending we bought a
+    strike exactly at the money when the real chain would have been up to half
+    an interval away.
+    """
+    for ceiling, step in ((50, 2.5), (250, 5.0), (500, 10.0), (1000, 20.0),
+                          (2500, 50.0), (5000, 100.0)):
+        if spot < ceiling:
+            return step
+    return 100.0
+
+
+def atm_strike(spot: float) -> float:
+    step = strike_interval(spot)
+    return round(spot / step) * step
+
+
+def contract_lot(spot: float, cfg: Config) -> int:
+    """Shares per contract: the configured lot, else one derived from notional.
+
+    Rounded to two significant figures because that is roughly how the real
+    ladder looks (250, 500, 1200, 2500...). The exact number is per-symbol and
+    lives in the contract master; what matters here is the order of magnitude,
+    since its only job is to stop the flat brokerage from dominating.
+    """
+    if cfg.lot_size:
+        return int(cfg.lot_size)
+    raw = max(cfg.lot_notional / max(spot, 1e-9), 1.0)
+    magnitude = 10.0 ** (len(str(int(raw))) - 2) if raw >= 10 else 1.0
+    return max(int(round(raw / magnitude) * magnitude), 1)
+
+
+def contract_expiry(entry: date, min_dte: int) -> date:
+    """The monthly contract to buy: this month's, unless it is too close.
+
+    Buying a contract with two weeks of life for a trade that may run a month
+    means holding the steepest part of the decay curve and then being forced
+    out by the delivery blackout regardless of whether the trade is working.
+    """
+    this_month = last_thursday(entry.year, entry.month)
+    if (this_month - entry).days >= min_dte:
+        return this_month
+    year, month = (entry.year + 1, 1) if entry.month == 12 else (entry.year,
+                                                                entry.month + 1)
+    return last_thursday(year, month)
+
+
+def realised_vol(close: pd.Series, lookback: int) -> pd.Series:
+    """Annualised close-to-close volatility, the input to the IV assumption."""
+    return close.pct_change().rolling(lookback).std() * sqrt(252)
+
+
+def option_charges(buy_value: float, sell_value: float, trade_date: date,
+                   cfg: Config) -> float:
+    """Indian F&O option costs, mirroring `options_tracker.capital_pnl`.
+
+    STT steps from 0.10% to 0.15% of sell-side premium on 1 April 2026, which
+    is live now, so a backtest spanning that date must not use one rate.
+    """
+    if not cfg.apply_charges:
+        return 0.0
+    turnover = buy_value + max(sell_value, 0.0)
+    brokerage = 2 * cfg.brokerage_per_leg
+    transaction = turnover * 0.0003503
+    sebi = turnover * 0.000001
+    stt = max(sell_value, 0.0) * (0.0015 if trade_date >= date(2026, 4, 1) else 0.001)
+    stamp = buy_value * 0.00003
+    gst = (brokerage + transaction + sebi) * 0.18
+    return brokerage + transaction + sebi + stt + stamp + gst
+
+
+# --------------------------------------------------------------------------- #
 # Execution
 # --------------------------------------------------------------------------- #
 
 
-def _option_pnl(entry: float, exit_price: float, held_days: int, cfg: Config) -> float:
-    """Underlying move converted to option P&L by a constant delta.
+def _price_option(entry_spot, exit_spot, entry_day, exit_day, sigma, cfg):
+    """Value one ATM call at entry and at exit, after spread and charges.
 
-    Worth being blunt about what this does and does not model. Delta 0.50 is
-    flat, but a real ATM option's delta climbs toward 1.0 as a winner runs and
-    decays toward 0 as a loser fades -- so this *understates* trend winners and
-    *overstates* losers, which flatters nothing and penalises nothing in an
-    obvious direction. Theta is the real omission: on a positional hold of two
-    to six weeks it is the largest single cost in the trade and it is charged
-    every calendar day regardless of whether the thesis is working. Set
-    `theta_per_day` and `entry_premium` to price it; left at zero this returns
-    exactly the brief's proxy.
+    Returns the fields the trade log needs. Under `pricing="delta"` this falls
+    back to the brief's flat-delta proxy so the two can be compared directly on
+    the same trades -- which is the only honest way to see what the proxy costs
+    you in conclusions.
     """
-    gross = (exit_price - entry) * cfg.delta
-    if cfg.theta_per_day and cfg.entry_premium:
-        gross -= cfg.entry_premium * cfg.theta_per_day * held_days
-    return gross
+    if cfg.pricing == "delta":
+        gross = (exit_spot - entry_spot) * cfg.delta * contract_lot(entry_spot, cfg)
+        return {"Strike": np.nan, "Expiry": None, "DTE": np.nan, "IV": np.nan,
+                "Lot": contract_lot(entry_spot, cfg),
+                "Premium In": np.nan, "Premium Out": np.nan, "Charges": 0.0,
+                "Option PnL": round(gross, 2)}
+
+    strike = atm_strike(entry_spot)
+    expiry = contract_expiry(entry_day, cfg.min_dte)
+    lot = contract_lot(entry_spot, cfg)
+    years_in = max((expiry - entry_day).days, 0) / 365.0
+    years_out = max((expiry - exit_day).days, 0) / 365.0
+
+    premium_in = black_scholes_call(entry_spot, strike, years_in, sigma, cfg.risk_free)
+    premium_out = black_scholes_call(
+        exit_spot, strike, years_out,
+        max(sigma + cfg.iv_exit_shift, 0.01), cfg.risk_free,
+    )
+
+    # Cross the spread in the direction that costs money, both times.
+    fill_in = premium_in * (1 + cfg.half_spread_pct)
+    fill_out = max(premium_out * (1 - cfg.half_spread_pct), 0.0)
+
+    buy_value = fill_in * lot
+    sell_value = fill_out * lot
+    charges = option_charges(buy_value, sell_value, exit_day, cfg)
+
+    return {
+        "Strike": strike,
+        "Expiry": expiry,
+        "DTE": (expiry - entry_day).days,
+        "IV": round(sigma, 4),
+        "Lot": lot,
+        "Premium In": round(fill_in, 2),
+        "Premium Out": round(fill_out, 2),
+        "Charges": round(charges, 2),
+        "Option PnL": round(sell_value - buy_value - charges, 2),
+    }
 
 
 def _resolve_trade(bars: dict, entry_index: int, atr_at_signal: float,
@@ -313,7 +500,9 @@ def _resolve_trade(bars: dict, entry_index: int, atr_at_signal: float,
     ema, blackout = bars["ema"], bars["blackout"]
     n = len(close)
 
-    entry_price = open_[entry_index] if cfg.entry_on == "next_open" else close[entry_index]
+    entry_price = (
+        open_[entry_index] if cfg.entry_on == "next_open" else close[entry_index]
+    )
     stop = entry_price - cfg.stop_atr * atr_at_signal
     target = entry_price + cfg.target_atr * atr_at_signal
     breakeven_trigger = entry_price + cfg.breakeven_atr * atr_at_signal
@@ -333,7 +522,8 @@ def _resolve_trade(bars: dict, entry_index: int, atr_at_signal: float,
                                 bars, cfg)
 
         hit_target = high[position] >= target
-        if hit_target and not (cfg.pessimistic_intrabar and low[position] <= active_stop):
+        stop_also_hit = cfg.pessimistic_intrabar and low[position] <= active_stop
+        if hit_target and not stop_also_hit:
             fill = max(open_[position], target)  # gap-up honesty
             return _close_trade(entry_index, entry_price, position, fill, "TP",
                                 bars, cfg)
@@ -360,9 +550,12 @@ def _resolve_trade(bars: dict, entry_index: int, atr_at_signal: float,
 def _close_trade(entry_index, entry_price, exit_index, exit_price, reason,
                  bars, cfg) -> dict:
     dates = bars["dates"]
+    entry_day, exit_day = dates[entry_index].date(), dates[exit_index].date()
     held = (dates[exit_index] - dates[entry_index]).days
-    stock_pnl = exit_price - entry_price
-    option_pnl = _option_pnl(entry_price, exit_price, held, cfg)
+
+    option = _price_option(
+        entry_price, exit_price, entry_day, exit_day, bars["sigma"][entry_index], cfg
+    )
     return {
         "Entry Date": dates[entry_index],
         "Entry Price": round(entry_price, 2),
@@ -370,9 +563,14 @@ def _close_trade(entry_index, entry_price, exit_index, exit_price, reason,
         "Exit Price": round(exit_price, 2),
         "Exit Reason": reason,
         "Held Days": held,
-        "Stock PnL": round(stock_pnl, 2),
-        "Option PnL proxy": round(option_pnl, 2),
-        "Option PnL (lot)": round(option_pnl * cfg.lot_size, 2),
+        "Stock PnL": round(exit_price - entry_price, 2),
+        "Stock %": round((exit_price / entry_price - 1) * 100, 2),
+        **option,
+        "Option %": (
+            round(option["Option PnL"]
+                  / (option["Premium In"] * option["Lot"]) * 100, 1)
+            if option["Premium In"] and option["Premium In"] > 0 else np.nan
+        ),
         "_exit_index": exit_index,
     }
 
@@ -403,13 +601,23 @@ def backtest(df: pd.DataFrame, strategy: str = "ttm_squeeze",
     )
     tradeable = signals & ~entry_blackout & atr_series.notna() & (atr_series > 0)
 
+    # The IV we will pay, from trailing realised vol. Clamped: a stock that has
+    # barely moved for a month does not sell you a 5% option, and a post-event
+    # name does not sell you a 200% one.
+    sigma = (realised_vol(data["close"], cfg.vol_lookback) * cfg.iv_premium).clip(
+        cfg.iv_floor, cfg.iv_cap
+    ).bfill()
+
     bars = {
         "open": data["open"].to_numpy(),
         "high": data["high"].to_numpy(),
         "low": data["low"].to_numpy(),
         "close": data["close"].to_numpy(),
-        "ema": data["close"].ewm(span=cfg.ema_exit_period, adjust=False).mean().to_numpy(),
+        "ema": data["close"].ewm(
+            span=cfg.ema_exit_period, adjust=False
+        ).mean().to_numpy(),
         "blackout": blackout.to_numpy(),
+        "sigma": sigma.to_numpy(),
         "dates": data.index.to_pydatetime(),
     }
     atr_values = atr_series.to_numpy()
@@ -434,7 +642,8 @@ def backtest(df: pd.DataFrame, strategy: str = "ttm_squeeze",
 
 TRADE_COLUMNS = [
     "Entry Date", "Entry Price", "Exit Date", "Exit Price", "Exit Reason",
-    "Held Days", "Stock PnL", "Option PnL proxy", "Option PnL (lot)",
+    "Held Days", "Stock PnL", "Stock %", "Strike", "Expiry", "DTE", "IV",
+    "Lot", "Premium In", "Premium Out", "Charges", "Option PnL", "Option %",
 ]
 
 
@@ -461,7 +670,7 @@ def run_universe(data: dict[str, pd.DataFrame], strategy: str = "ttm_squeeze",
 # --------------------------------------------------------------------------- #
 
 
-def metrics(log: pd.DataFrame, column: str = "Option PnL proxy") -> dict:
+def metrics(log: pd.DataFrame, column: str = "Option PnL") -> dict:
     """Headline statistics on the traded instrument, not on the underlying.
 
     Scratches are counted separately rather than lumped in with losers. A stop
@@ -511,7 +720,7 @@ def summarise(log: pd.DataFrame, label: str = "TTM Squeeze") -> dict:
         print(f"  {key:<24}{value:>14}")
 
     print(f"\n  {'exit reason':<24}{'n':>6}{'avg option PnL':>18}")
-    breakdown = log.groupby("Exit Reason")["Option PnL proxy"].agg(["count", "mean"])
+    breakdown = log.groupby("Exit Reason")["Option PnL"].agg(["count", "mean"])
     for reason, row in breakdown.sort_values("count", ascending=False).iterrows():
         print(f"  {reason:<24}{int(row['count']):>6}{row['mean']:>18.2f}")
     return stats
@@ -570,3 +779,30 @@ if __name__ == "__main__":
             f"  {name:<16}{stats['Total Trades']:>5}{stats['Win Rate (%)']:>8}"
             f"{stats['Expectancy']:>13}{stats['Total PnL']:>12}"
         )
+
+    # What the option model is actually doing to the result. Three prices for
+    # the same trades: the brief's flat delta, a frictionless real option, and
+    # a real option after spread and charges. The gap between the last two is
+    # the toll, and on this account's measured spreads it is the biggest single
+    # number in the table -- which is why the flat-delta proxy cannot be used
+    # to decide whether an entry rule is worth trading.
+    print(f"\n{'=' * 62}\nWhat the option model costs, same trades\n{'=' * 62}")
+    print(f"  {'engine':<16}{'flat delta':>13}{'BS gross':>12}{'BS net':>12}"
+          f"{'toll/trade':>12}")
+    for name in SIGNAL_ENGINES:
+        net = backtest(df, strategy=name, cfg=config)
+        if net.empty:
+            continue
+        flat = backtest(df, strategy=name, cfg=replace(config, pricing="delta"))
+        gross = backtest(
+            df, strategy=name,
+            cfg=replace(config, half_spread_pct=0.0, apply_charges=False),
+        )
+        toll = (gross["Option PnL"].sum() - net["Option PnL"].sum()) / len(net)
+        print(
+            f"  {name:<16}{flat['Option PnL'].sum():>13,.0f}"
+            f"{gross['Option PnL'].sum():>12,.0f}{net['Option PnL'].sum():>12,.0f}"
+            f"{toll:>12,.0f}"
+        )
+    print("\n  Synthetic data. These numbers say nothing about edge -- they say"
+          "\n  what the costs do to whatever edge you bring.")
