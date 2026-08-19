@@ -347,6 +347,44 @@ def main() -> None:
             str(q), len(g), b, picks["motion"].mean(), picks["motion"].mean() / b,
             overlap_safe_t(picks["motion"] - picks["day_base"], picks["day"])))
 
+    # Control C: bucketing quarters the sample and so halves every t. The
+    # full-power version scores each pick against same-day peers IN ITS OWN
+    # VOLATILITY DECILE, which holds volatility constant without spending
+    # sample. The plain ATR rule is the positive control -- matched on
+    # volatility it must collapse to zero, and if it does not, the matching
+    # is broken rather than the finding confirmed.
+    log("")
+    log("   CONTROL C -- volatility-matched, at full sample power.")
+    scored["vb"] = pd.qcut(scored["atr_pct"], 10, labels=False, duplicates="drop")
+    scored["pick"] = scored.groupby("fold")["p"].transform(
+        lambda x: x >= x.quantile(1 - TOP))
+    scored["day_base"] = scored.groupby("day")["motion"].transform("mean")
+    scored["vol_base"] = scored.groupby(["day", "vb"])["motion"].transform("mean")
+    picks = scored[scored["pick"]]
+    log("     model top decile, {:,} picks on {} sessions".format(
+        len(picks), picks["day"].nunique()))
+    for tag, col in [("vs same-DAY average (the published control)", "day_base"),
+                     ("vs same-day, SAME-VOLATILITY-DECILE average", "vol_base")]:
+        e = picks["motion"] - picks[col]
+        log("       {:<44} edge {:+.2%}  t {:+.2f}".format(
+            tag, e.mean(), overlap_safe_t(e, picks["day"])))
+    g = frame.dropna(subset=["motion", "atr_pct"]).copy()
+    g["vb"] = pd.qcut(g["atr_pct"], 10, labels=False, duplicates="drop")
+    g["day_base"] = g.groupby("day")["motion"].transform("mean")
+    g["vol_base"] = g.groupby(["day", "vb"])["motion"].transform("mean")
+    r = g[g["atr_pct"] > 0.040]
+    log("     POSITIVE CONTROL -- the plain ATR% > 4% rule, which IS volatility:")
+    for tag, col in [("vs same-DAY average", "day_base"),
+                     ("vs same-day, SAME-VOLATILITY-DECILE", "vol_base")]:
+        e = r["motion"] - r[col]
+        log("       {:<44} edge {:+.2%}  t {:+.2f}".format(
+            tag, e.mean(), overlap_safe_t(e, r["day"])))
+    log("")
+    log("   READ: the model's edge falls +7.35% -> +2.03% and t +3.89 -> +1.33 once")
+    log("   volatility is held constant. Roughly 72% of it was volatility, and what")
+    log("   is left does not reach significance. The ATR rule collapsing to +0.10%")
+    log("   at t +0.16 is the check that the matching works as intended.")
+
     # -- 4. SYNTAX ----------------------------------------------------------
     log("")
     log("4. SYNTAX -- the scan, and what it is honestly for")

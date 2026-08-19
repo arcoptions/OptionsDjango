@@ -73,6 +73,19 @@ CAN THE MOTION SIGNAL BE RUN AS A CHARTINK SCAN?
      Q3               8,505   8.52%      10.46%    1.23    0.75
      Q4 volatile      8,505  16.08%      22.21%    1.38    0.92
 
+   CONTROL C -- volatility-matched, at full sample power.
+     model top decile, 3,403 picks on 179 sessions
+       vs same-DAY average (the published control)  edge +7.35%  t +3.89
+       vs same-day, SAME-VOLATILITY-DECILE average  edge +2.03%  t +1.33
+     POSITIVE CONTROL -- the plain ATR% > 4% rule, which IS volatility:
+       vs same-DAY average                          edge +11.03%  t +7.11
+       vs same-day, SAME-VOLATILITY-DECILE          edge +0.10%  t +0.16
+
+   READ: the model's edge falls +7.35% -> +2.03% and t +3.89 -> +1.33 once
+   volatility is held constant. Roughly 72% of it was volatility, and what
+   is left does not reach significance. The ATR rule collapsing to +0.10%
+   at t +0.16 is the check that the matching works as intended.
+
 4. SYNTAX -- the scan, and what it is honestly for
 
    Verdict: buildable, and it will do what it says -- surface stocks that
