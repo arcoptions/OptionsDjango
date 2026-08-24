@@ -72,7 +72,19 @@ jobs:
         # when it does fail it says which call was refused.
         run: |
           zip -qr /tmp/package.zip . -x '.git/*'
+          set +e
           az webapp deploy \
             --resource-group rg-optionsdjango-centralindia \
             --name arc-options-2fa45de1 \
-            --src-path /tmp/package.zip --type zip
+            --src-path /tmp/package.zip --type zip > /tmp/deploy.log 2>&1
+          code=$?
+          cat /tmp/deploy.log
+          # Lift the failure into an annotation as well as the log. Run logs need
+          # an authenticated GitHub session to read; annotations do not, so this
+          # is the difference between diagnosing a failed deploy and guessing at
+          # one -- which cost three runs when the action's bare 403 was all there
+          # was to go on.
+          if [ $code -ne 0 ]; then
+            echo "::error::az webapp deploy exited $code: $(tail -c 800 /tmp/deploy.log | tr '\n\r' '  ')"
+            exit $code
+          fi
