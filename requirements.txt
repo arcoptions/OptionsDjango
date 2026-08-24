@@ -6,3 +6,17 @@ gunicorn>=23.0.0
 whitenoise>=6.9.0
 Telethon>=1.40.0
 qrcode[pil]>=8.0
+
+# shortlist.py and build_daily_shortlist compute the daily picks with these, and
+# options_tracker/urls.py imports shortlist_views -- so a host without them
+# cannot even run `manage.py check`. They were only ever installed here by the
+# research work, which is why the suite passed on this laptop and failed on the
+# first clean install.
+#
+# Capped at the major version the picks were actually computed under. Left open,
+# a clean install today resolves pandas 3.0, where copy-on-write and the new
+# default string dtype are mandatory rather than opt-in -- so the deployed host
+# would be running the shortlist on a pandas the numbers were never checked
+# against, decided by nothing but the date of the deploy.
+numpy>=2.1.0,<3
+pandas>=2.2.0,<3
