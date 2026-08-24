@@ -60,7 +60,19 @@ jobs:
         run: rm -rf research
 
       - name: Deploy to Azure
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: arc-options-2fa45de1
-          package: .
+        # The Azure CLI rather than azure/webapps-deploy@v3, which started
+        # answering "Failed to deploy web package using OneDeploy to App
+        # Service. Forbidden (CODE: 403)" on 24 August against an unchanged
+        # subscription: same Website Contributor assignment (13 August, and it
+        # deployed fine on the 19th), no IP restrictions, plan Ready, usage
+        # Normal, nothing in the activity log. What did change is the runner --
+        # azure/login@v2 is now force-migrated to Node 24 -- and the deploy
+        # action's only credential is state handed to it by that login step.
+        # `az` uses the login's own session, so there is no handoff to lose, and
+        # when it does fail it says which call was refused.
+        run: |
+          zip -qr /tmp/package.zip . -x '.git/*'
+          az webapp deploy \
+            --resource-group rg-optionsdjango-centralindia \
+            --name arc-options-2fa45de1 \
+            --src-path /tmp/package.zip --type zip
