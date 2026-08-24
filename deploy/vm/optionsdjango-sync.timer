@@ -1,0 +1,14 @@
+[Unit]
+Description=Check every five minutes for a newly deployed commit
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+# One timer covers the whole day rather than a second unit pinned to the close.
+# A commit deployed at 11:00 is deferred on every tick while a position is open
+# and applied by the first tick after the engine goes flat -- which the shipped
+# strategy does at 15:20, and the market forces by 15:40.
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

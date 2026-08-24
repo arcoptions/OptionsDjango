@@ -43,6 +43,22 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Stamp the commit into the package
+        # App Service unpacks a zip with no .git in it, so this file is the only
+        # way it can know which commit it is serving. `record_deployment` reads
+        # it on startup and publishes it; the trading VM follows that row rather
+        # than origin/master, so it never runs code whose migration has not been
+        # applied yet. See options_tracker/deployment.py.
+        run: echo "${{ github.sha }}" > DEPLOYED_SHA
+
+      - name: Trim the deployment package
+        # research/ is two hundred scripts and their output. The site reads
+        # sixteen small CSVs from it, and those now live in
+        # options_tracker/data/research/ and travel with the app. Shipping the
+        # rest lengthens every deploy and puts half-finished experiments on the
+        # production host for no reason.
+        run: rm -rf research
+
       - name: Deploy to Azure
         uses: azure/webapps-deploy@v3
         with:

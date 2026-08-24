@@ -5,8 +5,11 @@ import shutil
 import tempfile
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from io import StringIO
+from pathlib import Path
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.management import call_command
@@ -15,11 +18,14 @@ from django.db import connection
 from django.utils import timezone
 
 from . import live_dashboard, live_engine
+from .deployment import SYNC_STALE_AFTER, deployed_commit, record_deployed_commit, record_vm_commit, sync_status
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
-from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TradeExecution, TradeStyle
+from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TrackedStock, TradeExecution, TradeStyle
+from .research_views import PAGE_TABLES, RESEARCH as PUBLISHED
 from .services import _expiry_month_hint, _extract_access_token, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
+from .management.commands.sync_to_deployed_commit import Command as SyncCommand
 from .management.commands.track_telegram import Command as TrackTelegramCommand
 
 
@@ -1775,14 +1781,36 @@ class DhanTokenRenewalTests(TestCase):
 		# someone pasted this morning.
 		self.assertEqual(access_token, live)
 
-	def test_refuses_to_renew_when_there_is_nowhere_to_put_the_result(self):
+	def test_a_newer_but_dead_renewal_file_never_shadows_a_live_database_token(self):
+		live = self._jwt(12)
+		AppSetting.objects.create(key="dhan_access_token", value=live)
+		path = self._token_path()
+		with open(path, "w", encoding="utf-8") as handle:
+			handle.write(self._jwt(-3))
+		os.utime(path, (0, (timezone.now() + timedelta(minutes=5)).timestamp()))
+
+		with self._env(DHAN_TOKEN_FILE=path, DHAN_CLIENT_ID="1111"):
+			access_token, _ = get_dhan_credentials()
+
+		# A host that renewed yesterday and then sat idle has the newest file on
+		# disk and the deadest token in it. Recency may only break ties between
+		# two live tokens, on this pair as much as on the environment seed.
+		self.assertEqual(access_token, live)
+
+	@patch("options_tracker.services.requests.get")
+	def test_a_host_that_keeps_no_file_still_publishes_to_the_database(self, get):
+		get.side_effect = lambda url, **kwargs: (
+			_FakeResponse(200, {"accessToken": "brand-new-token"}) if "RenewToken" in url
+			else _FakeResponse(200, {"tokenValidity": "18/08/2026 09:00"})
+		)
+
 		with self._env(DHAN_ACCESS_TOKEN="live-token", DHAN_CLIENT_ID="1111"):
 			result = renew_dhan_token()
 
-		# Renewing kills the old token. Doing that without somewhere to persist
-		# the replacement would leave the host holding an invalidated token.
-		self.assertFalse(result["ok"])
-		self.assertIn("DHAN_TOKEN_FILE", result["error"])
+		# Renewing kills the old token, so it may only happen somewhere the
+		# replacement can be saved -- and the database always qualifies.
+		self.assertTrue(result["ok"])
+		self.assertEqual(AppSetting.objects.get(key="dhan_access_token").value, "brand-new-token")
 
 	@patch("options_tracker.services.requests.get")
 	def test_persists_the_new_token_without_ever_returning_it(self, get):
@@ -1801,6 +1829,10 @@ class DhanTokenRenewalTests(TestCase):
 
 		self.assertTrue(result["ok"])
 		self.assertEqual(stored, "brand-new-token")
+		# The other host cannot renew -- Dhan whitelists one IP -- so it can only
+		# ever hold a working token if the renewing host publishes it here. Not
+		# doing this cost a session a day, every day, from 18 August.
+		self.assertEqual(AppSetting.objects.get(key="dhan_access_token").value, "brand-new-token")
 		self.assertEqual(result["validity"], "18/08/2026 09:00")
 		self.assertNotIn("brand-new-token", json.dumps(result))
 
@@ -1866,3 +1898,268 @@ class LiveEngineObserveOnlyTests(TestCase):
 		# The flag still wins on its own: absence of the variable must mean
 		# "whatever the caller asked for", not "go live".
 		self.assertTrue(tick.call_args.kwargs["dry_run"])
+
+
+class DeployedCommitSyncTests(TestCase):
+	"""Keeping the trading VM on the commit App Service is actually serving.
+
+	Updating the VM used to mean remembering to SSH in and pull, and it stopped
+	being remembered: on 24 August 2026 the engine was eighteen commits behind
+	the laptop and five days behind the site describing it. Automating that is
+	only safe if the restart waits for a flat book, so most of this is about
+	when the sync refuses to act.
+	"""
+
+	SYNC = "options_tracker.management.commands.sync_to_deployed_commit"
+	OLD = "a" * 40
+	NEW = "b" * 40
+
+	def _patches(self, market_open, position):
+		return (
+			patch(f"{self.SYNC}.git_head", return_value=self.OLD),
+			patch(f"{self.SYNC}.is_dhan_market_open", return_value=market_open),
+			patch(f"{self.SYNC}.load_state", return_value={"position": position}),
+			patch.object(SyncCommand, "_checkout"),
+			patch.object(SyncCommand, "_restart"),
+		)
+
+	def _sync(self, market_open, position):
+		head, open_, state, checkout, restart = self._patches(market_open, position)
+		with head, open_, state, checkout as moved, restart as restarted:
+			call_command("sync_to_deployed_commit", stdout=StringIO(), stderr=StringIO())
+		return moved, restarted
+
+	def test_record_deployment_publishes_the_sha_stamped_into_the_package(self):
+		with tempfile.TemporaryDirectory() as directory:
+			(Path(directory) / "DEPLOYED_SHA").write_text(self.NEW, encoding="utf-8")
+			with self.settings(BASE_DIR=Path(directory)):
+				call_command("record_deployment", stdout=StringIO())
+
+		# App Service unpacks a zip with no .git in it, so the workflow stamps
+		# the commit into the package and this is the only way to read it back.
+		self.assertEqual(deployed_commit(), self.NEW)
+
+	def test_it_will_not_restart_the_engine_with_a_position_open(self):
+		record_deployed_commit(self.NEW)
+
+		moved, restarted = self._sync(market_open=True, position={"strike": 24000})
+
+		# Neither the tree nor the process moves. Checking the code out now and
+		# restarting after the close would leave new files under a running
+		# engine all session, and anything imported inside a function would come
+		# off the new tree mid-trade.
+		moved.assert_not_called()
+		restarted.assert_not_called()
+		self.assertEqual(AppSetting.objects.get(key="vm_update_pending").value, self.NEW)
+
+	def test_it_updates_and_restarts_once_the_book_is_flat(self):
+		record_deployed_commit(self.NEW)
+		AppSetting.objects.create(key="vm_update_pending", value=self.NEW)
+
+		moved, restarted = self._sync(market_open=True, position=None)
+
+		moved.assert_called_once()
+		restarted.assert_called_once()
+		self.assertFalse(AppSetting.objects.filter(key="vm_update_pending").exists())
+
+	def test_a_closed_market_is_reason_enough_to_update(self):
+		record_deployed_commit(self.NEW)
+
+		moved, restarted = self._sync(market_open=False, position={"strike": 24000})
+
+		# A position carried across the close is squared off on the next tick;
+		# it is not a reason to keep the engine on stale code overnight.
+		moved.assert_called_once()
+		restarted.assert_called_once()
+
+	def test_a_host_already_on_the_deployed_commit_does_nothing(self):
+		record_deployed_commit(self.OLD)
+
+		moved, restarted = self._sync(market_open=False, position=None)
+
+		moved.assert_not_called()
+		restarted.assert_not_called()
+
+	def test_an_unrecorded_deployment_leaves_the_engine_where_it_is(self):
+		moved, restarted = self._sync(market_open=False, position=None)
+
+		# Before the first deploy on this scheme -- and after one that failed to
+		# write its marker -- staying put is the safe direction to fail.
+		moved.assert_not_called()
+		restarted.assert_not_called()
+
+
+class PublishedResearchTableTests(TestCase):
+	"""The /research/ page has to render on a host with no research/ folder.
+
+	The deploy drops research/ from the package, so every table the page reads
+	must already be inside the app. These run in CI, which gates the deploy --
+	so adding a _read() and forgetting to publish it fails before it ships,
+	rather than rendering an empty section in production.
+	"""
+
+	def test_every_table_the_page_reads_is_published(self):
+		missing = [name for name in PAGE_TABLES if not (PUBLISHED / name).exists()]
+		self.assertEqual(missing, [], "run: manage.py publish_research_tables")
+
+	def test_nothing_is_published_that_the_page_does_not_read(self):
+		if not PUBLISHED.exists():
+			self.skipTest("nothing published yet")
+		strays = sorted(p.name for p in PUBLISHED.iterdir() if p.name not in PAGE_TABLES)
+		self.assertEqual(strays, [], "published but never read; delete them")
+
+	def test_the_published_tables_live_outside_the_research_folder(self):
+		# The invariant the workflow's `rm -rf research` depends on. Asserted
+		# rather than assumed, because breaking it looks fine locally.
+		research = (Path(settings.BASE_DIR) / "research").resolve()
+		self.assertNotIn(research, PUBLISHED.resolve().parents)
+
+	def test_the_page_renders_its_tables(self):
+		body = self.client.get("/research/").content.decode()
+		# One row out of each family, so an empty CSV cannot pass as a render.
+		for probe in ("1-hour scan", "Stage 1", "Spread"):
+			self.assertIn(probe, body)
+
+
+class SyncStatusTests(TestCase):
+	"""What /nifty-live/ says about the code the engine is running.
+
+	The site is App Service and the engine is the VM, so the page cannot ask --
+	it reads what the VM last wrote. Each of these is a state that actually
+	happened at least once and was invisible at the time.
+	"""
+	OLD = "a" * 40
+	NEW = "b" * 40
+
+	def test_a_vm_that_has_never_reported_reads_as_unknown(self):
+		record_deployed_commit(self.NEW)
+
+		status = sync_status()
+
+		self.assertEqual(status["vm"], "")
+		self.assertFalse(status["in_sync"])
+		# Nothing heard from is not the same as heard-from-and-late.
+		self.assertFalse(status["stale"])
+		self.assertIsNone(status["age_seconds"])
+
+	def test_matching_commits_are_in_sync(self):
+		record_deployed_commit(self.NEW)
+		record_vm_commit(self.NEW)
+
+		status = sync_status()
+
+		self.assertTrue(status["in_sync"])
+		self.assertFalse(status["stale"])
+		self.assertEqual(status["vm_short"], self.NEW[:7])
+
+	def test_a_lagging_vm_is_drift(self):
+		record_deployed_commit(self.NEW)
+		record_vm_commit(self.OLD)
+		AppSetting.objects.create(key="vm_update_pending", value=self.NEW)
+
+		status = sync_status()
+
+		self.assertFalse(status["in_sync"])
+		self.assertEqual(status["pending_short"], self.NEW[:7])
+
+	def test_a_stopped_timer_is_visible_even_while_the_commits_match(self):
+		# The failure that looks exactly like success: same SHA on both sides,
+		# because nothing has updated the row since the timer died.
+		record_deployed_commit(self.NEW)
+		record_vm_commit(self.NEW)
+		stale = timezone.now() - timedelta(seconds=SYNC_STALE_AFTER + 60)
+		AppSetting.objects.filter(key="vm_commit").update(updated_at=stale)
+
+		status = sync_status()
+
+		self.assertTrue(status["in_sync"])
+		self.assertTrue(status["stale"])
+		self.assertGreaterEqual(status["age_minutes"], SYNC_STALE_AFTER // 60)
+
+	def test_the_sync_command_reports_in_even_when_it_changes_nothing(self):
+		record_deployed_commit(self.OLD)
+		with patch("options_tracker.management.commands.sync_to_deployed_commit.git_head",
+				   return_value=self.OLD):
+			call_command("sync_to_deployed_commit", stdout=StringIO())
+
+		# Already on the deployed commit, so nothing moved -- but the heartbeat
+		# has to be written anyway or a healthy VM reads as a dead one.
+		self.assertTrue(sync_status()["in_sync"])
+
+	def test_the_dashboard_names_the_commit_the_engine_is_running(self):
+		record_deployed_commit(self.NEW)
+		record_vm_commit(self.OLD)
+
+		body = self.client.get("/nifty-live/").content.decode()
+
+		self.assertIn("CODE DRIFT", body)
+		self.assertIn(self.OLD[:7], body)
+		self.assertIn(self.NEW[:7], body)
+
+	def test_the_dashboard_is_quiet_when_the_hosts_agree(self):
+		record_deployed_commit(self.NEW)
+		record_vm_commit(self.NEW)
+
+		body = self.client.get("/nifty-live/").content.decode()
+
+		self.assertNotIn("CODE DRIFT", body)
+		self.assertIn(self.NEW[:7], body)
+
+
+class ReferenceDataSeedTests(TestCase):
+	"""The traded universe has to survive the trip to a host that has no P&L files.
+
+	TrackedStock is harvested from broker statements on one laptop. Production
+	sat at zero rows because of it, so these run against the fixture that
+	actually ships rather than one built in the test.
+	"""
+
+	def test_the_shipped_fixture_populates_an_empty_database(self):
+		self.assertEqual(TrackedStock.objects.count(), 0)
+
+		call_command("seed_reference_data", stdout=StringIO())
+
+		stocks = TrackedStock.objects.all()
+		self.assertGreater(stocks.count(), 100)
+		# A stock with no security id downloads nothing, so this is what makes
+		# the fixture usable. lot_size is deliberately not asserted: 13 active
+		# names carry none, and `download_stock_data --feed master` is what
+		# stamps those from the current Dhan scrip master.
+		self.assertTrue(all(stock.security_id for stock in stocks.filter(is_active=True)))
+
+	def test_seeding_twice_changes_nothing(self):
+		call_command("seed_reference_data", stdout=StringIO())
+		before = TrackedStock.objects.count()
+
+		out = StringIO()
+		call_command("seed_reference_data", "--dry-run", stdout=out)
+
+		self.assertEqual(TrackedStock.objects.count(), before)
+		self.assertIn("0 to create, 0 to update", out.getvalue())
+
+	def test_it_matches_on_symbol_rather_than_primary_key(self):
+		# Two databases number their rows independently. Seeding on top of a row
+		# that already exists has to update it, not collide with it or duplicate.
+		TrackedStock.objects.create(symbol="RELIANCE", security_id="wrong", priority=99)
+
+		call_command("seed_reference_data", stdout=StringIO())
+
+		self.assertEqual(TrackedStock.objects.filter(symbol="RELIANCE").count(), 1)
+		self.assertNotEqual(TrackedStock.objects.get(symbol="RELIANCE").security_id, "wrong")
+
+	def test_decimals_survive_the_round_trip(self):
+		TrackedStock.objects.create(
+			symbol="TESTCO", security_id="1", lot_size=50,
+			strike_step=Decimal("12.50"), turnover=Decimal("1234567.89"),
+			realised_pnl=Decimal("-4321.05"))
+		dump = Path(tempfile.mkdtemp()) / "stocks.json"
+		call_command("seed_reference_data", "--dump", f"--fixture={dump}", stdout=StringIO())
+		TrackedStock.objects.all().delete()
+
+		call_command("seed_reference_data", f"--fixture={dump}", stdout=StringIO())
+
+		stock = TrackedStock.objects.get(symbol="TESTCO")
+		# json floats would round these; the fixture writes strings for that reason.
+		self.assertEqual(stock.turnover, Decimal("1234567.89"))
+		self.assertEqual(stock.realised_pnl, Decimal("-4321.05"))
+		self.assertEqual(stock.strike_step, Decimal("12.50"))

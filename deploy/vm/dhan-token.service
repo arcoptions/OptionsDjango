@@ -1,0 +1,27 @@
+[Unit]
+Description=Dhan access token renewal (this host owns the token)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/opt/optionsdjango
+EnvironmentFile=/etc/optionsdjango.env
+# THIS HOST, AND ONLY THIS HOST. Renewing invalidates the previous token
+# account-wide, so two renewers take turns killing each other's token. The VM
+# owns it because Dhan whitelists this IP for orders and App Service's outbound
+# pool cannot be whitelisted. The renewed token is published to the shared
+# database, which is where every other process reads it from.
+#
+# The daemon renews at 08:20 IST against the clock rather than on an interval
+# from process start -- an interval timer eventually fires at 11:00 or 14:00 and
+# takes the token away mid-session, possibly with a position open.
+ExecStart=/opt/optionsdjango/.venv/bin/python -u manage.py renew_dhan_token --daemon
+Restart=always
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

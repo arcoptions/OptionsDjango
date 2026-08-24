@@ -1,0 +1,28 @@
+[Unit]
+Description=NIFTY Live Trading Engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/opt/optionsdjango
+EnvironmentFile=/etc/optionsdjango.env
+# Diagnostic, not a gate. `-` so a dead token still lets the engine start: it
+# will log the failure every tick, which is louder and more useful than a service
+# that refuses to come up and gets restarted every thirty seconds forever.
+#
+# This replaces refresh_token.sh, which copied the token from /mnt/arc-options --
+# a storage mount that was never configured on either host. It printed "Azure
+# mount not found; token must be pre-placed" and exited 0 on every single boot,
+# so the one step that was supposed to keep this host's token current had in fact
+# never run. The token now arrives through the database instead.
+ExecStartPre=-/opt/optionsdjango/.venv/bin/python manage.py renew_dhan_token --check
+ExecStart=/opt/optionsdjango/.venv/bin/python -u manage.py run_nifty_live
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

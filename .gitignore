@@ -15,12 +15,27 @@ staticfiles/
 research/cache/
 research/*.pkl
 research/*.parquet
-# Per-trade dumps, kept only for ad-hoc digging. The small aggregate CSVs the
-# /research/ page renders from ARE tracked; these are not (spread_trades.csv
-# alone is 140 MB, and spread_tables.py rebuilds the page tables from them).
+# Per-trade dumps, kept only for ad-hoc digging (spread_trades.csv alone is
+# 140 MB, and spread_tables.py rebuilds the page tables from them).
 research/spread_trades.csv
 research/spread_nearexpiry_trades.csv
 research/chartink_options_trades.csv
+# The sixteen aggregates the /research/ page renders. Tracked once, as
+# options_tracker/data/research/*.csv, put there by
+# `manage.py publish_research_tables`. research/ is where the scripts write
+# them and hand them to each other; publishing is what commits them.
+research/option_strategy.csv
+research/option_big_runs.csv
+research/chartink_ARC15MIN.csv
+research/chartink_NARC1HR.csv
+research/chartink_ce_*.csv
+research/spread_summary.csv
+research/spread_dte.csv
+research/spread_exits.csv
+research/spread_cycles.csv
+research/spread_slippage.csv
+research/spread_months.csv
+research/spread_money.csv
 # Downloaded market data, not results. Every one of these is rebuilt by the
 # script named after it, and together they are ~110 MB -- scrip_master is a
 # fresh Dhan download each run, stock_intraday is 49 symbols of 1-min bars, and
@@ -46,3 +61,7 @@ research/daily_panel.csv
 # Run logs from long research jobs. The .txt write-up beside each script is the
 # artefact worth keeping; these are just the console scrolling past.
 research/*.log
+
+# Written into the deployment package by the workflow so the running host can
+# name its own commit. Never committed -- it is per-deploy, not per-revision.
+DEPLOYED_SHA

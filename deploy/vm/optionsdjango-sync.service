@@ -1,0 +1,17 @@
+[Unit]
+Description=Follow the commit App Service deployed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=azureuser
+WorkingDirectory=/opt/optionsdjango
+EnvironmentFile=/etc/optionsdjango.env
+# The command decides for itself whether restarting is safe and does nothing at
+# all when it is not, so this can run straight through the session. It restarts
+# nifty-live.service via passwordless sudo; that is the only privileged thing it
+# does.
+ExecStart=/opt/optionsdjango/.venv/bin/python -u manage.py sync_to_deployed_commit
+StandardOutput=journal
+StandardError=journal

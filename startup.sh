@@ -2,26 +2,35 @@
 set -e
 
 python manage.py migrate --noinput
+# After the migration, never before: this row is what the VM checks out, and it
+# has to mean "the schema is ready for this commit" rather than "this commit
+# exists". Failing to record is not failing to deploy -- the VM simply stays
+# where it is, which is the safe direction to fail.
+python manage.py record_deployment || true
 python manage.py collectstatic --noinput
-# Dhan tokens die after 24 hours and only a live one can be renewed, so this has
-# to run well before it lapses rather than after. The renewal daemon schedules
-# against the clock (08:20 IST) rather than from process start, so renewal never
-# lands during a session. It needs DHAN_TOKEN_FILE, but that is only set on the
-# order-placing host (the VM); App Service reads the token it renewed from the
-# database instead.
-if [ -n "${DHAN_TOKEN_FILE:-}" ]; then
+# ONE HOST RENEWS THE DHAN TOKEN. Renewing invalidates the previous token
+# account-wide, so a second renewer silently takes the first one's token away --
+# which is precisely what was happening: App Service renewed at 08:20 IST and the
+# VM spent every session presenting a token Dhan had already killed, 399 of the
+# last 400 order events coming back DH-906. The VM owns renewal because it is the
+# host whose IP Dhan whitelists for orders; it publishes the result to the shared
+# database and everything here reads it from there.
+#
+# The gate is its own variable rather than DHAN_TOKEN_FILE. That file is a local
+# cache, not a claim of ownership, and conflating the two is what kept this
+# failure quiet for a week.
+if [ "${DHAN_TOKEN_OWNER:-0}" = "1" ]; then
 	python -u manage.py renew_dhan_token --daemon > /home/LogFiles/dhan-token.log 2>&1 &
-	# Same gate, same reason: building the shortlist means refreshing equity bars
-	# from Dhan, so it can only run where the token lives. It fires at 18:40 IST
-	# rather than straight after the close because the history API sheds load
-	# during the session and a half-downloaded day produces a list that looks
-	# ordinary and is wrong. App Service serves /shortlist/ from the rows the VM
-	# writes; it does not build them.
-	python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortlist.log 2>&1 &
 fi
+# Building the shortlist needs a token but not ownership of one -- reading
+# history invalidates nothing -- so it runs here, where the page is served. It
+# fires at 18:40 IST rather than straight after the close because the history API
+# sheds load during the session and a half-downloaded day produces a list that
+# looks ordinary and is wrong. Only App Service runs this script, so there is
+# exactly one builder however many hosts exist.
+python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortlist.log 2>&1 &
 python -u manage.py collect_index_oi > /home/LogFiles/index-oi-collector.log 2>&1 &
 # The live strategy engine runs on the dedicated VM, not in the App Service.
-# Only one order-placing host can hold the Dhan token at any moment, and
 # App Service manages a pool of outbound IPs that Dhan cannot whitelist. The VM
 # has 20.197.60.99 and can place orders; App Service observes the live feed but
 # does not trade.

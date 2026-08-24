@@ -46,8 +46,8 @@ def get_dhan_credentials():
     return access_token, client_id
 
 
-def _live_one_of(written, seeded):
-    """Prefer what was written on this host, but never prefer a token that is dead.
+def _live_one_of(preferred, other):
+    """Take the preferred token, but never prefer one that is already dead.
 
     Ordering by write time is right while both are alive and wrong the moment the
     newer one lapses. A token pasted into the database on 13 August outranked a
@@ -57,12 +57,14 @@ def _live_one_of(written, seeded):
     ever asked whether the token it picked was still valid.
 
     The JWT states its own expiry, so asking costs nothing and needs no network.
+    Every comparison between two candidate tokens goes through here, so the rule
+    holds for the file-versus-database pair as well as the deploy-time seed.
     """
-    if not written:
-        return seeded
-    if seeded and _token_is_spent(written) and not _token_is_spent(seeded):
-        return seeded
-    return written
+    if not preferred:
+        return other
+    if other and _token_is_spent(preferred) and not _token_is_spent(other):
+        return other
+    return preferred
 
 
 def _token_expiry(access_token):
@@ -93,6 +95,11 @@ def _freshest_token(stored, stored_at):
     always wins would silently keep serving the dead one. Comparing when each was
     written is the only ordering that stays right in both directions.
 
+    Recency decides only between two *live* tokens. A host that renewed
+    yesterday and then sat idle has a newer file than the database row a live
+    host published this morning, and preferring it on the timestamp alone would
+    serve a corpse -- so the winner goes through `_live_one_of` either way.
+
     The environment variable is neither: it is the deploy-time seed, and it only
     applies when nothing has been written since.
     """
@@ -103,16 +110,19 @@ def _freshest_token(stored, stored_at):
         written_at = datetime.fromtimestamp(dhan_token_file().stat().st_mtime).astimezone()
     except OSError:
         return stored
-    return renewed if written_at >= stored_at else stored
+    if written_at >= stored_at:
+        return _live_one_of(renewed, stored)
+    return _live_one_of(stored, renewed)
 
 
 def dhan_token_file():
     """Where a renewed token lives on this host, or None if it keeps none.
 
-    A renewed token has to outlive the process that fetched it, and the two places
-    it must never go are the database and the logs. A file owned by the account
-    that runs the engine is neither. Azure sets no `DHAN_TOKEN_FILE`, so nothing
-    there changes.
+    A renewed token has to outlive the process that fetched it, and it must never
+    reach the logs. A file owned by the account that runs the engine is the local
+    copy; the database row is the bus to the other host (see
+    `_persist_dhan_token`). Only the order-placing VM sets `DHAN_TOKEN_FILE` --
+    App Service reads what the VM published and renews nothing.
     """
     path = os.getenv("DHAN_TOKEN_FILE", "").strip()
     return Path(path) if path else None
@@ -143,6 +153,41 @@ def write_dhan_token_file(access_token):
     return True
 
 
+def _persist_dhan_token(access_token):
+    """Save a renewed token everywhere that has to be able to read it.
+
+    THE DATABASE IS THE BUS BETWEEN HOSTS. Dhan whitelists one IP, so only the
+    VM places orders and only the VM renews; everything running in App Service --
+    the OI collector, the shortlist builder, the dashboard -- needs the token the
+    VM just fetched. For months the renewal wrote a local file and nothing else,
+    so the renewing host kept the token to itself and every other process went on
+    presenting the one Dhan had just invalidated. That is DH-906 on 399 of 400
+    order events, and a trading session lost every day until someone pasted a
+    token in by hand.
+
+    The file stays as this host's own copy: it is what keeps the engine alive
+    through a database blip mid-session, and it is one fewer query per tick.
+
+    Both writes are attempted whatever the other one does. Renewing kills the old
+    token, so a renewal that saved nowhere costs the account the rest of the day
+    -- the caller is told exactly which destinations took it.
+    """
+    saved, failed = [], []
+    try:
+        AppSetting.objects.update_or_create(
+            key="dhan_access_token", defaults={"value": access_token})
+        saved.append("database")
+    except Exception as exc:                      # noqa: BLE001
+        # Never interpolate the token into an error string; only the reason.
+        failed.append(f"database ({exc})")
+    try:
+        if write_dhan_token_file(access_token):
+            saved.append(str(dhan_token_file()))
+    except OSError as exc:
+        failed.append(f"token file ({exc})")
+    return saved, failed
+
+
 def _extract_access_token(body):
     """Pull the token out of a renewal response.
 
@@ -164,7 +209,7 @@ def _extract_access_token(body):
 
 
 def renew_dhan_token():
-    """Swap the current 24-hour token for a fresh one, and persist it.
+    """Swap the current 24-hour token for a fresh one, and publish it.
 
     Dhan renews only *active* tokens -- "If you try to renew an expired token, it
     will return an error" -- so this is a before-open job, not a recovery one.
@@ -172,14 +217,14 @@ def renew_dhan_token():
 
     Renewing kills the old token, so the fetch and the write have to be one step:
     a renewal that succeeded but was not saved leaves every process on this host
-    holding a token Dhan has already invalidated. The response body carries the
-    token, so it is never logged and never put in a returned error string.
+    holding a token Dhan has already invalidated. The same is true one host over,
+    which is why `_persist_dhan_token` writes the database and not only the local
+    file. The response body carries the token, so it is never logged and never
+    put in a returned error string.
     """
     access_token, client_id = get_dhan_credentials()
     if not access_token or not client_id:
         return {"ok": False, "error": "No Dhan token or client id to renew."}
-    if not dhan_token_file():
-        return {"ok": False, "error": "Set DHAN_TOKEN_FILE first; a renewed token with nowhere to go is a lost token."}
 
     headers = {"Accept": "application/json", "access-token": access_token, "dhanClientId": client_id}
     try:
@@ -204,11 +249,17 @@ def renew_dhan_token():
         keys = sorted(body) if isinstance(body, dict) else type(body).__name__
         return {"ok": False, "error": f"Renewal returned no token. Response keys: {keys}"}
 
-    write_dhan_token_file(renewed)
+    saved, failed = _persist_dhan_token(renewed)
+    if not saved:
+        # The old token is already dead by now -- Dhan invalidated it the moment
+        # it issued this one -- so losing the replacement costs the day. Say so.
+        return {"ok": False, "error": "Renewal succeeded but the new token could not be saved: "
+                                      + "; ".join(failed)}
     # The body already says when the new token dies, so the profile round trip is
     # only a fallback for a response that leaves it out.
     expiry = str(body.get("expiryTime") or "") if isinstance(body, dict) else ""
-    return {"ok": True, "validity": expiry or dhan_token_validity(renewed)}
+    return {"ok": True, "validity": expiry or dhan_token_validity(renewed),
+            "saved_to": saved, "not_saved_to": failed}
 
 
 def dhan_token_validity(access_token=None):

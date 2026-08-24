@@ -1,24 +1,54 @@
 """The strategy report, rendered from the files the research scripts wrote.
 
-Everything numeric on this page is read back out of research/*.csv rather than
-typed into the template, so the page cannot drift from what was actually
+Everything numeric on this page is read back out of the published CSVs rather
+than typed into the template, so the page cannot drift from what was actually
 measured. If a script is re-run with more data, the page moves with it.
+
+WHERE THOSE FILES LIVE. Not in research/ -- that folder is two hundred scripts
+and their working files, and it does not travel to the deployed hosts. These
+sixteen tables are copied into the app by `manage.py publish_research_tables`,
+which makes publishing a step someone takes rather than a side effect of
+whatever happened to be sitting on the laptop at deploy time. There is
+deliberately no fallback to research/: the page renders the same bytes here as
+it does in production, so a missing table is visible while it is still cheap to
+fix.
 """
 import csv
 import datetime as dt
-import os
+from pathlib import Path
 
-from django.conf import settings
 from django.shortcuts import render
 
 from .stock_views import _rupees
 
-RESEARCH = os.path.join(settings.BASE_DIR, "research")
+RESEARCH = Path(__file__).resolve().parent / "data" / "research"
+
+# Every file this page reads, and so the whole of what gets published. Keep it
+# in step with the _read() calls below -- publish_research_tables checks it
+# against research/ and names anything it cannot find.
+PAGE_TABLES = (
+    "option_strategy.csv",
+    "option_big_runs.csv",
+    "chartink_ARC15MIN.csv",
+    "chartink_NARC1HR.csv",
+    "chartink_ce_stage1.csv",
+    "chartink_ce_stage2.csv",
+    "chartink_ce_money.csv",
+    "chartink_ce_hurdle.csv",
+    "chartink_ce_control.csv",
+    "spread_summary.csv",
+    "spread_dte.csv",
+    "spread_exits.csv",
+    "spread_cycles.csv",
+    "spread_slippage.csv",
+    "spread_months.csv",
+    "spread_money.csv",
+)
 
 
 def _read(name):
-    path = os.path.join(RESEARCH, name)
-    if not os.path.exists(path):
+    path = RESEARCH / name
+    if not path.exists():
         return []
     with open(path, newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))

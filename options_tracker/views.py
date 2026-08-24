@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
+from .deployment import sync_status
 from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .live_config import (
@@ -995,6 +996,7 @@ def nifty_live(request):
         "curve": curve_svg(results["curve"]),
         "months": by_month(rows),
         "panel": risk_panel(),
+        "deploy": sync_status(),
         "warnings": warnings_for(settings),
         "baseline": surface.get("baseline"),
         "sessions": surface.get("sessions"),

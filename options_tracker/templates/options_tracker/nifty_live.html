@@ -62,6 +62,22 @@
       {% endif %}
     </form>
   </div>
+  {# Which code the engine is actually running. The site is App Service and the
+     engine is the VM, so these can differ -- and used to, for five days, found
+     only by noticing the engine behaving like older code. #}
+  <div class="muted" style="margin-top:8px; font-size:12px;">
+    {% if not deploy.vm %}
+      the trading VM has never reported its commit &mdash; is <code>optionsdjango-sync.timer</code> running?
+    {% elif deploy.in_sync %}
+      engine and site both on <code>{{ deploy.vm_short }}</code>
+      {% if deploy.stale %}&middot; <span class="badge stale">SYNC SILENT</span> last checked in {{ deploy.age_minutes }} min ago{% endif %}
+    {% else %}
+      <span class="badge stale">CODE DRIFT</span>
+      engine on <code>{{ deploy.vm_short }}</code>, site deployed <code>{{ deploy.deployed_short|default:"none" }}</code>
+      {% if deploy.pending %}&middot; update to <code>{{ deploy.pending_short }}</code> waiting for a flat book{% endif %}
+      {% if deploy.stale %}&middot; last checked in {{ deploy.age_minutes }} min ago{% endif %}
+    {% endif %}
+  </div>
   <div class="kv" style="margin-top:14px;">
     <div><div class="k">Today's P&amp;L</div><div class="v {% if today.net_pnl > 0 %}pos{% elif today.net_pnl < 0 %}neg{% endif %}">&#8377; {{ today.net_pnl|floatformat:2 }}</div></div>
     <div><div class="k">Trades today</div><div class="v">{{ engine.trades_today }} / {{ engine.max_trades_per_day }}</div></div>

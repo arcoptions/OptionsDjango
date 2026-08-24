@@ -1,0 +1,7 @@
+# The hosts that run these are Linux, and the laptop that edits them is not.
+# A systemd unit with CRLF endings takes the carriage return as part of the
+# value, so ExecStart tries to run a binary whose name ends in \r. Pinning the
+# ending here means it cannot depend on whose machine wrote the file.
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf

@@ -17,6 +17,13 @@ the blast radius is a window when nothing is trading.
 The token itself is never printed. `--check` reports validity without renewing,
 which is the safe thing to run when you only want to know where you stand.
 
+ONE HOST RENEWS, EVERYONE READS. Dhan whitelists a single IP, so the VM is the
+only host that can place orders and it is the only one that runs this. The
+renewed token is written to the shared database as well as to this host's file,
+and App Service reads it from there -- see `services._persist_dhan_token`. Two
+hosts renewing would take turns invalidating each other, which is exactly the
+outage this arrangement ends.
+
     python manage.py renew_dhan_token --check
     python manage.py renew_dhan_token
     python manage.py renew_dhan_token --daemon
@@ -53,7 +60,7 @@ def next_run(now):
 
 
 class Command(BaseCommand):
-    help = "Renew the 24-hour Dhan access token and persist it to DHAN_TOKEN_FILE."
+    help = "Renew the 24-hour Dhan access token and publish it to the database and this host's file."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -122,4 +129,9 @@ class Command(BaseCommand):
 
         validity = result.get("validity") or "(Dhan did not report a validity)"
         self.stdout.write(self.style.SUCCESS(f"renewed; valid until {validity}"))
+        self.stdout.write("published to: {}".format(", ".join(result.get("saved_to") or [])))
+        for destination in result.get("not_saved_to") or []:
+            # Partial is survivable but not fine: whichever host reads the one
+            # that missed out is about to start presenting a dead token.
+            self.stdout.write(self.style.WARNING(f"could NOT publish to {destination}"))
         return True
