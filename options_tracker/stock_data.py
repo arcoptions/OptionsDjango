@@ -35,6 +35,7 @@ from .services import get_dhan_credentials
 
 MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master-detailed.csv"
 INTRADAY_URL = "https://api.dhan.co/v2/charts/intraday"
+HISTORICAL_URL = "https://api.dhan.co/v2/charts/historical"
 ROLLING_URL = "https://api.dhan.co/v2/charts/rollingoption"
 
 MASTER_CACHE = os.path.join(os.path.dirname(__file__), "data", "scrip_master.csv")
@@ -49,6 +50,7 @@ WORKERS = 4
 # to six retries still fail -- so window size is the only lever there is.
 ROLLING_WINDOW_DAYS = 15
 INTRADAY_WINDOW_DAYS = 85  # the documented intraday cap is 90
+DAILY_INTERVAL = 1440      # one session, stored beside the 15-minute series
 RELATIVE_STRIKES = ["ATM", "ATM+1", "ATM-1", "ATM+2", "ATM-2", "ATM+3", "ATM-3"]
 
 _local = threading.local()
@@ -83,6 +85,22 @@ def log(message):
         print(f"[{dt.datetime.now():%H:%M:%S}] {message}", flush=True)
 
 
+class DhanAuthExpired(RuntimeError):
+    """The token stopped being accepted mid-run.
+
+    Its own exception type because it is the one failure that must not be
+    retried and must not be recorded as a window: every subsequent request will
+    fail identically, and a DH-901 lands in DownloadJob looking exactly like
+    "this strike never traded". A run that hits this has already produced tens
+    of thousands of rows that a later reader will mistake for absence of data.
+    """
+
+
+# DH-901 is an expired access token; DH-906 is a token the gateway will not
+# accept at all. Neither is retryable and neither says anything about the data.
+_AUTH_CODES = ("DH-901", "DH-906", "Invalid_Authentication")
+
+
 def _post(url, payload, attempts=6):
     """One request, backing off through 429s rather than dropping the window."""
     delay = 2.0
@@ -101,7 +119,10 @@ def _post(url, payload, attempts=6):
             continue
         if response.ok:
             return response.json(), None
-        return None, f"HTTP {response.status_code}: {response.text[:200]}"
+        body = response.text[:200]
+        if response.status_code in (400, 401) and any(c in body for c in _AUTH_CODES):
+            raise DhanAuthExpired(f"HTTP {response.status_code}: {body}")
+        return None, f"HTTP {response.status_code}: {body}"
     return None, "rate limited after retries"
 
 
@@ -337,8 +358,12 @@ def _run(tasks, label):
             kind, symbol, detail, start, end = futures[future]
             try:
                 rows, error = future.result()
-            except Exception as error:  # noqa: BLE001 - a bad row must not kill the run
-                rows, error = 0, str(error)
+            except Exception as exc:  # noqa: BLE001 - a bad row must not kill the run
+                # NOT `except Exception as error`. Python deletes the name bound
+                # by `as` when the handler exits, so assigning to `error` inside
+                # it does not survive -- the next line raised UnboundLocalError
+                # and took the whole run down instead of recording one failure.
+                rows, error = 0, str(exc)
             _record(kind, symbol, detail, start, end, rows, error)
             total_rows += rows
             done += 1
@@ -369,6 +394,68 @@ def download_equity(stocks, start, end, interval=15):
                     fetch_equity(s, i, a, b, interval),
             ))
     log(f"equity: {len(tasks)} windows queued across {len(stocks)} stocks")
+    return _run(tasks, "equity")
+
+
+def fetch_equity_daily(symbol, security_id, start, end):
+    """Daily bars, which reach years back where the intraday feed reaches one.
+
+    The intraday endpoint is capped near a year of lookback, and that cap is
+    what makes the monthly horizon unanswerable rather than merely noisy: 18
+    months of history is 18 independent 21-session windows, and a t computed on
+    18 observations cannot separate a strategy from a run of luck. This endpoint
+    has no such cap, so a monthly claim can be given a sample worth quoting.
+
+    Stored in the same table under `interval_minutes=1440`. The unique
+    constraint spans the interval, so a daily bar cannot collide with the
+    15-minute bar of the same stamp, and no existing query is disturbed --
+    every one of them filters on `interval_minutes=15`.
+    """
+    payload = {
+        "securityId": str(security_id), "exchangeSegment": "NSE_EQ",
+        "instrument": "EQUITY", "oi": False,
+        "fromDate": start.isoformat(), "toDate": end.isoformat(),
+    }
+    data, error = _post(HISTORICAL_URL, payload)
+    if error:
+        return 0, error
+    stamps = data.get("timestamp") or []
+    if not stamps:
+        return 0, ""
+    value = lambda name, index: (data.get(name) or [None] * len(stamps))[index]
+    candles = [
+        StockEquityCandle(
+            symbol=symbol, interval_minutes=DAILY_INTERVAL, timestamp=_stamp(epoch),
+            open=value("open", index), high=value("high", index),
+            low=value("low", index), close=value("close", index),
+            volume=int(value("volume", index) or 0),
+        )
+        for index, epoch in enumerate(stamps)
+    ]
+    StockEquityCandle.objects.bulk_create(candles, ignore_conflicts=True, batch_size=2000)
+    return len(candles), ""
+
+
+def download_equity_daily(stocks, start, end):
+    """One request per stock -- the whole span comes back in a single window.
+
+    Cheap enough to run beside a long option download without contending for
+    the API in any meaningful way: fifty stocks is fifty requests.
+    """
+    equities = equity_ids(load_master())
+    done = _done_keys("equity")
+    tasks = []
+    for stock in stocks:
+        security_id = stock.security_id or equities.get(stock.symbol)
+        if not security_id:
+            continue
+        if (stock.symbol, "1d", start, end) in done:
+            continue
+        tasks.append((
+            ("equity", stock.symbol, "1d", start, end),
+            lambda s=stock.symbol, i=security_id: fetch_equity_daily(s, i, start, end),
+        ))
+    log(f"daily equity: {len(tasks)} stocks queued, {start} -> {end}")
     return _run(tasks, "equity")
 
 
