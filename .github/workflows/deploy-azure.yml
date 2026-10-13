@@ -89,9 +89,12 @@ jobs:
               deployment="$(az webapp log deployment list \
                 --resource-group rg-optionsdjango-centralindia \
                 --name arc-options-2fa45de1 \
-                --query '[0].[id,status,complete,progress]' \
-                --output tsv)"
-              read -r deployment_id deployment_status deployment_complete deployment_progress <<< "$deployment"
+                --query '[0]' \
+                --output json)"
+              deployment_id="$(jq -r '.id // ""' <<< "$deployment")"
+              deployment_status="$(jq -r '.status // ""' <<< "$deployment")"
+              deployment_complete="$(jq -r '.complete // false' <<< "$deployment")"
+              deployment_progress="$(jq -r '.progress // ""' <<< "$deployment")"
               echo "Kudu attempt $attempt: id=$deployment_id status=$deployment_status complete=$deployment_complete progress=$deployment_progress"
               if [ "$deployment_complete" = "true" ] || [ "$deployment_complete" = "True" ]; then
                 if [ "$deployment_status" = "4" ]; then
