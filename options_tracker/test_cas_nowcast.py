@@ -19,6 +19,7 @@ from .cas_nowcast import (
     decode_cas_packet,
     parse_cas_index_packet,
     parse_cas_instrument_packet,
+    reconnect_delay_seconds,
 )
 from .models import AppSetting, CasAuctionEvent, DhanOrderEvent
 
@@ -112,6 +113,33 @@ class NiftyCloseNowcasterTests(SimpleTestCase):
         )
 
         self.assertEqual(state, "OPEN")
+
+    def test_reconnect_waits_past_dhan_stale_socket_retention(self):
+        delay = reconnect_delay_seconds(
+            RuntimeError("connection lost"),
+            received_packet=False,
+            configured_delay=5,
+        )
+
+        self.assertEqual(delay, 45)
+
+    def test_rate_limit_uses_long_cooldown(self):
+        delay = reconnect_delay_seconds(
+            RuntimeError("Handshake status 429 Too Many Requests"),
+            received_packet=False,
+            configured_delay=5,
+        )
+
+        self.assertEqual(delay, 120)
+
+    def test_post_packet_disconnect_uses_normal_backoff(self):
+        delay = reconnect_delay_seconds(
+            RuntimeError("connection lost"),
+            received_packet=True,
+            configured_delay=5,
+        )
+
+        self.assertEqual(delay, 10)
 
 
 class CasDashboardTests(TestCase):

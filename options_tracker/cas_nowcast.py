@@ -30,7 +30,7 @@ CAS_PACKET_SIZE = 128
 CAS_INDEX_PACKET_SIZE = 33
 NIFTY_50_CSV_URL = "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv"
 CAS_CONNECT_FROM = clock_time(15, 14)
-CAS_CONNECT_UNTIL = clock_time(15, 40)
+CAS_CONNECT_UNTIL = clock_time(15, 35)
 DEFAULT_NIFTY_SYMBOLS = (
     "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
     "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL", "BHARTIARTL",
@@ -55,6 +55,21 @@ def cas_connection_state(now: datetime) -> tuple[str, str]:
     if local_time <= CAS_CONNECT_UNTIL:
         return "OPEN", "CAS connection window is open"
     return "COMPLETE", "Today's CAS connection window has ended"
+
+
+def reconnect_delay_seconds(
+    error: object | None,
+    *,
+    received_packet: bool,
+    configured_delay: float,
+) -> float:
+    """Choose a reconnect delay that cannot exhaust Dhan's socket quota."""
+    status_code = getattr(error, "status_code", None)
+    if status_code == 429 or "429 Too Many Requests" in str(error):
+        return max(120.0, configured_delay)
+    if not received_packet:
+        return max(45.0, configured_delay)
+    return max(10.0, configured_delay)
 
 
 @dataclass(frozen=True)
@@ -328,9 +343,13 @@ class DhanCasClient:
         self.should_continue = should_continue or (lambda: True)
         self._opened = threading.Event()
         self._app: websocket.WebSocketApp | None = None
+        self.last_error: object | None = None
+        self.received_packet = False
 
     def run(self) -> None:
         self._opened.clear()
+        self.last_error = None
+        self.received_packet = False
         self._app = websocket.WebSocketApp(
             self.url,
             on_open=self._on_open,
@@ -377,6 +396,7 @@ class DhanCasClient:
         except ValueError as error:
             self.on_error(str(error), observed_at)
             return
+        self.received_packet = True
         self.on_packet(packet, observed_at, data)
 
     def _on_ping(self, app: websocket.WebSocketApp, _message: bytes) -> None:
@@ -384,6 +404,7 @@ class DhanCasClient:
             app.close()
 
     def _on_error(self, _app: websocket.WebSocketApp, error: object) -> None:
+        self.last_error = error
         self.on_error(f"WebSocket error: {error}", timezone.localtime())
 
     def _on_close(

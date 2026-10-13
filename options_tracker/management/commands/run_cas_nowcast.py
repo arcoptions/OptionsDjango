@@ -20,6 +20,7 @@ from options_tracker.cas_nowcast import (
     JsonlCasRecorder,
     NiftyCloseNowcaster,
     cas_connection_state,
+    reconnect_delay_seconds,
     resolve_nifty_security_ids,
 )
 from options_tracker.models import AppSetting, CasAuctionEvent
@@ -259,7 +260,11 @@ class Command(BaseCommand):
                     "Dhan closed the CAS feed. Outside the auction window this is expected; "
                     "run without --once to reconnect automatically."
                 )
-            delay = max(1.0, options["reconnect_delay"])
+            delay = reconnect_delay_seconds(
+                client.last_error,
+                received_packet=client.received_packet,
+                configured_delay=max(1.0, options["reconnect_delay"]),
+            )
             if collector_enabled():
                 update_status(
                     "RECONNECTING",
