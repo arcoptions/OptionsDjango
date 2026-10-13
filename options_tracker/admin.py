@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
 	AppSetting,
+	CasAuctionEvent,
 	ChartinkTrigger,
 	ChatMessage,
 	DhanOrderEvent,
@@ -22,3 +23,4 @@ admin.site.register(IndexOptionStrikeSnapshot)
 admin.site.register(IndexOptionCandle)
 admin.site.register(AppSetting)
 admin.site.register(DhanOrderEvent)
+admin.site.register(CasAuctionEvent)

@@ -144,7 +144,7 @@ def _trade_levels(reference_price, recent_support=None):
 
 
 def _opening_breakout_report(underlying, days=45, session_date=None):
-    cutoff = timezone.localdate() - timedelta(days=days)
+    cutoff = (session_date or timezone.localdate()) - timedelta(days=days)
     cutoff_start, _ = _session_bounds(cutoff)
     query = IndexOptionCandle.objects.filter(
         underlying=underlying, interval_minutes=1, timestamp__gte=cutoff_start,
@@ -259,7 +259,7 @@ def _historical_trade_outcome(current, prior_rows, future_rows):
 
 
 def _historical_events(underlying, days=45, session_date=None):
-    cutoff = timezone.localdate() - timedelta(days=days)
+    cutoff = (session_date or timezone.localdate()) - timedelta(days=days)
     cutoff_start, _ = _session_bounds(cutoff)
     rows = IndexOptionCandle.objects.filter(
         underlying=underlying,

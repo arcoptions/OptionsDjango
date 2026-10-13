@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import research_views, shortlist_views, stock_views, views
+from . import cas_views, research_views, shortlist_views, stock_views, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -18,6 +18,8 @@ urlpatterns = [
     path("index-oi/", views.index_oi, name="index_oi"),
     path("nifty-live/", views.nifty_live, name="nifty_live"),
     path("api/nifty-live/status/", views.nifty_live_status_api, name="nifty_live_status_api"),
+    path("nifty-cas/", cas_views.cas_dashboard, name="cas_dashboard"),
+    path("api/nifty-cas/status/", cas_views.cas_status_api, name="cas_status_api"),
     path("dhan-orders/", views.dhan_orders, name="dhan_orders"),
     path("journal/", views.trade_journal, name="trade_journal"),
     path("archive/", views.archive, name="archive"),

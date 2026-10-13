@@ -30,6 +30,12 @@ fi
 # exactly one builder however many hosts exist.
 python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortlist.log 2>&1 &
 python -u manage.py collect_index_oi > /home/LogFiles/index-oi-collector.log 2>&1 &
+# The dashboard switch controls whether this daemon holds the CAS socket open.
+# Packets are persisted to the shared database for replay and model tuning.
+python -u manage.py run_cas_nowcast \
+  --controlled \
+  --output-dir /home/LogFiles/nifty-cas-data \
+  > /home/LogFiles/nifty-cas.log 2>&1 &
 # The live strategy engine runs on the dedicated VM, not in the App Service.
 # App Service manages a pool of outbound IPs that Dhan cannot whitelist. The VM
 # has 20.197.60.99 and can place orders; App Service observes the live feed but

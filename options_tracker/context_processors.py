@@ -21,6 +21,7 @@ def layout_shell(request):
         ("Strategy Report", reverse("research_report")),
         ("Breakeven", reverse("breakeven")),
         ("NIFTY Live", reverse("nifty_live")),
+        ("NIFTY Closing Auction", reverse("cas_dashboard")),
         ("Scanners", reverse("scanners")),
         ("Telegram Feed", reverse("telegram_feed")),
         ("Recommendations", reverse("recommendations")),

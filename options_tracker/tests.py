@@ -787,11 +787,15 @@ class IndexOIIntelligenceTests(TestCase):
 				volume=volume, oi=oi, implied_volatility=iv,
 			)
 
-		first = historical_jump_report("NIFTY", use_cache=False)["latest_candidates"][0]
+		first = historical_jump_report(
+			"NIFTY", use_cache=False, session_date=tuesday,
+		)["latest_candidates"][0]
 		future = IndexOptionCandle.objects.get(timestamp=timezone.make_aware(datetime.combine(tuesday, time(14, 31))))
 		future.high = Decimal("120")
 		future.save(update_fields=["high"])
-		second = historical_jump_report("NIFTY", use_cache=False)["latest_candidates"][0]
+		second = historical_jump_report(
+			"NIFTY", use_cache=False, session_date=tuesday,
+		)["latest_candidates"][0]
 
 		self.assertEqual(first["score"], second["score"])
 		self.assertEqual(first["max_multiple"], 3)

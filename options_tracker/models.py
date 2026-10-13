@@ -476,3 +476,34 @@ class DailyPick(models.Model):
     @property
     def is_scored(self):
         return self.scored_on is not None
+
+
+class CasAuctionEvent(models.Model):
+    """Durable CAS packets and forecasts used for replay and model tuning."""
+
+    class EventType(models.TextChoices):
+        INSTRUMENT = "INSTRUMENT", "Instrument packet"
+        INDEX = "INDEX", "Index packet"
+        NOWCAST = "NOWCAST", "Nowcast"
+        ERROR = "ERROR", "Collector error"
+
+    session_date = models.DateField()
+    observed_at = models.DateTimeField()
+    event_type = models.CharField(max_length=12, choices=EventType.choices)
+    security_id = models.CharField(max_length=20, blank=True)
+    index_name = models.CharField(max_length=40, blank=True)
+    payload_json = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-observed_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["session_date", "event_type", "observed_at"],
+                name="idx_cas_session_type",
+            ),
+            models.Index(
+                fields=["security_id", "observed_at"],
+                name="idx_cas_security_time",
+            ),
+        ]

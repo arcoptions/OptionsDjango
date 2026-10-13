@@ -1,0 +1,152 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<style>
+  .cas-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .cas-badge { padding:5px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+  .cas-live { background:#dcfce7; color:#15803d; }
+  .cas-wait { background:#fef3c7; color:#92400e; }
+  .cas-off { background:#e2e8f0; color:#475569; }
+  .cas-error { background:#fee2e2; color:#b91c1c; }
+  .cas-value { font-size:30px; font-weight:800; margin-top:5px; }
+  .cas-table { max-height:420px; overflow:auto; }
+  .mono { font-family:ui-monospace,Consolas,monospace; }
+</style>
+
+<div class="panel">
+  <div class="cas-head">
+    {% if not enabled %}
+      <span id="cas-badge" class="cas-badge cas-off">STOPPED</span>
+    {% elif stale %}
+      <span id="cas-badge" class="cas-badge cas-error">NO DAEMON HEARTBEAT</span>
+    {% elif status.state == "LIVE" %}
+      <span id="cas-badge" class="cas-badge cas-live">LIVE</span>
+    {% else %}
+      <span id="cas-badge" class="cas-badge cas-wait">{{ status.state|default:"STARTING" }}</span>
+    {% endif %}
+    <span id="cas-message" class="muted">{{ status.message|default:"Collector has not reported yet." }}</span>
+    <form method="post" style="margin-left:auto;">
+      {% csrf_token %}
+      {% if enabled %}
+        <button class="btn secondary" name="action" value="stop">Stop collector</button>
+      {% else %}
+        <button class="btn" name="action" value="start">Start CAS collector</button>
+      {% endif %}
+    </form>
+  </div>
+  <p class="muted" style="margin-bottom:0;">
+    Observe-only. This process records Dhan CAS packets and forecasts; it cannot place an order.
+    The deployment-managed daemon can be armed now and opens Dhan automatically at 3:14 PM.
+  </p>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <div class="muted">Indicative NIFTY close</div>
+    <div id="indicative-close" class="cas-value">{{ nowcast.indicative_close|default:"-" }}</div>
+    <div class="muted">Safe untrained baseline</div>
+  </div>
+  <div class="panel">
+    <div class="muted">Predicted close</div>
+    <div id="predicted-close" class="cas-value">{{ nowcast.predicted_close|default:"-" }}</div>
+    <div id="method" class="muted">{{ nowcast.method|default:"Waiting for first index packet" }}</div>
+  </div>
+  <div class="panel">
+    <div class="muted">Experimental momentum</div>
+    <div id="momentum-close" class="cas-value">{{ nowcast.experimental_momentum_close|default:"-" }}</div>
+    <div class="muted">Bounded, not trained; evaluate against saved closes</div>
+  </div>
+  <div class="panel">
+    <div class="muted">Indicative interval</div>
+    <div class="cas-value" style="font-size:24px;">
+      <span id="interval-low">{{ nowcast.indicative_interval_low|default:"-" }}</span>
+      &ndash;
+      <span id="interval-high">{{ nowcast.indicative_interval_high|default:"-" }}</span>
+    </div>
+    <div class="muted">Noise-based operational band, not a calibrated probability interval</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3 style="margin-top:0;">Collection</h3>
+    <div class="row"><span class="muted">Events saved today</span><strong id="event-count">{{ event_count }}</strong></div>
+    <div class="row"><span class="muted">Nowcasts saved today</span><strong id="nowcast-count">{{ nowcast_count }}</strong></div>
+    <div class="row"><span class="muted">Constituents seen</span><strong id="constituents-seen">{{ nowcast.constituents_seen|default:0 }}</strong></div>
+    <div class="row"><span class="muted">Index samples</span><strong id="samples-seen">{{ nowcast.samples_seen|default:0 }}</strong></div>
+    <div class="row"><span class="muted">Buy/sell pressure</span><strong id="pressure">{{ nowcast.constituent_pressure|default:"-" }}</strong></div>
+  </div>
+  <div class="panel">
+    <h3 style="margin-top:0;">Saved for tuning</h3>
+    <p>Every constituent packet, index packet, nowcast, and collector error is stored in the database with its observed timestamp.</p>
+    <p>Raw packet bytes and normalized JSON are also appended to the session JSONL file under <span class="mono">research/cas/</span>.</p>
+    <p class="muted" style="margin-bottom:0;">Use day-level walk-forward splits when this history is trained; never split auction ticks randomly.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top:0;">Recent persisted events</h3>
+  <div class="cas-table">
+    <table>
+      <thead>
+        <tr><th>Observed</th><th>Type</th><th>Instrument</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        {% for event in recent_events %}
+          <tr>
+            <td>{{ event.observed_at|date:"H:i:s.u" }}</td>
+            <td>{{ event.event_type }}</td>
+            <td>{{ event.index_name|default:event.security_id|default:"-" }}</td>
+            <td class="mono">
+              {% if event.event_type == "INDEX" %}
+                {{ event.payload_json.indicative_close|default:"-" }}
+              {% elif event.event_type == "NOWCAST" %}
+                {{ event.payload_json.predicted_close|default:"-" }}
+              {% elif event.event_type == "INSTRUMENT" %}
+                IEP {{ event.payload_json.indicative_equilibrium_price|default:"-" }}
+              {% else %}
+                {{ event.payload_json.message|default:"-" }}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="muted">No CAS events have been recorded today.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const text = (id, value) => {
+      document.getElementById(id).textContent = value ?? "-";
+    };
+    const refresh = async () => {
+      try {
+        const response = await fetch("{% url 'cas_status_api' %}", {
+          headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const nowcast = data.nowcast || {};
+        text("cas-message", (data.status || {}).message || "Collector has not reported yet.");
+        text("indicative-close", nowcast.indicative_close);
+        text("predicted-close", nowcast.predicted_close);
+        text("momentum-close", nowcast.experimental_momentum_close);
+        text("interval-low", nowcast.indicative_interval_low);
+        text("interval-high", nowcast.indicative_interval_high);
+        text("method", nowcast.method || "Waiting for first index packet");
+        text("event-count", data.event_count);
+        text("nowcast-count", data.nowcast_count);
+        text("constituents-seen", nowcast.constituents_seen || 0);
+        text("samples-seen", nowcast.samples_seen || 0);
+        text("pressure", nowcast.constituent_pressure);
+      } catch (_error) {
+        text("cas-message", "Status refresh failed; the saved page state remains visible.");
+      }
+    };
+    window.setInterval(refresh, 3000);
+  })();
+</script>
+{% endblock %}
