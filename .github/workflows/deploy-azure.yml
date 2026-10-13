@@ -79,6 +79,29 @@ jobs:
             --src-path /tmp/package.zip --type zip > /tmp/deploy.log 2>&1
           code=$?
           cat /tmp/deploy.log
+          # On a B1 plan Oryx can outlive the CLI's five-minute HTTP request.
+          # The deployment is still running in Kudu: the 13 October package
+          # completed successfully three seconds after az returned 504. Poll
+          # Kudu's terminal state so a client timeout does not trigger an
+          # overlapping retry that replaces wwwroot mid-build.
+          if [ $code -ne 0 ]; then
+            for attempt in $(seq 1 80); do
+              deployment="$(az webapp log deployment list \
+                --resource-group rg-optionsdjango-centralindia \
+                --name arc-options-2fa45de1 \
+                --query '[0].[id,status,complete,progress]' \
+                --output tsv)"
+              read -r deployment_id deployment_status deployment_complete deployment_progress <<< "$deployment"
+              echo "Kudu attempt $attempt: id=$deployment_id status=$deployment_status complete=$deployment_complete progress=$deployment_progress"
+              if [ "$deployment_complete" = "true" ] || [ "$deployment_complete" = "True" ]; then
+                if [ "$deployment_status" = "4" ]; then
+                  code=0
+                fi
+                break
+              fi
+              sleep 15
+            done
+          fi
           # Lift the failure into an annotation as well as the log. Run logs need
           # an authenticated GitHub session to read; annotations do not, so this
           # is the difference between diagnosing a failed deploy and guessing at
