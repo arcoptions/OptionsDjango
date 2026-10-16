@@ -423,6 +423,9 @@ def option_live_prices(request):
         "ok": not bool(refresh_result["error"]),
         "error": refresh_result["error"],
         "market_closed": bool(refresh_result.get("market_closed")),
+        "rate_limited": bool(refresh_result.get("rate_limited")),
+        "refreshing": bool(refresh_result.get("refreshing")),
+        "retry_after_seconds": refresh_result.get("retry_after_seconds"),
         "rows": rows,
         "counts": {
             "tracked": selected_tips.count(),

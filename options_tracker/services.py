@@ -11,6 +11,7 @@ from decimal import Decimal
 from datetime import datetime, time as clock_time, timedelta
 
 import requests
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -23,6 +24,9 @@ DHAN_SUPER_ORDER_URL = "https://api.dhan.co/v2/super/orders"
 DHAN_ORDER_URL = "https://api.dhan.co/v2/orders"
 DHAN_RENEW_TOKEN_URL = "https://api.dhan.co/v2/RenewToken"
 DHAN_PROFILE_URL = "https://api.dhan.co/v2/profile"
+DHAN_LTP_STATE_KEY = "dhan_ltp_request_state"
+DHAN_LTP_IN_FLIGHT_SECONDS = 30
+DHAN_LTP_RATE_LIMIT_SECONDS = 120
 DHAN_SYMBOL_ALIASES = {"NG": "NATURALGAS", "UNITSDSPR": "UNITDSPR"}
 DHAN_SEGMENTS = {
     ("NSE", "D"): "NSE_FNO", ("BSE", "D"): "BSE_FNO", ("MCX", "M"): "MCX_COMM",
@@ -619,6 +623,76 @@ def resolve_dhan_instruments(signals):
     return resolved
 
 
+def _dhan_ltp_state_time(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
+
+
+def _acquire_dhan_ltp_slot():
+    """Coordinate one Dhan LTP request across every web worker and instance."""
+    now = timezone.now()
+    with transaction.atomic():
+        setting, _ = AppSetting.objects.select_for_update().get_or_create(
+            key=DHAN_LTP_STATE_KEY,
+            defaults={"value": "{}"},
+        )
+        try:
+            state = json.loads(setting.value or "{}")
+        except (TypeError, json.JSONDecodeError):
+            state = {}
+
+        cooldown_until = _dhan_ltp_state_time(state.get("cooldown_until"))
+        if cooldown_until and cooldown_until > now:
+            return {
+                "acquired": False,
+                "rate_limited": True,
+                "retry_after_seconds": max(
+                    1, int((cooldown_until - now).total_seconds())
+                ),
+            }
+
+        in_flight_until = _dhan_ltp_state_time(state.get("in_flight_until"))
+        if in_flight_until and in_flight_until > now:
+            return {"acquired": False, "refreshing": True}
+
+        state.pop("cooldown_until", None)
+        state["in_flight_until"] = (
+            now + timedelta(seconds=DHAN_LTP_IN_FLIGHT_SECONDS)
+        ).isoformat()
+        setting.value = json.dumps(state, separators=(",", ":"))
+        setting.save(update_fields=["value", "updated_at"])
+    return {"acquired": True}
+
+
+def _finish_dhan_ltp_request(*, cooldown_seconds=None):
+    now = timezone.now()
+    with transaction.atomic():
+        setting, _ = AppSetting.objects.select_for_update().get_or_create(
+            key=DHAN_LTP_STATE_KEY,
+            defaults={"value": "{}"},
+        )
+        try:
+            state = json.loads(setting.value or "{}")
+        except (TypeError, json.JSONDecodeError):
+            state = {}
+        state.pop("in_flight_until", None)
+        if cooldown_seconds:
+            state["cooldown_until"] = (
+                now + timedelta(seconds=cooldown_seconds)
+            ).isoformat()
+            state["last_rate_limited_at"] = now.isoformat()
+        else:
+            state.pop("cooldown_until", None)
+            state["last_success_at"] = now.isoformat()
+        setting.value = json.dumps(state, separators=(",", ":"))
+        setting.save(update_fields=["value", "updated_at"])
+
+
 def refresh_dhan_option_prices(signals, force=False):
     signals = list(signals)
     if not signals:
@@ -656,23 +730,53 @@ def refresh_dhan_option_prices(signals, force=False):
     if not access_token or not client_id:
         return {"updated": 0, "error": "Dhan credentials are not configured."}
 
-    payload = {}
+    payload_ids = {}
     by_security_id = {}
     for signal in signals:
         if not signal.security_id or not signal.exchange_segment:
             continue
-        payload.setdefault(signal.exchange_segment, []).append(int(signal.security_id))
+        payload_ids.setdefault(signal.exchange_segment, set()).add(int(signal.security_id))
         by_security_id.setdefault((signal.exchange_segment, signal.security_id), []).append(signal)
-    if not payload:
+    if not payload_ids:
         return {"updated": 0, "error": "No Dhan instruments could be resolved."}
+    payload = {
+        segment: sorted(security_ids)
+        for segment, security_ids in payload_ids.items()
+    }
+
+    slot = _acquire_dhan_ltp_slot()
+    if not slot["acquired"]:
+        if slot.get("rate_limited"):
+            return {
+                "updated": 0,
+                "error": "Dhan rate limit active; showing last saved quotes.",
+                "rate_limited": True,
+                "retry_after_seconds": slot["retry_after_seconds"],
+            }
+        return {"updated": 0, "error": "", "refreshing": True}
 
     try:
         response = requests.post(DHAN_LTP_URL, json=payload, headers=_dhan_headers(access_token), timeout=20)
+        if response.status_code == 429:
+            try:
+                retry_after = int(response.headers.get("Retry-After", "0"))
+            except (TypeError, ValueError):
+                retry_after = 0
+            cooldown_seconds = max(DHAN_LTP_RATE_LIMIT_SECONDS, retry_after)
+            _finish_dhan_ltp_request(cooldown_seconds=cooldown_seconds)
+            return {
+                "updated": 0,
+                "error": "Dhan rate limit active; showing last saved quotes.",
+                "rate_limited": True,
+                "retry_after_seconds": cooldown_seconds,
+            }
         response.raise_for_status()
         response_data = response.json()
     except (requests.RequestException, ValueError) as exc:
+        _finish_dhan_ltp_request()
         return {"updated": 0, "error": f"Dhan quote request failed: {exc}"}
 
+    _finish_dhan_ltp_request()
     now = timezone.now()
     updated = 0
     for segment, prices in response_data.get("data", {}).items():

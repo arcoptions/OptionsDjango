@@ -149,7 +149,15 @@
           const outcome = row.querySelector(".outcome"); outcome.textContent = outcomeLabels[quote.outcome_status] || quote.outcome_status; outcome.className = `outcome outcome-${quote.outcome_status.toLowerCase()}`;
         });
         document.getElementById("tracked-count").textContent = data.counts.tracked; document.getElementById("target-count").textContent = data.counts.target; document.getElementById("stop-loss-count").textContent = data.counts.stop_loss;
-        feedState.textContent = data.market_closed ? "Market closed" : data.ok ? "Live" : data.error; feedState.style.color = data.ok ? "var(--green)" : "var(--danger)";
+        if (data.market_closed) {
+          feedState.textContent = "Market closed"; feedState.style.color = "var(--muted)";
+        } else if (data.rate_limited) {
+          feedState.textContent = `Rate limited; showing saved quotes (${data.retry_after_seconds}s)`; feedState.style.color = "#b45309";
+        } else if (data.refreshing) {
+          feedState.textContent = "Refreshing quotes"; feedState.style.color = "var(--muted)";
+        } else {
+          feedState.textContent = data.ok ? "Live" : data.error; feedState.style.color = data.ok ? "var(--green)" : "var(--danger)";
+        }
       } catch (error) { feedState.textContent = "Unavailable"; feedState.style.color = "var(--danger)"; }
     };
     const scheduleRefresh = () => {
