@@ -15,7 +15,7 @@
   <div class="tracker-head">
     <div>
       <h3>{% if tracker_tab == "equities" %}Tracked Equities{% else %}Tracked Options{% endif %}</h3>
-      <p class="muted">{% if tracker_tab == "equities" %}Cash-equity calls parsed from Telegram sources.{% else %}Dhan live prices for CE and PE contracts.{% endif %}</p>
+      <p class="muted">{% if tracker_tab == "equities" %}Cash-equity calls parsed from Telegram sources.{% else %}Dhan live prices for unexpired CE and PE contracts. Expired contracts move to <a href="{% url 'archive' %}">Archive</a> automatically and are not fetched live.{% endif %}</p>
     </div>
     <div class="tracker-actions">
       <label class="refresh-setting">Refresh
@@ -140,6 +140,17 @@
       try {
         const response = await fetch("{% url 'option_live_prices' %}?tab={{ tracker_tab }}", {method: "POST", headers: {"X-CSRFToken": csrfToken}});
         const data = await response.json();
+        const activeIds = new Set(data.rows.map((quote) => String(quote.id)));
+        document.querySelectorAll("[data-signal-id]").forEach((row) => {
+          if (!activeIds.has(row.dataset.signalId)) row.remove();
+        });
+        const tableBody = document.querySelector(".options-table tbody");
+        if (!tableBody.children.length) {
+          const emptyRow = tableBody.insertRow();
+          const emptyCell = emptyRow.insertCell();
+          emptyCell.colSpan = 9;
+          emptyCell.textContent = "No tracked options match these filters.";
+        }
         data.rows.forEach((quote) => {
           const row = document.querySelector(`[data-signal-id="${quote.id}"]`); if (!row) return;
           row.querySelector(".contract-name").textContent = quote.dhan_display_name || "Resolving Dhan contract";

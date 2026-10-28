@@ -21,9 +21,9 @@ from . import live_dashboard, live_engine
 from .deployment import SYNC_STALE_AFTER, deployed_commit, record_deployed_commit, record_vm_commit, sync_status
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
-from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, TipSignal, TrackedStock, TradeExecution, TradeStyle
+from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, SignalStatus, TipSignal, TrackedStock, TradeExecution, TradeStyle
 from .research_views import PAGE_TABLES, RESEARCH as PUBLISHED
-from .services import _expiry_month_hint, _extract_access_token, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
+from .services import _expiry_month_hint, _extract_access_token, archive_old_signals, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.sync_to_deployed_commit import Command as SyncCommand
 from .management.commands.track_telegram import Command as TrackTelegramCommand
@@ -149,6 +149,112 @@ class DhanOptionTrackingTests(TestCase):
 		values.update(overrides)
 		return TipSignal.objects.create(**values)
 
+	def test_tracker_automatically_archives_expired_contracts_and_preserves_history(self):
+		expired = self.make_signal(
+			expiry_date=timezone.localdate() - timedelta(days=1),
+			live_price=Decimal("80"),
+			outcome_status=OptionOutcome.TARGET_1,
+			quote_updated_at=timezone.now(),
+		)
+		quote_time = expired.quote_updated_at
+		current = self.make_signal(option_symbol="CURRENT 100 CE", expiry_date=timezone.localdate())
+		unknown = self.make_signal(option_symbol="UNKNOWN 100 PE", direction=Direction.PE)
+
+		response = self.client.get("/options/")
+
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(expired.live_price, Decimal("80"))
+		self.assertEqual(expired.outcome_status, OptionOutcome.TARGET_1)
+		self.assertEqual(expired.quote_updated_at, quote_time)
+		self.assertEqual({row.pk for row in response.context["items"]}, {current.pk, unknown.pk})
+		self.assertEqual(response.context["tracked_count"], 2)
+		self.assertEqual(response.context["target_count"], 0)
+		self.assertContains(self.client.get("/archive/"), expired.option_symbol)
+
+	def test_archive_moves_current_month_expiries_immediately_and_is_idempotent(self):
+		with patch("options_tracker.services.timezone.localdate", return_value=date(2026, 10, 28)):
+			expired = self.make_signal(expiry_date=date(2026, 10, 27), direction=Direction.PE)
+			current = self.make_signal(expiry_date=date(2026, 10, 28))
+			future = self.make_signal(expiry_date=date(2026, 11, 3))
+
+			self.assertEqual(archive_old_signals(), 1)
+			self.assertEqual(archive_old_signals(), 0)
+
+		expired.refresh_from_db()
+		current.refresh_from_db()
+		future.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(current.status, SignalStatus.NEW)
+		self.assertEqual(future.status, SignalStatus.NEW)
+
+	def test_archive_page_automatically_includes_newly_expired_contracts(self):
+		expired = self.make_signal(expiry_date=timezone.localdate() - timedelta(days=1))
+
+		response = self.client.get("/archive/")
+
+		self.assertContains(response, expired.option_symbol)
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+
+	@patch("options_tracker.services.requests.post")
+	@patch("options_tracker.services._load_dhan_contracts")
+	def test_expired_and_archived_contracts_never_resolve_or_fetch_even_when_forced(self, load_contracts, post):
+		expired = self.make_signal(expiry_date=timezone.localdate() - timedelta(days=1))
+		archived = self.make_signal(status=SignalStatus.ARCHIVED)
+
+		result = refresh_dhan_option_prices([expired, archived], force=True)
+		self.assertEqual(result, {"updated": 0, "error": ""})
+		self.assertEqual(resolve_dhan_instruments([expired, archived]), 0)
+
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		load_contracts.assert_not_called()
+		post.assert_not_called()
+
+	@patch("options_tracker.services.requests.post")
+	def test_quote_payload_excludes_expired_contracts_but_keeps_expiry_day_and_equities(self, post):
+		expired = self.make_signal(
+			expiry_date=timezone.localdate() - timedelta(days=1),
+			security_id="111", exchange_segment="NSE_FNO",
+		)
+		current = self.make_signal(
+			expiry_date=timezone.localdate(), security_id="222", exchange_segment="NSE_FNO",
+		)
+		equity = self.make_signal(
+			option_symbol="VARROC", direction=Direction.EQ,
+			security_id="333", exchange_segment="NSE_EQ",
+		)
+		post.return_value.status_code = 200
+		post.return_value.json.return_value = {"data": {}}
+
+		with patch.dict(os.environ, {"DHAN_ACCESS_TOKEN": "token", "DHAN_CLIENT_ID": "client"}):
+			refresh_dhan_option_prices([expired, current, equity], force=True)
+
+		self.assertEqual(post.call_args.kwargs["json"], {"NSE_FNO": [222], "NSE_EQ": [333]})
+
+	@patch("options_tracker.views.refresh_dhan_option_prices", return_value={"updated": 0, "error": ""})
+	def test_live_endpoint_archives_before_selecting_contracts(self, refresh_prices):
+		expired = self.make_signal(expiry_date=timezone.localdate() - timedelta(days=1))
+		current = self.make_signal(expiry_date=timezone.localdate())
+
+		response = self.client.post("/api/options/live/")
+
+		self.assertEqual([row.pk for row in refresh_prices.call_args.args[0]], [current.pk])
+		self.assertEqual([row["id"] for row in response.json()["rows"]], [current.pk])
+		self.assertEqual(response.json()["counts"], {"tracked": 1, "target": 0, "stop_loss": 0})
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+
+	@patch("options_tracker.services.is_dhan_market_open", return_value=False)
+	def test_expired_contracts_are_archived_even_outside_market_hours(self, market_open):
+		expired = self.make_signal(expiry_date=timezone.localdate() - timedelta(days=1))
+
+		refresh_dhan_option_prices([expired])
+
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+
 	def test_uses_first_expiry_month_mentioned(self):
 		self.assertEqual(_expiry_month_hint("BUY 5200CE AUG SELL 5200CE JULY"), 8)
 
@@ -250,7 +356,7 @@ class DhanOptionTrackingTests(TestCase):
 			security_id="bse-contract",
 			exchange_segment="BSE_FNO",
 			dhan_display_name="NIFTY BSE CONTRACT",
-			expiry_date=date(2026, 7, 30),
+			expiry_date=timezone.localdate() + timedelta(days=1),
 			live_price=Decimal("10"),
 		)
 		load_contracts.return_value = {}
@@ -316,9 +422,10 @@ class DhanOptionTrackingTests(TestCase):
 
 	@patch("options_tracker.views.refresh_dhan_option_prices")
 	def test_live_endpoint_returns_counts(self, refresh_prices):
+		expiry = timezone.localdate() + timedelta(days=7)
 		signal = self.make_signal(
 			dhan_display_name="NIFTY 25 AUG 24000 CALL",
-			expiry_date=date(2026, 8, 25),
+			expiry_date=expiry,
 		)
 		signal.outcome_status = OptionOutcome.TARGET_1
 		signal.save(update_fields=["outcome_status"])
@@ -329,7 +436,7 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()["counts"], {"tracked": 1, "target": 1, "stop_loss": 0})
 		self.assertEqual(response.json()["rows"][0]["dhan_display_name"], "NIFTY 25 AUG 24000 CALL")
-		self.assertEqual(response.json()["rows"][0]["expiry_date"], "2026-08-25")
+		self.assertEqual(response.json()["rows"][0]["expiry_date"], expiry.isoformat())
 
 	def test_tracker_filters_by_exact_source(self):
 		self.make_signal(source_name="Source A")

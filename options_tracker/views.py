@@ -54,6 +54,7 @@ from .models import (
     TradeStyle,
 )
 from .services import (
+    archive_expired_signals,
     archive_old_signals,
     classify_regime,
     get_oi_interval_seconds,
@@ -331,6 +332,7 @@ def telegram_tracker_status_api(request):
 
 @require_http_methods(["GET", "POST"])
 def options_tracker(request):
+    archive_expired_signals()
     if request.method == "GET" and request.GET.get("sync") == "legacy":
         created, status_msg = sync_telegram_from_legacy(limit=300, trade_style=TradeStyle.INTRADAY)
         if status_msg == "OK":
@@ -410,6 +412,7 @@ def options_tracker(request):
 
 @require_http_methods(["POST"])
 def option_live_prices(request):
+    archive_expired_signals()
     tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
     options = tracked_tips.filter(direction__in=["CE", "PE"])
     tracker_tab = request.GET.get("tab", "options").strip().lower()
@@ -896,9 +899,10 @@ def trade_journal(request):
 def archive(request):
     if request.GET.get("run") == "1":
         moved = archive_old_signals()
-        messages.success(request, f"Archived {moved} records by expiry/close month.")
+        messages.success(request, f"Archived {moved} expired contracts and older closed records.")
         return redirect("archive")
 
+    archive_expired_signals()
     month = request.GET.get("month", "")
     source = request.GET.get("source", "").strip()
     q = request.GET.get("q", "").strip()

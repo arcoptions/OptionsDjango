@@ -464,11 +464,28 @@ def classify_regime(put_oi, call_oi):
     return "Neutral / Range"
 
 
+def archive_expired_signals():
+    return TipSignal.objects.filter(
+        direction__in=[Direction.CE, Direction.PE],
+        expiry_date__lt=timezone.localdate(),
+    ).exclude(status=SignalStatus.ARCHIVED).update(status=SignalStatus.ARCHIVED)
+
+
 def archive_old_signals():
+    archived = archive_expired_signals()
     now = timezone.localdate()
-    expiry_q = Q(expiry_date__isnull=False, expiry_date__lt=now.replace(day=1))
     close_q = Q(status=SignalStatus.CLOSED, executions__closed_at__date__lt=now.replace(day=1))
-    return TipSignal.objects.filter(expiry_q | close_q).exclude(status=SignalStatus.ARCHIVED).update(status=SignalStatus.ARCHIVED)
+    return archived + TipSignal.objects.filter(close_q).update(status=SignalStatus.ARCHIVED)
+
+
+def _live_dhan_signals(signals):
+    archive_expired_signals()
+    today = timezone.localdate()
+    return [
+        signal for signal in signals
+        if signal.status != SignalStatus.ARCHIVED
+        and (signal.direction == Direction.EQ or not signal.expiry_date or signal.expiry_date >= today)
+    ]
 
 
 def _dhan_headers(access_token, client_id=None):
@@ -548,6 +565,9 @@ def _expected_dhan_segment(option_symbol, direction=None):
 
 
 def resolve_dhan_instruments(signals):
+    signals = _live_dhan_signals(signals)
+    if not signals:
+        return 0
     contracts = _load_dhan_contracts()
     today = timezone.localdate()
     resolved = 0
@@ -694,7 +714,7 @@ def _finish_dhan_ltp_request(*, cooldown_seconds=None):
 
 
 def refresh_dhan_option_prices(signals, force=False):
-    signals = list(signals)
+    signals = _live_dhan_signals(signals)
     if not signals:
         return {"updated": 0, "error": ""}
     if not force and not is_dhan_market_open():
