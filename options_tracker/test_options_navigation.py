@@ -45,6 +45,23 @@ class OptionsNavigationTests(TestCase):
             html=True,
         )
 
+    def test_tracker_paginates_large_tabs_and_preserves_filters(self):
+        TipSignal.objects.bulk_create([
+            TipSignal(
+                option_symbol=f"TEST {index} CE",
+                direction=Direction.CE,
+                stop_loss=10,
+                source_name="Bulk source",
+            )
+            for index in range(101)
+        ])
+
+        response = self.client.get(f"{reverse('options_tracker')}?tab=options&source=Bulk+source")
+
+        self.assertEqual(len(response.context["items"]), 100)
+        self.assertTrue(response.context["page_obj"].has_next())
+        self.assertContains(response, "tab=options&amp;source=Bulk+source&amp;page=2")
+
     def test_option_edit_post_returns_to_the_matching_tracker_tab(self):
         response = self.client.post(reverse("option_edit", args=[self.signal.pk]), {
             "source_name": "Manual",

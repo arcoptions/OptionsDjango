@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Max, Min, Q
 from django.http import JsonResponse
@@ -432,9 +433,14 @@ def options_tracker(request):
     if outcome in OptionOutcome.values:
         items = items.filter(outcome_status=outcome)
 
+    page = Paginator(items, 100).get_page(request.GET.get("page"))
+    pagination_query = request.GET.copy()
+    pagination_query.pop("page", None)
     ctx = {
         "title": "Options Tracker",
-        "items": items[:300],
+        "items": page.object_list,
+        "page_obj": page,
+        "pagination_query": pagination_query.urlencode(),
         "form": form,
         "filter_form": f,
         "score_min": request.GET.get("score_min", ""),
