@@ -2,11 +2,13 @@ import re
 import json
 import os
 import secrets
+import logging
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.cache import cache
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Max, Min, Q
 from django.http import JsonResponse
@@ -68,13 +70,29 @@ from .services import (
     sync_chartink_from_legacy,
     sync_index_oi_from_legacy,
     sync_telegram_from_legacy,
-    validate_dhan_credentials,
+    validate_dhan_credentials, fetch_dhan_nifty_ltp, _token_expiry, _token_is_spent,
 )
 from .strategy_backtest import NIFTY_PUT_RESEARCH_SUMMARY
+from .action_workspace import action_list_context
+
+
+logger = logging.getLogger(__name__)
+NIFTY_LTP_CACHE_KEY = "market_ticker_nifty_ltp"
 
 
 def home(request):
-    return redirect("options_tracker")
+    return redirect("radar")
+
+
+def action_list(request):
+    return render(
+        request,
+        "options_tracker/action_list.html",
+        {
+            "title": "Action List",
+            **action_list_context(),
+        },
+    )
 
 
 def _session_bounds(session_date):
@@ -97,11 +115,32 @@ def _latest_session_dates(queryset, field_name, limit=30):
 
 def market_ticker_api(request):
     snapshot = IndexOISnapshot.objects.filter(underlying="NIFTY").order_by("-created_at").first()
-    if not snapshot or snapshot.underlying_price is None:
-        return JsonResponse({"ok": False, "error": "No NIFTY snapshot is available."}, status=503)
-    age_seconds = max(0, int((timezone.now() - snapshot.created_at).total_seconds()))
-    price = float(snapshot.underlying_price)
-    change = float(snapshot.underlying_change or 0)
+    live_quote = cache.get(NIFTY_LTP_CACHE_KEY)
+    if live_quote is None:
+        try:
+            live_quote = {
+                "price": fetch_dhan_nifty_ltp(timeout=3),
+                "updated_at": timezone.localtime().isoformat(),
+            }
+        except Exception as exc:
+            logger.warning("Dhan NIFTY ticker request failed; using stored snapshot: %s", exc)
+        else:
+            cache.set(NIFTY_LTP_CACHE_KEY, live_quote, timeout=25)
+
+    if live_quote:
+        price = live_quote["price"]
+        updated_at = live_quote["updated_at"]
+        source = "dhan_ltp"
+        stale = False
+    elif snapshot and snapshot.underlying_price is not None:
+        price = float(snapshot.underlying_price)
+        updated_at = timezone.localtime(snapshot.created_at).isoformat()
+        source = "stored_index_oi"
+        stale = (timezone.now() - snapshot.created_at).total_seconds() > 300
+    else:
+        return JsonResponse({"ok": False, "error": "No live or stored NIFTY quote is available."}, status=503)
+
+    change = float(snapshot.underlying_change or 0) if snapshot else 0
     previous = price - change
     return JsonResponse({
         "ok": True,
@@ -109,8 +148,10 @@ def market_ticker_api(request):
         "price": price,
         "change": change,
         "change_percent": round(change / previous * 100, 2) if previous else 0,
-        "updated_at": timezone.localtime(snapshot.created_at).isoformat(),
-        "stale": age_seconds > 300,
+        "updated_at": updated_at,
+        "stale": stale,
+        "source": source,
+        "change_source": "stored_index_oi" if snapshot else "unavailable",
     })
 
 
@@ -137,13 +178,16 @@ def dhan_settings(request):
                     AppSetting.objects.update_or_create(key="dhan_client_id", defaults={"value": client_id})
                 messages.success(request, "Dhan access token validated and updated. Live feeds now use it.")
                 return redirect("dhan_settings")
+    token_expiry = _token_expiry(access_token) if access_token else None
+    token_live = bool(access_token and configured_client_id and not _token_is_spent(access_token))
     return render(request, "options_tracker/dhan_settings.html", {
         "title": "Dhan API Setup",
         "form": form,
-        "dhan_configured": bool(access_token and configured_client_id),
+        "dhan_configured": token_live,
         "dhan_token_source": "Dashboard override" if token_setting else "Azure App Setting",
         "dhan_token_updated_at": token_setting.updated_at if token_setting else None,
-        "dhan_token_expires_at": token_setting.updated_at + timedelta(hours=24) if token_setting else None,
+        "dhan_token_expires_at": token_expiry,
+        "dhan_token_expired": bool(access_token and _token_is_spent(access_token)),
     })
 
 

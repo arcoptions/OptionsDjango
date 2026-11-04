@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title|default:shell_brand }} | {{ shell_brand }}</title>
+  <title>{% block title %}{{ title|default:shell_brand }} | {{ shell_brand }}{% endblock %}</title>
   <style>
     :root {
       --bg: #f3f5f9;
@@ -74,7 +74,7 @@
     .nav-item { padding: 10px 12px; border-radius: 8px; border: 1px solid transparent; color: #334155; background: transparent; }
     .nav-item.active { background: #fff; border-color: #dbe2ea; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04); color: #d08f10; font-weight: 700; }
     .nav-item:hover { background: rgba(255,255,255,0.7); }
-    .content { padding: 18px 22px 28px; }
+    .content { padding: 18px 22px 28px; min-width: 0; }
     .top-strip {
       display: flex;
       align-items: center;
@@ -176,8 +176,9 @@
       .tabs { gap: 10px; }
     }
   </style>
+  {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <div class="shell">
     <aside class="sidebar">
       <div class="brand-card">
@@ -223,6 +224,7 @@
         </div>
       </div>
 
+      {% block page_header %}
       <div class="page-head">
         <div>
           <h1 class="page-title">{{ title|default:shell_brand }}</h1>
@@ -238,6 +240,7 @@
           </div>
         </div>
       </div>
+      {% endblock %}
 
       {% if messages %}
         {% for message in messages %}
@@ -264,8 +267,10 @@
           change.className = data.change >= 0 ? "up" : "down";
           document.getElementById("ticker-status").textContent = data.stale ? "STALE" : "LIVE";
           ticker.title = `Dhan snapshot ${new Date(data.updated_at).toLocaleString()}`;
+          window.dispatchEvent(new CustomEvent("arc:market-ticker", {detail: data}));
         } catch (error) {
           document.getElementById("ticker-status").textContent = "UNAVAILABLE";
+          window.dispatchEvent(new CustomEvent("arc:market-ticker", {detail: {ok: false, stale: true}}));
         }
       };
       refreshTicker();

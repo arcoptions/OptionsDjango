@@ -11,6 +11,7 @@ from .models import (
 	IndexOptionStrikeSnapshot,
 	TipSignal,
 	TradeExecution,
+	RadarCatalyst,
 )
 
 
@@ -24,3 +25,4 @@ admin.site.register(IndexOptionCandle)
 admin.site.register(AppSetting)
 admin.site.register(DhanOrderEvent)
 admin.site.register(CasAuctionEvent)
+admin.site.register(RadarCatalyst)

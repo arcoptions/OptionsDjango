@@ -62,9 +62,6 @@
       {% endif %}
     </form>
   </div>
-  {# Which code the engine is actually running. The site is App Service and the
-     engine is the VM, so these can differ -- and used to, for five days, found
-     only by noticing the engine behaving like older code. #}
   <div class="muted" style="margin-top:8px; font-size:12px;">
     {% if not deploy.vm %}
       the trading VM has never reported its commit &mdash; is <code>optionsdjango-sync.timer</code> running?

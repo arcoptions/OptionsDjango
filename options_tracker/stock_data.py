@@ -459,6 +459,71 @@ def download_equity_daily(stocks, start, end):
     return _run(tasks, "equity")
 
 
+QUOTE_URL = "https://api.dhan.co/v2/marketfeed/quote"
+
+
+def snapshot_today_daily(stocks, today=None):
+    """Write today's daily bar from the market quote, for an evening build.
+
+    The historical endpoint does not publish a session's daily bar until the
+    next morning (measured: absent at 23:30 IST even with toDate = tomorrow), and
+    the 15-minute feed stops at the 15:00 bar, so neither can give an evening job
+    the day's close. The quote can: after the close `last_price` is the closing
+    price and `ohlc` holds the session's open, high and low, for the whole
+    universe in one request. The row carries the same midnight stamp as Dhan's
+    own daily bar, so when that bar arrives the next morning it lands on this
+    row as a duplicate and is ignored; the two describe the same session.
+
+    Nothing is written unless the last trade was today, so a holiday cannot mint
+    a bar out of the previous session's quote.
+    """
+    today = today or timezone.localdate()
+    equities = equity_ids(load_master())
+    wanted = {}
+    for stock in stocks:
+        security_id = stock.security_id or equities.get(stock.symbol)
+        if security_id:
+            wanted[str(security_id)] = stock.symbol
+    if not wanted:
+        return 0, "no security ids"
+    written, stamp = 0, timezone.make_aware(dt.datetime.combine(today, dt.time.min))
+    ids = list(wanted)
+    for i in range(0, len(ids), 900):
+        data, error = _post(QUOTE_URL, {"NSE_EQ": [int(x) for x in ids[i:i + 900]]})
+        if error:
+            return written, error
+        quotes = ((data or {}).get("data") or {}).get("NSE_EQ") or {}
+        for security_id, q in quotes.items():
+            symbol = wanted.get(str(security_id))
+            traded = (q.get("last_trade_time") or "")[:10]
+            if not symbol or traded != today.strftime("%d/%m/%Y"):
+                continue
+            ohlc = q.get("ohlc") or {}
+            if not q.get("last_price") or not ohlc.get("open"):
+                continue
+            StockEquityCandle.objects.update_or_create(
+                symbol=symbol, interval_minutes=DAILY_INTERVAL, timestamp=stamp,
+                defaults={"open": ohlc["open"], "high": ohlc["high"], "low": ohlc["low"],
+                          "close": q["last_price"], "volume": int(q.get("volume") or 0)})
+            written += 1
+        time.sleep(1.1)                       # the quote API allows one request a second
+    return written, ""
+
+
+def option_quotes(security_ids):
+    """{security_id: quote} for NSE F&O contracts, as of now. One request per 900."""
+    out = {}
+    ids = [int(x) for x in dict.fromkeys(security_ids) if x]
+    for i in range(0, len(ids), 900):
+        data, error = _post(QUOTE_URL, {"NSE_FNO": ids[i:i + 900]})
+        if error:
+            log(f"option quotes: {error}")
+            continue
+        out.update(((data or {}).get("data") or {}).get("NSE_FNO") or {})
+        time.sleep(1.1)
+    return {str(k): v for k, v in out.items()}
+
+
 def download_rolling(stocks, start, end, relatives=None, interval=15, expiry_code=1,
                      option_types=("CALL", "PUT")):
     """Rolling ATM-relative option bars.

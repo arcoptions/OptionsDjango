@@ -1,5 +1,7 @@
 from django import forms
 
+from .services import _token_expiry, _token_is_spent
+
 from .models import ChartinkTrigger, SignalStatus, TipSignal, TradeExecution, TradeStyle
 from .telegram_sources import SOURCES
 
@@ -82,3 +84,12 @@ class DhanCredentialsForm(forms.Form):
         strip=True,
         help_text="Leave blank to keep the configured Dhan client ID.",
     )
+
+    def clean_access_token(self):
+        access_token = self.cleaned_data["access_token"]
+        if _token_is_spent(access_token):
+            expiry = _token_expiry(access_token)
+            raise forms.ValidationError(
+                f"This Dhan token expired at {expiry:%d %b %Y %I:%M %p %Z}. Generate and paste today's token."
+            )
+        return access_token

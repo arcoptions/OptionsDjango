@@ -1,0 +1,126 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<div class="panel warning" style="border-color:#f59e0b;">
+  <div class="muted">Research verdict &middot; {{ research.data.first_entry }} to {{ research.data.last_entry }}</div>
+  <div style="font-size:26px; font-weight:800; margin:4px 0;">Do not buy front-month calls from these signals</div>
+  <p style="max-width:920px; line-height:1.55; margin:0;">
+    {{ research.data.priced_paths }} historical signals had a tradeable, pinned nearest-expiry ATM-call path.
+    The least-bad exit still averaged <strong style="color:var(--danger);">{{ all_result.full.mean|floatformat:2 }}%</strong>
+    after measured spreads, with only <strong>{{ all_result.full.win|floatformat:1 }}%</strong> winners.
+    This actual-quote test is a warning against front-month calls, not a verdict on the separate
+    <a href="{% url 'swing_options' %}" style="text-decoration:underline;">15+ DTE modelled plan</a>.
+  </p>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(4,minmax(170px,1fr));">
+  <div class="stat"><div class="label">Priced option paths</div><div class="value">{{ research.data.priced_paths }}</div><div class="muted">of {{ research.data.signals }} stock signals</div></div>
+  <div class="stat"><div class="label">All calls, mean</div><div class="value" style="color:var(--danger);">{{ all_result.full.mean|floatformat:1 }}%</div><div class="muted">median {{ all_result.full.median|floatformat:1 }}%</div></div>
+  <div class="stat"><div class="label">Spread &le; 3%, mean</div><div class="value" style="color:var(--danger);">{{ cheap_result.full.mean|floatformat:1 }}%</div><div class="muted">{{ cheap_result.full.trades }} trades; {{ cheap_result.full.win|floatformat:0 }}% won</div></div>
+  <div class="stat"><div class="label">Validation mean</div><div class="value" style="color:var(--danger);">{{ cheap_result.validation.mean|floatformat:1 }}%</div><div class="muted">cheap subset after 1 Mar 2026</div></div>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between; align-items:flex-end;">
+    <div>
+      <strong style="font-size:18px;">Latest stock signals</strong>
+      <div class="muted">
+        {% if latest_day %}{{ latest_day|date:"D d M Y" }}{% else %}No saved signals{% endif %}
+        &middot; reference-snapshot spread status must be rechecked live
+      </div>
+    </div>
+    <div class="row">
+      <a class="btn secondary" href="{% url 'swing_options' %}">Open 15+ DTE plan</a>
+      <a class="btn secondary" href="{% url 'swing_alerts' %}">Open stock signals</a>
+    </div>
+  </div>
+  {% if candidates %}
+  <div style="overflow-x:auto; margin-top:10px;">
+    <table>
+      <thead><tr><th>Rank</th><th>Symbol</th><th>Stock close</th><th>Reference cost gate</th><th>Action now</th><th>Reason</th></tr></thead>
+      <tbody>
+      {% for item in candidates %}
+        <tr>
+          <td>{{ item.row.rank }}</td>
+          <td><strong>{{ item.row.symbol }}</strong></td>
+          <td>{% if item.row.close %}&#8377;{{ item.row.close }}{% else %}&ndash;{% endif %}</td>
+          <td>{% if item.historically_cheap %}<span style="color:var(--green);">snapshot spread &le; 3%</span>{% else %}<span style="color:var(--danger);">failed reference gate</span>{% endif %}</td>
+          <td><strong>{{ item.decision }}</strong></td>
+          <td class="muted">{% if item.historically_cheap %}Eligible only for the protocol below; no cash trade until forward paper results turn positive.{% else %}The one-time reference spread was too wide or was not measurable.{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="muted">Run the strength-dip build before evaluating option candidates.</p>
+  {% endif %}
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(2,minmax(300px,1fr));">
+  <div class="panel">
+    <strong style="font-size:18px;">Paper protocol: the least-bad tested exit</strong>
+    <ol style="line-height:1.7; padding-left:20px;">
+      <li>Enter only after a saved strength-dip signal, at the next session open.</li>
+      <li>Use the ATM call, premium at least &#8377;{{ rule.min_premium|floatformat:0 }}, with at least {{ rule.min_sessions_to_expiry }} sessions before expiry.</li>
+      <li>Skip unless the live bid/ask round trip is at most {{ rule.max_live_spread_pct|floatformat:0 }}% and the contract has traded.</li>
+      {% if rule.initial_stop_pct %}
+      <li>Initial premium stop: <strong>&minus;{{ rule.initial_stop_pct|floatformat:0 }}%</strong>. Never average down.</li>
+      <li>After premium reaches <strong>+{{ rule.trail_activation_pct|floatformat:0 }}%</strong>, trail <strong>{{ rule.trail_gap_pct|floatformat:0 }}%</strong> below the high-water mark from the next bar.</li>
+      {% else %}
+      <li>No tested premium stop or trailing rule improved the discovery result. Never average down; size the paper premium as fully at risk.</li>
+      {% endif %}
+      <li>Mandatory exit at the same session's close. No overnight hold in the tested protocol.</li>
+    </ol>
+    <div class="msg warning" style="margin:0;">This was the least-bad tested rule, not a profitable rule. Keep it paper-only.</div>
+  </div>
+  <div class="panel">
+    <strong style="font-size:18px;">Why the 20-session stock hold does not transfer</strong>
+    <div style="overflow-x:auto; margin-top:10px;">
+      <table>
+        <thead><tr><th>Option exit</th><th style="text-align:right;">Mean</th><th style="text-align:right;">Median</th><th style="text-align:right;">Win</th><th style="text-align:right;">Lost 50%+</th></tr></thead>
+        <tbody>
+        {% for row in research.comparison %}
+          <tr>
+            <td>{% if row.rule == rule.name %}{% if rule.initial_stop_pct %}stop + trail, same day{% else %}same-session close{% endif %}{% else %}{{ row.rule|cut:"hold_" }} sessions{% endif %}</td>
+            <td style="text-align:right; color:var(--danger);">{{ row.mean|floatformat:1 }}%</td>
+            <td style="text-align:right; color:var(--danger);">{{ row.median|floatformat:1 }}%</td>
+            <td style="text-align:right;">{{ row.win|floatformat:1 }}%</td>
+            <td style="text-align:right;">{{ row.loss_50|floatformat:1 }}%</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="line-height:1.5;">Theta, expiry proximity and stock-option spreads compound quickly. A stock signal can remain valid while its call loses most of its premium.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <strong style="font-size:18px;">Recent reconstructed option trades</strong>
+  <div class="muted">One absolute strike is pinned from entry to exit; the test never switches contracts when the moving ATM label changes.</div>
+  <div style="overflow-x:auto; margin-top:10px;">
+    <table>
+      <thead><tr><th>Signal</th><th>Symbol</th><th>Strike</th><th>Entry</th><th>Exit</th><th>Peak</th><th>Net</th><th>Exit</th><th>Cost gate</th></tr></thead>
+      <tbody>
+      {% for trade in research.recent_trades %}
+        <tr>
+          <td>{{ trade.signal_day }}</td><td><strong>{{ trade.symbol }}</strong></td>
+          <td>{{ trade.strike|floatformat:0 }} CE</td><td>&#8377;{{ trade.entry }}</td><td>&#8377;{{ trade.exit }}</td>
+          <td style="text-align:right;">{{ trade.peak|floatformat:1 }}%</td>
+          <td style="text-align:right; font-weight:700; color:{% if trade.net < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ trade.net|floatformat:1 }}%</td>
+          <td>{{ trade.reason }}</td><td>{% if trade.cheap %}pass{% else %}fail{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <strong>Limits that keep this result honest</strong>
+  <ul class="muted" style="line-height:1.7;">
+    {% for limitation in research.limitations %}<li>{{ limitation }}</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

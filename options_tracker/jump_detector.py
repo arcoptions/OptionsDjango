@@ -144,14 +144,16 @@ def _trade_levels(reference_price, recent_support=None):
 
 
 def _opening_breakout_report(underlying, days=45, session_date=None):
-    cutoff = (session_date or timezone.localdate()) - timedelta(days=days)
-    cutoff_start, _ = _session_bounds(cutoff)
     query = IndexOptionCandle.objects.filter(
-        underlying=underlying, interval_minutes=1, timestamp__gte=cutoff_start,
+        underlying=underlying, interval_minutes=1,
     )
     if session_date:
         session_start, session_end = _session_bounds(session_date)
         query = query.filter(timestamp__gte=session_start, timestamp__lt=session_end)
+    else:
+        cutoff = timezone.localdate() - timedelta(days=days)
+        cutoff_start, _ = _session_bounds(cutoff)
+        query = query.filter(timestamp__gte=cutoff_start)
     query = query.values(
         "timestamp", "strike", "option_type", "open", "high", "low", "close", "volume", "spot",
     ).order_by("timestamp")
@@ -259,16 +261,17 @@ def _historical_trade_outcome(current, prior_rows, future_rows):
 
 
 def _historical_events(underlying, days=45, session_date=None):
-    cutoff = (session_date or timezone.localdate()) - timedelta(days=days)
-    cutoff_start, _ = _session_bounds(cutoff)
     rows = IndexOptionCandle.objects.filter(
         underlying=underlying,
         interval_minutes=1,
-        timestamp__gte=cutoff_start,
     )
     if session_date:
         session_start, session_end = _session_bounds(session_date)
         rows = rows.filter(timestamp__gte=session_start, timestamp__lt=session_end)
+    else:
+        cutoff = timezone.localdate() - timedelta(days=days)
+        cutoff_start, _ = _session_bounds(cutoff)
+        rows = rows.filter(timestamp__gte=cutoff_start)
     rows = rows.values(
         "timestamp", "relative_strike", "option_type", "strike", "spot",
         "close", "high", "low", "volume", "oi", "implied_volatility",

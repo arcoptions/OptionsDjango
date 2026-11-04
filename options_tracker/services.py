@@ -296,6 +296,28 @@ def validate_dhan_credentials(access_token, client_id):
     return data
 
 
+def fetch_dhan_nifty_ltp(timeout=3):
+    access_token, client_id = get_dhan_credentials()
+    if not access_token or not client_id:
+        raise RuntimeError("Dhan credentials are not configured.")
+    response = requests.post(
+        DHAN_LTP_URL,
+        json={"IDX_I": [13]},
+        headers=_dhan_headers(access_token, client_id),
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+    try:
+        price = Decimal(str(data["data"]["IDX_I"]["13"]["last_price"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        message = data.get("remarks", {}).get("message") if isinstance(data, dict) else None
+        raise ValueError(message or "Dhan returned no NIFTY LTP.") from exc
+    if price <= 0:
+        raise ValueError("Dhan returned an invalid NIFTY LTP.")
+    return float(price)
+
+
 def parse_tip_text(raw_text):
     text = str(raw_text or "").strip().upper()
     text = re.sub(r"[#*_`]+", " ", text)

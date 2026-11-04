@@ -15,20 +15,11 @@ def layout_shell(request):
     nifty_ticker = IndexOISnapshot.objects.filter(underlying="NIFTY").order_by("-created_at").first()
 
     nav_items = [
-        ("Options Tracker", reverse("options_tracker")),
-        ("Stock Options", reverse("stock_options")),
-        ("Daily Shortlist", reverse("daily_shortlist")),
-        ("Strategy Report", reverse("research_report")),
-        ("Breakeven", reverse("breakeven")),
-        ("NIFTY Live", reverse("nifty_live")),
-        ("NIFTY Closing Auction", reverse("cas_dashboard")),
-        ("Scanners", reverse("scanners")),
-        ("Telegram Feed", reverse("telegram_feed")),
-        ("Recommendations", reverse("recommendations")),
-        ("Index OI", reverse("index_oi")),
-        ("Dhan Orders", reverse("dhan_orders")),
+        ("Trading Workspace", reverse("radar")),
+        ("NIFTY Execution", reverse("nifty_live")),
         ("Trade Journal", reverse("trade_journal")),
-        ("Archive", reverse("archive")),
+        ("Research & Archive", reverse("research_report")),
+        ("Signal Archive", reverse("archive")),
         ("Admin", reverse("admin:index")),
     ]
 
@@ -42,5 +33,5 @@ def layout_shell(request):
         "shell_nifty_ticker": nifty_ticker,
         "shell_nifty_stale": not nifty_ticker or nifty_ticker.created_at < timezone.now() - timedelta(minutes=5),
         "shell_brand": "ARC Trading Journal",
-        "shell_subtitle": "Options terminal for tips, triggers, OI, and execution control",
+        "shell_subtitle": "One evidence-aware queue for action, review, charts, and risk",
     }

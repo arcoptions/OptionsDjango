@@ -3,12 +3,12 @@
 <section class="card dhan-settings">
   <div class="settings-head">
     <div><h2>Dhan API connection</h2><p class="muted">Replace the access token after its daily expiry. The new token is validated before activation.</p></div>
-    <span class="connection-state {% if dhan_configured %}connected{% endif %}">{% if dhan_configured %}CONFIGURED{% else %}NOT CONFIGURED{% endif %}</span>
+    <span class="connection-state {% if dhan_configured %}connected{% endif %}">{% if dhan_configured %}VALID UNTIL EXPIRY{% elif dhan_token_expired %}EXPIRED{% else %}NOT CONFIGURED{% endif %}</span>
   </div>
   <dl class="credential-status">
     <div><dt>Active source</dt><dd>{{ dhan_token_source }}</dd></div>
     <div><dt>Updated</dt><dd>{% if dhan_token_updated_at %}{{ dhan_token_updated_at|date:"d M Y h:i A" }}{% else %}Managed in Azure{% endif %}</dd></div>
-    <div><dt>Expected expiry</dt><dd>{% if dhan_token_expires_at %}{{ dhan_token_expires_at|date:"d M Y h:i A" }}{% else %}Update when Dhan returns 401{% endif %}</dd></div>
+    <div><dt>JWT expiry</dt><dd>{% if dhan_token_expires_at %}{{ dhan_token_expires_at|date:"d M Y h:i A T" }}{% else %}Token does not expose a readable expiry{% endif %}</dd></div>
   </dl>
   <form method="post" class="token-form">
     {% csrf_token %}

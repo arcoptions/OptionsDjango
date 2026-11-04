@@ -29,6 +29,12 @@ fi
 # looks ordinary and is wrong. Only App Service runs this script, so there is
 # exactly one builder however many hosts exist.
 python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortlist.log 2>&1 &
+# The strength-dip alert: rank the F&O universe on the close, move the paper
+# book on, and send the Telegram message. 18:55 IST, after the shortlist, for
+# the same reason -- a half-downloaded session ranks the universe on a partial
+# close. It reads history only, so like the shortlist it needs a token but not
+# ownership of one.
+python -u manage.py build_swing_alerts --daemon > /home/LogFiles/swing-alerts.log 2>&1 &
 python -u manage.py collect_index_oi > /home/LogFiles/index-oi-collector.log 2>&1 &
 # The dashboard switch controls whether this daemon holds the CAS socket open.
 # Packets are persisted to the shared database for replay and model tuning.

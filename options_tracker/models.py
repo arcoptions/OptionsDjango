@@ -1,6 +1,14 @@
 from django.db import models
 from django.utils import timezone
 
+from .radar_models import (
+    RadarAlert, RadarBar, RadarDecision, RadarInstrument, RadarOpportunity,
+    RadarOptionPoint, RadarQuote, RadarWatch, RadarWorker, RadarWorkspace,
+    RadarNotificationRoute, RadarPriceAlert, RadarSector,
+    RadarAssistantSnapshot, RadarResearchProtocol, RadarResearchObservation,
+    RadarCatalyst, RadarHistoryConflict,
+)
+
 
 class TradeStyle(models.TextChoices):
     INTRADAY = "INTRADAY", "Intraday"
@@ -478,6 +486,106 @@ class DailyPick(models.Model):
         return self.scored_on is not None
 
 
+class SwingStatus(models.TextChoices):
+    WATCH = "WATCH", "Signal, no free slot"
+    PENDING = "PENDING", "Buy at the next open"
+    OPEN = "OPEN", "Held"
+    CLOSED = "CLOSED", "Exited"
+
+
+class SwingSignal(models.Model):
+    """One strength-dip signal, and the paper trade it became if a slot was free.
+
+    Written on the signal session's close and never re-ranked: the row is the
+    evidence that the name was put forward before its outcome existed. LIVE and
+    BACKFILL run as two separate ten-slot books and are never mixed in a
+    statistic, for the same reason as `DailyPick`.
+    """
+
+    day = models.DateField(help_text="The session whose close produced the signal.")
+    symbol = models.CharField(max_length=40)
+    source = models.CharField(max_length=10, choices=PickSource.choices, default=PickSource.LIVE)
+    rank = models.PositiveSmallIntegerField(default=0, help_text="Position by strength that day.")
+
+    close = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    strength = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    rsi2 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    ret63 = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    ret252 = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    ret5 = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    turnover_cr = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    status = models.CharField(max_length=8, choices=SwingStatus.choices, default=SwingStatus.WATCH)
+    entry_day = models.DateField(null=True, blank=True)
+    entry_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    stop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    sessions_held = models.PositiveSmallIntegerField(default=0)
+    marked_on = models.DateField(null=True, blank=True, help_text="Last session this trade was marked.")
+    last_close = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    exit_day = models.DateField(null=True, blank=True)
+    exit_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    exit_reason = models.CharField(max_length=12, blank=True)
+    net_return = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True,
+                                     help_text="Exit over entry, less the 0.30% round trip.")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-day", "rank", "symbol"]
+        constraints = [
+            models.UniqueConstraint(fields=["day", "symbol", "source"], name="unique_swing_signal")
+        ]
+        indexes = [
+            models.Index(fields=["source", "status"], name="idx_swing_source_status"),
+            models.Index(fields=["source", "-day"], name="idx_swing_source_day"),
+        ]
+
+    def __str__(self):
+        return "{} {} {} ({})".format(self.day, self.symbol, self.status, self.source)
+
+
+class SwingOptionTrade(models.Model):
+    """The call-option version of a strength-dip trade the stock book took.
+
+    One per taken signal: the front-month-or-next call nearest the money with at
+    least 15 sessions left, bought at the next open and sold on the close of the
+    tenth session (or three sessions before expiry). No stop -- the premium is
+    the stop, and every early-exit rule tested lowered the return
+    (research/STRENGTH_DIP_OPTIONS_REPORT.md). Marked once each evening from the
+    Dhan quote, so it only exists for the live book.
+    """
+
+    signal = models.OneToOneField(SwingSignal, on_delete=models.CASCADE, related_name="option_trade")
+    symbol = models.CharField(max_length=40)
+    security_id = models.CharField(max_length=20, blank=True)
+    contract = models.CharField(max_length=60, blank=True)
+    expiry = models.DateField(null=True, blank=True)
+    strike = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    lot_size = models.PositiveIntegerField(default=0)
+
+    status = models.CharField(max_length=8, choices=SwingStatus.choices, default=SwingStatus.PENDING)
+    signal_premium = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+                                         help_text="Last traded premium on the signal evening.")
+    signal_spread_pct = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    entry_day = models.DateField(null=True, blank=True)
+    entry_premium = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    last_premium = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    marked_on = models.DateField(null=True, blank=True)
+    sessions_held = models.PositiveSmallIntegerField(default=0)
+    exit_day = models.DateField(null=True, blank=True)
+    exit_premium = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    exit_reason = models.CharField(max_length=12, blank=True)
+    net_return = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True,
+                                     help_text="Exit over entry premium, less a 7% round trip.")
+    note = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-signal__day", "symbol"]
+        indexes = [models.Index(fields=["status"], name="idx_swing_opt_status")]
+
+    def __str__(self):
+        return "{} {} ({})".format(self.contract or self.symbol, self.status, self.signal.day)
 class CasAuctionEvent(models.Model):
     """Durable CAS packets and forecasts used for replay and model tuning."""
 

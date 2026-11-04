@@ -15,15 +15,16 @@ from django.core.cache import cache
 from django.core.management import call_command
 from django.test import TestCase
 from django.db import connection
+from django.urls import reverse
 from django.utils import timezone
 
 from . import live_dashboard, live_engine
 from .deployment import SYNC_STALE_AFTER, deployed_commit, record_deployed_commit, record_vm_commit, sync_status
 from .index_oi_services import _buildup, _market_prices, backfill_fixed_option_history
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
-from .models import AppSetting, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, SignalStatus, TipSignal, TrackedStock, TradeExecution, TradeStyle
+from .models import AppSetting, ChartinkTrigger, ChatMessage, Direction, IndexOISnapshot, IndexOptionCandle, IndexOptionStrikeSnapshot, OptionOutcome, RadarInstrument, SignalStatus, TipSignal, TrackedStock, TradeExecution, TradeStyle, TriggerStatus
 from .research_views import PAGE_TABLES, RESEARCH as PUBLISHED
-from .services import _expiry_month_hint, _extract_access_token, archive_old_signals, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
+from .services import _expiry_month_hint, _extract_access_token, _token_expiry, archive_old_signals, get_dhan_credentials, is_dhan_market_open, refresh_dhan_option_prices, renew_dhan_token, resolve_dhan_instruments, parse_tip_text
 from .views import _ingest_single_telegram_message
 from .management.commands.sync_to_deployed_commit import Command as SyncCommand
 from .management.commands.track_telegram import Command as TrackTelegramCommand
@@ -134,6 +135,121 @@ class TelegramTipParserTests(TestCase):
 		result = TrackTelegramCommand._fresh_database_call(lambda: "saved")
 
 		self.assertEqual(result, "saved")
+
+
+class ActionListTests(TestCase):
+	def make_signal(self, **overrides):
+		values = {
+			"source_type": "TELEGRAM",
+			"source_name": "Test feed",
+			"option_symbol": "NIFTY 24000 CE",
+			"direction": Direction.CE,
+			"entry_price": Decimal("50"),
+			"stop_loss": Decimal("40"),
+			"target_1": Decimal("75"),
+			"expiry_date": timezone.localdate() + timedelta(days=1),
+			"score": 80,
+			"recommendation": "STRONG GO",
+			"status": SignalStatus.CANDIDATE,
+		}
+		values.update(overrides)
+		return TipSignal.objects.create(**values)
+
+	def action_rows(self):
+		response = self.client.get(reverse("action_list"))
+		self.assertEqual(response.status_code, 200)
+		return response, {
+			(row["type"], row["symbol"]): row
+			for row in response.context["rows"]
+		}
+
+	def test_closed_rejected_archived_and_expired_signals_are_not_action_rows(self):
+		current = self.make_signal(option_symbol="CURRENT 24000 CE")
+		closed = self.make_signal(option_symbol="CLOSED 24000 CE", status=SignalStatus.CLOSED)
+		rejected = self.make_signal(option_symbol="REJECTED 24000 CE", status=SignalStatus.REJECTED)
+		archived = self.make_signal(option_symbol="ARCHIVED 24000 CE", status=SignalStatus.ARCHIVED)
+		expired = self.make_signal(
+			option_symbol="EXPIRED 24000 CE",
+			expiry_date=timezone.localdate() - timedelta(days=1),
+		)
+
+		response, rows = self.action_rows()
+
+		self.assertIn(("TipSignal", current.option_symbol), rows)
+		for signal in (closed, rejected, archived, expired):
+			self.assertNotIn(("TipSignal", signal.option_symbol), rows)
+			self.assertNotContains(response, signal.option_symbol)
+		expired.refresh_from_db()
+		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(response.context["buy_count"], 1)
+
+	def test_buy_ready_requires_complete_current_plan_and_active_is_manage_only(self):
+		ready = self.make_signal(option_symbol="READY 24000 CE")
+		missing_target = self.make_signal(option_symbol="NO TARGET 24000 CE", target_1=None)
+		unknown_expiry = self.make_signal(option_symbol="UNKNOWN EXPIRY 24000 CE", expiry_date=None)
+		caution = self.make_signal(
+			option_symbol="CAUTION 24000 CE",
+			score=65,
+			recommendation="CAUTION",
+		)
+		active = self.make_signal(option_symbol="ACTIVE 24000 CE", status=SignalStatus.ACTIVE)
+
+		response, rows = self.action_rows()
+
+		self.assertEqual(rows[("TipSignal", ready.option_symbol)]["action"], "BUY")
+		self.assertTrue(rows[("TipSignal", ready.option_symbol)]["is_buy"])
+		for signal in (missing_target, unknown_expiry, caution):
+			self.assertEqual(rows[("TipSignal", signal.option_symbol)]["action"], "WATCH")
+			self.assertFalse(rows[("TipSignal", signal.option_symbol)]["is_buy"])
+		self.assertEqual(rows[("TipSignal", active.option_symbol)]["action"], "MANAGE")
+		self.assertFalse(rows[("TipSignal", active.option_symbol)]["is_buy"])
+		self.assertEqual(response.context["buy_count"], 1)
+		self.assertEqual(response.context["manage_count"], 1)
+
+	def test_scanner_crossing_and_raw_telegram_message_are_not_buy_ready(self):
+		trigger = ChartinkTrigger.objects.create(
+			scanner_name="Momentum scan",
+			symbol="RELIANCE",
+			trigger_price=Decimal("1500"),
+			live_price=Decimal("1510"),
+			status=TriggerStatus.MONITORING,
+		)
+		chat = ChatMessage.objects.create(
+			source_name="Chartsays",
+			source_category="TIPS",
+			raw_text="Watch RELIANCE above 1500",
+			normalized_text="Watch RELIANCE above 1500",
+			is_tip_candidate=True,
+		)
+
+		response, rows = self.action_rows()
+
+		scanner_row = rows[("Chartink", trigger.symbol)]
+		self.assertEqual(scanner_row["action"], "TRIGGERED")
+		self.assertFalse(scanner_row["is_buy"])
+		self.assertIsNone(scanner_row["stop"])
+		telegram_row = rows[("Telegram", "Telegram")]
+		self.assertEqual(telegram_row["action"], "REVIEW")
+		self.assertFalse(telegram_row["is_buy"])
+		self.assertEqual(response.context["buy_count"], 0)
+
+	def test_rows_link_to_source_and_available_interactive_chart(self):
+		RadarInstrument.objects.create(
+			kind="EQUITY",
+			segment="NSE_EQ",
+			security_id="2885",
+			symbol="RELIANCE",
+			name="Reliance Industries",
+		)
+		signal = self.make_signal(option_symbol="RELIANCE 1500 CE")
+
+		_, rows = self.action_rows()
+
+		row = rows[("TipSignal", signal.option_symbol)]
+		self.assertEqual(row["detail_url"], reverse("option_edit", args=[signal.pk]))
+		self.assertEqual(row["source_key"], "tracker")
+		self.assertIn("symbol=RELIANCE", row["chart_url"])
+		self.assertTrue(row["chart_url"].endswith("#selected-stock"))
 
 
 class DhanOptionTrackingTests(TestCase):
@@ -275,6 +391,9 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertEqual(AppSetting.objects.get(key="dhan_access_token").value, "fresh-token")
 
 	def test_market_ticker_returns_latest_nifty_snapshot(self):
+		from django.core.cache import cache
+
+		cache.clear()
 		IndexOISnapshot.objects.create(underlying="NIFTY", underlying_price=Decimal("24800"), underlying_change=Decimal("25"))
 
 		response = self.client.get("/api/market-ticker/")
@@ -282,6 +401,49 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()["price"], 24800.0)
 		self.assertEqual(response.json()["change"], 25.0)
+		self.assertEqual(response.json()["source"], "stored_index_oi")
+
+	@patch("options_tracker.views.fetch_dhan_nifty_ltp", return_value=24915.5)
+	def test_market_ticker_prefers_short_cached_live_dhan_ltp(self, fetch_ltp):
+		from django.core.cache import cache
+
+		cache.clear()
+		IndexOISnapshot.objects.create(
+			underlying="NIFTY",
+			underlying_price=Decimal("24800"),
+			underlying_change=Decimal("25"),
+		)
+
+		first = self.client.get("/api/market-ticker/")
+		second = self.client.get("/api/market-ticker/")
+
+		self.assertEqual(first.status_code, 200)
+		self.assertEqual(first.json()["price"], 24915.5)
+		self.assertEqual(first.json()["source"], "dhan_ltp")
+		self.assertFalse(first.json()["stale"])
+		self.assertEqual(first.json()["change_source"], "stored_index_oi")
+		self.assertEqual(second.json()["price"], 24915.5)
+		fetch_ltp.assert_called_once_with(timeout=3)
+
+	@patch("options_tracker.views.fetch_dhan_nifty_ltp", side_effect=RuntimeError("network down"))
+	def test_market_ticker_falls_back_to_stored_snapshot(self, fetch_ltp):
+		from django.core.cache import cache
+
+		cache.clear()
+		snapshot = IndexOISnapshot.objects.create(
+			underlying="NIFTY",
+			underlying_price=Decimal("24800"),
+			underlying_change=Decimal("25"),
+		)
+		IndexOISnapshot.objects.filter(pk=snapshot.pk).update(
+			created_at=timezone.now() - timedelta(minutes=10)
+		)
+
+		response = self.client.get("/api/market-ticker/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()["source"], "stored_index_oi")
+		self.assertTrue(response.json()["stale"])
 
 	@patch("options_tracker.services._load_dhan_contracts")
 	def test_stale_expiry_month_rolls_to_nearest_active_nse_contract(self, load_contracts):
@@ -398,6 +560,57 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertEqual(result["updated"], 1)
 		self.assertEqual(signal.live_price, Decimal("80"))
 		self.assertEqual(signal.outcome_status, OptionOutcome.TARGET_1)
+
+	@patch("options_tracker.services.requests.post")
+	def test_refresh_enters_shared_cooldown_after_429(self, post):
+		signal = self.make_signal(security_id="123", exchange_segment="NSE_FNO")
+		post.return_value.status_code = 429
+		post.return_value.headers = {}
+
+		with patch.dict(os.environ, {"DHAN_ACCESS_TOKEN": "token", "DHAN_CLIENT_ID": "client"}):
+			first = refresh_dhan_option_prices([signal], force=True)
+			second = refresh_dhan_option_prices([signal], force=True)
+
+		self.assertTrue(first["rate_limited"])
+		self.assertEqual(first["retry_after_seconds"], 120)
+		self.assertNotIn("https://", first["error"])
+		self.assertTrue(second["rate_limited"])
+		self.assertEqual(post.call_count, 1)
+
+	@patch("options_tracker.services.requests.post")
+	def test_refresh_coalesces_request_while_another_worker_is_fetching(self, post):
+		signal = self.make_signal(security_id="123", exchange_segment="NSE_FNO")
+		AppSetting.objects.create(
+			key="dhan_ltp_request_state",
+			value=json.dumps({
+				"in_flight_until": (timezone.now() + timedelta(seconds=20)).isoformat(),
+			}),
+		)
+
+		with patch.dict(os.environ, {"DHAN_ACCESS_TOKEN": "token", "DHAN_CLIENT_ID": "client"}):
+			result = refresh_dhan_option_prices([signal], force=True)
+
+		self.assertTrue(result["refreshing"])
+		post.assert_not_called()
+
+	@patch("options_tracker.services.requests.post")
+	def test_refresh_deduplicates_security_ids_in_payload(self, post):
+		first = self.make_signal(security_id="123", exchange_segment="NSE_FNO")
+		second = self.make_signal(
+			option_symbol="NIFTY 24000 CE duplicate",
+			security_id="123",
+			exchange_segment="NSE_FNO",
+		)
+		post.return_value.status_code = 200
+		post.return_value.raise_for_status.return_value = None
+		post.return_value.json.return_value = {
+			"data": {"NSE_FNO": {"123": {"last_price": 60}}},
+		}
+
+		with patch.dict(os.environ, {"DHAN_ACCESS_TOKEN": "token", "DHAN_CLIENT_ID": "client"}):
+			refresh_dhan_option_prices([first, second], force=True)
+
+		self.assertEqual(post.call_args.kwargs["json"], {"NSE_FNO": [123]})
 
 	@patch("options_tracker.services.resolve_dhan_instruments")
 	def test_refresh_resolves_initially_unresolved_signals(self, resolve_instruments):
@@ -1866,6 +2079,33 @@ class DhanTokenRenewalTests(TestCase):
 		body = base64.urlsafe_b64encode(json.dumps(claim).encode()).decode().rstrip("=")
 		return f"header.{body}.signature"
 
+	def test_settings_reject_expired_token_before_network_and_keep_existing_value(self):
+		self.client.force_login(get_user_model().objects.create_user("dhan-settings-staff", is_staff=True))
+		existing = self._jwt(12)
+		AppSetting.objects.create(key="dhan_access_token", value=existing)
+		AppSetting.objects.create(key="dhan_client_id", value="1111")
+		with patch("options_tracker.views.validate_dhan_credentials") as validate:
+			response = self.client.post(reverse("dhan_settings"), {
+				"access_token": self._jwt(-1),
+				"client_id": "",
+			})
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "This Dhan token expired")
+		validate.assert_not_called()
+		self.assertEqual(AppSetting.objects.get(key="dhan_access_token").value, existing)
+
+	def test_settings_show_real_jwt_expiry_and_expired_state(self):
+		self.client.force_login(get_user_model().objects.create_user("dhan-expiry-staff", is_staff=True))
+		token = self._jwt(-1)
+		AppSetting.objects.create(key="dhan_access_token", value=token)
+		AppSetting.objects.create(key="dhan_client_id", value="1111")
+		with self._env():
+			response = self.client.get(reverse("dhan_settings"))
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "EXPIRED")
+		self.assertEqual(response.context["dhan_token_expires_at"], _token_expiry(token))
+		self.assertTrue(response.context["dhan_token_expired"])
+
 	def test_an_expired_token_in_the_database_never_shadows_a_live_one(self):
 		AppSetting.objects.create(key="dhan_access_token", value=self._jwt(-3))
 		live = self._jwt(12)
@@ -2274,3 +2514,248 @@ class ReferenceDataSeedTests(TestCase):
 		self.assertEqual(stock.turnover, Decimal("1234567.89"))
 		self.assertEqual(stock.realised_pnl, Decimal("-4321.05"))
 		self.assertEqual(stock.strike_step, Decimal("12.50"))
+
+
+class SwingAlertTests(TestCase):
+	"""Strength dips: features match the research, the book moves the way the simulation did."""
+
+	@staticmethod
+	def _universe(days=300, names=10, dip_names=("AAA", "BBB")):
+		import pandas as pd
+		rows = []
+		start = date(2025, 1, 1)
+		for n in range(names):
+			sym = dip_names[n] if n < len(dip_names) else f"S{n:02d}"
+			price = 100.0
+			for i in range(days):
+				day = start + timedelta(days=i)
+				if sym in dip_names:
+					# a strong trend, then two sharp down closes at the very end
+					price *= 0.95 if i >= days - 2 else 1.004
+				else:
+					price *= 1.0 + (0.0005 if n % 2 else -0.0005)
+				rows.append((sym, day, price, price * 1.01, price * 0.99, price, 5_000_000))
+		return pd.DataFrame(rows, columns=["symbol", "day", "o", "h", "l", "c", "v"])
+
+	def test_rsi2_reads_extremes(self):
+		import pandas as pd
+		from . import swing as W
+		self.assertLess(W.rsi2(pd.Series([100, 99, 98, 97, 96, 95.0])).iloc[-1], 1)
+		self.assertGreater(W.rsi2(pd.Series([95, 96, 97, 98, 99, 100.0])).iloc[-1], 99)
+
+	def test_bonus_gap_is_back_adjusted_not_read_as_a_crash(self):
+		import pandas as pd
+		from . import swing as W
+		bars = pd.DataFrame({
+			"symbol": ["X"] * 4, "day": [date(2025, 1, d) for d in (1, 2, 3, 4)],
+			"o": [200.0, 202.0, 101.0, 102.0], "h": [201.0, 203.0, 102.0, 103.0],
+			"l": [199.0, 201.0, 100.0, 101.0], "c": [200.0, 202.0, 101.0, 102.0], "v": [1, 1, 1, 1]})
+		adj = W.back_adjust(bars)
+		self.assertAlmostEqual(adj.adj_c.iloc[1], 101.0, places=6)
+		self.assertAlmostEqual(adj.adj_c.iloc[0], 100.0, places=6)
+		self.assertEqual(list(adj.c), [200.0, 202.0, 101.0, 102.0])
+
+	def test_signal_is_a_leader_with_a_sharp_dip(self):
+		from . import swing as W
+		frame = W.features(self._universe())
+		last = frame.day.max()
+		hits = W.signals(frame, last)
+		self.assertEqual(set(hits.symbol), {"AAA", "BBB"})
+		self.assertTrue((hits.rsi2 < W.RSI_CUT).all())
+		self.assertEqual(W.leaders(frame, last), 2)
+
+	def test_book_fills_at_open_and_stops_on_close(self):
+		from . import swing as W
+		from .models import PickSource, SwingSignal, SwingStatus
+		row = SwingSignal.objects.create(day=date(2025, 3, 3), symbol="AAA", source=PickSource.LIVE,
+			status=SwingStatus.PENDING, close=Decimal("100"))
+		W.advance(PickSource.LIVE, date(2025, 3, 4), {"AAA": (100.0, 101.0, 99.0, 100.5)})
+		row.refresh_from_db()
+		self.assertEqual(row.status, SwingStatus.OPEN)
+		self.assertEqual(row.entry_price, Decimal("100.00"))
+		self.assertEqual(row.stop_price, Decimal("92.00"))
+		self.assertEqual(row.sessions_held, 0)
+
+		W.advance(PickSource.LIVE, date(2025, 3, 5), {"AAA": (99.0, 99.0, 90.0, 91.0)})
+		W.advance(PickSource.LIVE, date(2025, 3, 5), {"AAA": (99.0, 99.0, 90.0, 91.0)})
+		row.refresh_from_db()
+		self.assertEqual(row.status, SwingStatus.CLOSED)
+		self.assertEqual(row.exit_reason, "STOP")
+		self.assertEqual(row.sessions_held, 1)
+		self.assertAlmostEqual(float(row.net_return), 91.0 / 100.0 - 1 - W.ROUND_TRIP, places=4)
+
+	def test_book_exits_on_the_twentieth_session_and_survives_a_bonus(self):
+		from . import swing as W
+		from .models import PickSource, SwingSignal, SwingStatus
+		row = SwingSignal.objects.create(day=date(2025, 3, 3), symbol="AAA", source=PickSource.LIVE,
+			status=SwingStatus.PENDING)
+		day = date(2025, 3, 4)
+		W.advance(PickSource.LIVE, day, {"AAA": (100.0, 100.0, 100.0, 100.0)})
+		for i in range(1, W.HOLD_SESSIONS + 1):
+			day += timedelta(days=1)
+			price = 50.0 if i >= 5 else 100.0      # a 1:1 bonus on the fifth session
+			W.advance(PickSource.LIVE, day, {"AAA": (price, price, price, price)})
+			row.refresh_from_db()
+			if i < W.HOLD_SESSIONS:
+				self.assertEqual(row.status, SwingStatus.OPEN, f"session {i}")
+		self.assertEqual(row.status, SwingStatus.CLOSED)
+		self.assertEqual(row.exit_reason, "TIME")
+		self.assertEqual(row.entry_price, Decimal("50.00"))
+		self.assertAlmostEqual(float(row.net_return), -W.ROUND_TRIP, places=4)
+
+	def test_full_book_records_signals_as_watch(self):
+		from . import swing as W
+		from .models import PickSource, SwingSignal, SwingStatus
+		for n in range(W.SLOTS):
+			SwingSignal.objects.create(day=date(2024, 1, 1), symbol=f"H{n}", source=PickSource.LIVE,
+				status=SwingStatus.OPEN, entry_day=date(2024, 1, 2), entry_price=Decimal("10"),
+				stop_price=Decimal("9.2"), last_close=Decimal("10"), marked_on=date(2030, 1, 1))
+		frame = W.features(self._universe())
+		last = frame.day.max()
+		result = W.advance(PickSource.LIVE, last, {}, frame)
+		self.assertEqual(len(result["signals"]), 2)
+		self.assertEqual(result["taken"], [])
+		self.assertTrue(all(r.status == SwingStatus.WATCH for r in result["signals"]))
+
+	def test_free_slots_take_the_strongest_and_the_alert_names_them(self):
+		from . import swing as W
+		from .models import PickSource, SwingStatus
+		frame = W.features(self._universe())
+		last = frame.day.max()
+		result = W.advance(PickSource.LIVE, last, {}, frame)
+		self.assertEqual(len(result["taken"]), 2)
+		self.assertTrue(all(r.status == SwingStatus.PENDING for r in result["taken"]))
+		text = W.format_alert(last, result, result["taken"], 2)
+		self.assertIn("BUY at tomorrow's open", text)
+		self.assertIn("AAA", text)
+		self.assertIn("BBB", text)
+
+	def test_page_renders_signals_and_book(self):
+		from . import swing as W
+		from .models import PickSource
+		frame = W.features(self._universe())
+		W.advance(PickSource.LIVE, frame.day.max(), {}, frame)
+		response = self.client.get("/swing/")
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "AAA")
+		self.assertContains(response, "buy next open")
+		self.assertContains(response, "Telegram delivery is off")
+
+	def test_option_lab_shows_the_negative_verdict_and_paper_protocol(self):
+		from .models import PickSource, SwingSignal
+		SwingSignal.objects.create(
+			day=date(2026, 9, 29), symbol="BSE", source=PickSource.LIVE,
+			rank=1, close=Decimal("2400"),
+		)
+
+		response = self.client.get("/swing/options/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "Do not buy front-month calls from these signals")
+		self.assertContains(response, "15+ DTE modelled plan")
+		self.assertContains(response, "BSE")
+		self.assertContains(response, "PAPER TEST")
+		self.assertContains(response, "Never average down")
+		self.assertContains(response, "No tested premium stop or trailing rule improved")
+		self.assertNotContains(response, "After premium reaches")
+
+	def test_option_lab_skips_a_signal_that_failed_the_cost_gate(self):
+		from .models import PickSource, SwingSignal
+		SwingSignal.objects.create(
+			day=date(2026, 9, 29), symbol="WIDECO", source=PickSource.LIVE,
+			rank=1, close=Decimal("100"),
+		)
+
+		response = self.client.get("/swing/options/")
+
+		self.assertContains(response, "WIDECO")
+		self.assertContains(response, "failed reference gate")
+		self.assertContains(response, "SKIP")
+
+	def test_bot_send_splits_long_messages_and_reports_errors(self):
+		from . import telegram_bot
+		ok, error = telegram_bot.send("hello")
+		self.assertFalse(ok)
+		self.assertIn("TELEGRAM_ALERT_CHAT_ID", error)
+		reply = Mock(ok=True, headers={"content-type": "application/json"})
+		reply.json.return_value = {"ok": True, "result": {}}
+		with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_ALERT_CHAT_ID": "42"}), \
+				patch("options_tracker.telegram_bot.requests.post", return_value=reply) as post:
+			ok, error = telegram_bot.send(("line of text\n" * 600))
+		self.assertTrue(ok, error)
+		self.assertEqual(post.call_count, 2)
+		self.assertEqual(post.call_args.kwargs["json"]["chat_id"], "42")
+
+class SwingOptionTests(TestCase):
+	"""Option leg of the strength-dip book: contract choice, fill at the open, sell on session 10."""
+
+	CONTRACTS = {"AAA": [
+		{"security_id": "11", "strike": 100.0, "option_type": "CE", "expiry": "2025-03-06", "lot_size": 500, "display": "AAA 06 MAR 100 CALL"},
+		{"security_id": "21", "strike": 100.0, "option_type": "CE", "expiry": "2025-03-27", "lot_size": 500, "display": "AAA 27 MAR 100 CALL"},
+		{"security_id": "22", "strike": 105.0, "option_type": "CE", "expiry": "2025-03-27", "lot_size": 500, "display": "AAA 27 MAR 105 CALL"},
+		{"security_id": "23", "strike": 100.0, "option_type": "PE", "expiry": "2025-03-27", "lot_size": 500, "display": "AAA 27 MAR 100 PUT"},
+	]}
+
+	@staticmethod
+	def _quote(day, open_, last):
+		return {"last_price": last, "ohlc": {"open": open_}, "last_trade_time": day.strftime("%d/%m/%Y") + " 15:29:59",
+			"depth": {"buy": [{"price": last - 0.5}], "sell": [{"price": last + 0.5}]}}
+
+	def test_contract_skips_an_expiry_too_close_and_takes_the_nearest_call(self):
+		from . import swing_options as WO
+		leg = WO.choose_contract("AAA", 101.0, date(2025, 3, 3), self.CONTRACTS)
+		self.assertEqual(leg["security_id"], "21")
+		self.assertEqual(leg["expiry"], date(2025, 3, 27))
+		self.assertIsNone(WO.choose_contract("ZZZ", 101.0, date(2025, 3, 3), self.CONTRACTS))
+
+	def test_trade_fills_at_the_open_and_sells_on_session_ten(self):
+		from . import swing_options as WO
+		from .models import PickSource, SwingOptionTrade, SwingSignal, SwingStatus
+		signal_day = date(2025, 3, 3)
+		SwingSignal.objects.create(day=signal_day, symbol="AAA", source=PickSource.LIVE, status=SwingStatus.PENDING,
+			close=Decimal("101"))
+		quotes = lambda day, o, l: (lambda ids: {i: self._quote(day, o, l) for i in ids})
+		res = WO.advance(signal_day, quotes(signal_day, 4.0, 5.0), self.CONTRACTS)
+		trade = SwingOptionTrade.objects.get()
+		self.assertEqual(len(res["opened"]), 1)
+		self.assertEqual((trade.status, trade.signal_premium, trade.lot_size), (SwingStatus.PENDING, Decimal("5.00"), 500))
+
+		day = date(2025, 3, 4)
+		WO.advance(day, quotes(day, 5.2, 5.5), self.CONTRACTS)
+		trade.refresh_from_db()
+		self.assertEqual((trade.status, trade.entry_premium, trade.sessions_held), (SwingStatus.OPEN, Decimal("5.20"), 0))
+
+		for n in range(1, WO.HOLD + 1):
+			day = WO.np.busday_offset(date(2025, 3, 4), n).astype(date)
+			WO.advance(day, quotes(day, 6.0, 7.8), self.CONTRACTS)
+			WO.advance(day, quotes(day, 6.0, 7.8), self.CONTRACTS)
+			trade.refresh_from_db()
+			if n < WO.HOLD:
+				self.assertEqual(trade.status, SwingStatus.OPEN, f"session {n}")
+		self.assertEqual((trade.status, trade.exit_reason, trade.sessions_held), (SwingStatus.CLOSED, "TIME", WO.HOLD))
+		expected = 7.8 / 5.2 * (1 - WO.ROUND_TRIP / 2) / (1 + WO.ROUND_TRIP / 2) - 1
+		self.assertAlmostEqual(float(trade.net_return), expected, places=4)
+
+	def test_untraded_contract_waits_instead_of_filling_at_a_stale_price(self):
+		from . import swing_options as WO
+		from .models import PickSource, SwingOptionTrade, SwingSignal, SwingStatus
+		SwingSignal.objects.create(day=date(2025, 3, 3), symbol="AAA", source=PickSource.LIVE,
+			status=SwingStatus.PENDING, close=Decimal("101"))
+		WO.advance(date(2025, 3, 3), lambda ids: {}, self.CONTRACTS)
+		stale = lambda ids: {i: self._quote(date(2025, 3, 3), 4.0, 5.0) for i in ids}
+		WO.advance(date(2025, 3, 4), stale, self.CONTRACTS)
+		trade = SwingOptionTrade.objects.get()
+		self.assertEqual(trade.status, SwingStatus.PENDING)
+		self.assertIn("no trade", trade.note)
+
+	def test_page_sizes_lots_against_capital(self):
+		from .models import PickSource, SwingOptionTrade, SwingSignal, SwingStatus
+		sig = SwingSignal.objects.create(day=date(2025, 3, 3), symbol="AAA", source=PickSource.LIVE,
+			status=SwingStatus.PENDING, close=Decimal("101"))
+		SwingOptionTrade.objects.create(signal=sig, symbol="AAA", security_id="21", contract="AAA 27 MAR 100 CALL",
+			expiry=date(2025, 3, 27), lot_size=500, signal_premium=Decimal("5.00"))
+		response = self.client.get("/swing/dip-options/?capital=500000")
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "AAA 27 MAR 100 CALL")
+		self.assertEqual(response.context["tonight"][0]["lots"], 2)
+		self.assertAlmostEqual(response.context["tonight"][0]["lot_pct"], 0.5)

@@ -1,9 +1,10 @@
 from django.urls import path
 
-from . import cas_views, research_views, shortlist_views, stock_views, views
+from . import cas_views, radar_views, research_views, shortlist_views, stock_views, swing_option_views, swing_views, views
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("action-list/", views.action_list, name="action_list"),
     path("api/telegram/ingest/", views.telegram_ingest_api, name="telegram_ingest_api"),
     path("api/telegram/status/", views.telegram_tracker_status_api, name="telegram_tracker_status_api"),
     path("api/options/live/", views.option_live_prices, name="option_live_prices"),
@@ -25,6 +26,15 @@ urlpatterns = [
     path("archive/", views.archive, name="archive"),
     path("stocks/", stock_views.stock_options, name="stock_options"),
     path("shortlist/", shortlist_views.daily_shortlist, name="daily_shortlist"),
+    path("radar/", radar_views.dashboard, name="radar"),
+    path("radar/data/", radar_views.workspace_data, name="radar_data"),
+    path("radar/preferences/", radar_views.workspace_preferences, name="radar_preferences"),
+    path("radar/watch/", radar_views.workspace_watch, name="radar_watch"),
+    path("radar/price-alert/", radar_views.price_alert, name="radar_price_alert"),
+    path("radar/<int:opportunity_id>/acknowledge/", radar_views.acknowledge_view, name="radar_acknowledge"),
+    path("swing/", swing_views.swing_alerts, name="swing_alerts"),
+    path("swing/dip-options/", swing_views.swing_options, name="swing_options"),
+    path("swing/options/", swing_option_views.swing_option_lab, name="swing_option_lab"),
     path("stocks/<str:symbol>/", stock_views.stock_option_detail, name="stock_option_detail"),
     path("breakeven/", stock_views.breakeven, name="breakeven"),
     path("research/", research_views.research_report, name="research_report"),

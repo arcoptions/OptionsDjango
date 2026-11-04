@@ -1,0 +1,311 @@
+{% extends "options_tracker/dashboard_base.html" %}
+{% load static %}
+{% block title %}Trading Workspace | ARC Trading Journal{% endblock %}
+{% block body_class %}arc-workspace-page{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'options_tracker/radar_workspace.css' %}">
+  <script defer src="{% static 'options_tracker/radar_workspace.js' %}"></script>
+{% endblock %}
+{% block page_header %}{% endblock %}
+{% block content %}
+<div id="workspace" class="radar-workspace-shell"
+     data-url="{% url 'radar_data' %}"
+     data-preferences="{% url 'radar_preferences' %}"
+     data-watch="{% url 'radar_watch' %}"
+     data-price-alert="{% url 'radar_price_alert' %}">
+  <header class="workspace-topbar">
+    <div>
+      <h1>Trading Workspace</h1>
+      <p>Only exceptions that require a decision. No compulsory watchlist.</p>
+    </div>
+    <nav class="workspace-switcher" aria-label="Workspace sections">
+      <a class="active" href="#trading-desk">Workspace</a>
+      <a href="#system-flow">System flow</a>
+    </nav>
+    <div class="workspace-status" aria-label="Live workspace status">
+      <span class="status-pill"><i id="market-state-dot"></i><span id="market-state">Market status</span></span>
+      <span class="status-pill"><i id="dhan-state-dot"></i><span id="dhan-state">Dhan status</span></span>
+      <span class="status-pill"><i id="cas-state-dot"></i><span id="cas-state">CAS status</span></span>
+      <span class="status-pill mode-pill">PAPER DEFAULT</span>
+      <span class="workspace-refresh">
+        <button id="refresh" type="button" aria-label="Refresh workspace">Refresh</button>
+        <small id="updated"></small>
+      </span>
+      <span id="market" class="sr-only"></span>
+    </div>
+  </header>
+
+  <section class="health-strip" aria-label="Market, data and risk summary">
+    <article class="health-card">
+      <span>NIFTY regime</span>
+      <strong id="health-regime">Waiting</strong>
+      <small id="health-regime-detail">Live market context</small>
+    </article>
+    <article class="health-card">
+      <span>Index OI</span>
+      <strong id="health-oi">Waiting</strong>
+      <small id="health-oi-detail">PCR and levels</small>
+    </article>
+    <article class="health-card">
+      <span>CAS context</span>
+      <strong id="health-cas">Waiting</strong>
+      <small id="health-cas-detail">Never an entry signal</small>
+    </article>
+    <article class="health-card">
+      <span>Data freshness</span>
+      <strong id="health-freshness">Waiting</strong>
+      <small id="health-freshness-detail">Recorded equity coverage</small>
+    </article>
+    <article class="health-card">
+      <span>Exceptions</span>
+      <strong id="health-exceptions">{{ rows|length }}</strong>
+      <small id="health-exceptions-detail">{{ buy_count }} actionable · {{ watch_count }} observe</small>
+    </article>
+    <article class="health-card">
+      <span>Risk today</span>
+      <strong id="health-risk">Waiting</strong>
+      <small id="health-risk-detail">NIFTY engine boundary</small>
+    </article>
+  </section>
+
+  <div id="request-error" role="alert" hidden></div>
+  <section id="session-status" class="session-banner" aria-live="polite"></section>
+
+  <div class="desk-grid" id="trading-desk">
+    <aside class="panel exception-rail" aria-label="Exception queue">
+      <div class="panel-head">
+        <div>
+          <h2>Exception queue</h2>
+          <small>Ranked by required attention, not probability</small>
+        </div>
+        <a href="{% url 'action_list' %}">Report</a>
+      </div>
+      <div class="queue-toolbar">
+        <label>
+          <span class="sr-only">Filter exception queue</span>
+          <input id="action-search" type="search" placeholder="Filter symbol or source">
+        </label>
+        <div class="queue-filters" role="group" aria-label="Exception decision filter">
+          <button type="button" class="active" data-action-filter="ALL">All</button>
+          <button type="button" data-action-filter="BUY">Buy</button>
+          <button type="button" data-action-filter="MANAGE">Manage</button>
+          <button type="button" data-action-filter="TRIGGERED">Triggered</button>
+          <button type="button" data-action-filter="REVIEW">Observe</button>
+        </div>
+        <div class="queue-filters" role="group" aria-label="Exception source filter">
+          <button type="button" class="active" data-source-filter="all">All sources</button>
+          <button type="button" data-source-filter="tracker">Tracker</button>
+          <button type="button" data-source-filter="scanner">Scanners</button>
+          <button type="button" data-source-filter="telegram">Telegram</button>
+        </div>
+      </div>
+      <div id="exception-queue" class="exception-list" role="listbox" aria-label="Current trading exceptions">
+        {% for row in rows %}
+          <article class="exception-card" tabindex="0" role="option"
+                   data-action-row data-action="{{ row.action }}" data-source="{{ row.source_key }}"
+                   data-underlying="{{ row.underlying }}" data-search="{{ row.symbol }} {{ row.source }} {{ row.reason }}">
+            <div class="exception-top">
+              <strong>{{ row.symbol }}</strong>
+              <span class="decision decision-{{ row.action|lower }}">{{ row.action }}</span>
+            </div>
+            <div class="exception-main"><b>{{ row.recommendation }}</b><span>Score {{ row.score }}</span></div>
+            <p>{{ row.reason }}</p>
+            <small>{{ row.action_reason }}</small>
+            <small>{{ row.source }} · {{ row.timestamp|date:"d M H:i" }}</small>
+          </article>
+        {% empty %}
+          <div class="no-trade"><strong>No suitable trade right now.</strong><p>No evidence-backed exception requires action.</p></div>
+        {% endfor %}
+      </div>
+      <p id="action-filter-empty" class="empty" hidden>No exceptions match these filters.</p>
+
+      <details class="rail-section" open>
+        <summary>Strategy lanes</summary>
+        <div class="lane-list">
+          {% for lane in strategy_lanes %}
+            <a class="lane lane-{{ lane.tone }}" href="{{ lane.url }}">
+              <span><strong>{{ lane.name }}</strong><small>{{ lane.stage }}</small></span>
+              <span>{{ lane.status }}</span>
+              <p>{{ lane.summary }}</p>
+            </a>
+          {% endfor %}
+        </div>
+      </details>
+
+      <details class="rail-section discovery" aria-label="Stock discovery" open>
+        <summary>Discover and watch stocks</summary>
+        <div class="tabs" role="group" aria-label="Stock views">
+          <button type="button" data-view="all">All F&O</button>
+          <button type="button" data-view="watchlist">Watchlist</button>
+          <button type="button" data-view="radar">Strategy radar</button>
+          <button type="button" data-view="positions">Positions</button>
+        </div>
+        <label>Search stocks<input id="search" type="search" maxlength="80" placeholder="Symbol or company"></label>
+        <div class="filters">
+          <label>Strategy<select id="strategy"><option value="">All strategies</option>{% for code, name in strategies.items %}<option value="{{ code }}">{{ code }} {{ name }}</option>{% endfor %}</select></label>
+          <label>State<select id="state"><option value="">All states</option>{% for code, name in states %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+          <label>Sort<select id="sort"><option value="symbol">Symbol A-Z</option><option value="change">Change descending</option><option value="rvol">Relative volume</option><option value="distance">Nearest trigger</option></select></label>
+          <button id="clear-filters" type="button">Clear filters</button>
+        </div>
+        <div id="counts" class="muted"></div>
+        <div class="table-scroll stock-table">
+          <table><thead><tr><th>Stock</th><th>Price / CTS %</th><th>RVOL</th><th>Setup</th></tr></thead><tbody id="stocks"></tbody></table>
+        </div>
+      </details>
+      <section id="portfolio" aria-label="Paper portfolio"></section>
+    </aside>
+
+    <main class="panel stock-context" id="selected-stock" aria-label="Selected market and chart">
+      <div class="chart-header">
+        <div id="stock-heading"></div>
+        <div class="chart-actions">
+          <button id="selected-watch" type="button">Watch stock</button>
+          <button id="chart-focus" type="button" aria-pressed="false">Focus chart</button>
+        </div>
+      </div>
+      <div class="chart-toolbar">
+        <label>Interval<select id="interval"><option value="1">1m</option><option value="2">2m</option><option value="3">3m</option><option value="5">5m</option><option value="10">10m</option><option value="15">15m</option><option value="25">25m</option><option value="30">30m</option><option value="60">1h</option><option value="75">75m</option><option value="125">125m</option><option value="240">4h</option><option value="D">1D</option><option value="W">1W</option><option value="M">1M</option></select></label>
+        <label>History<select id="period"><option value="1D">1 day</option><option value="5D">5 days</option><option value="1M">1 month</option><option value="3M">3 months</option></select></label>
+        <label>Through<input id="chart-date" type="date" max="{% now 'Y-m-d' %}"></label>
+        <button id="latest-chart" type="button">Latest</button>
+        <label><input type="checkbox" data-overlay="vwap">VWAP</label>
+        <label><input type="checkbox" data-overlay="levels">Levels</label>
+        <label><input type="checkbox" data-overlay="strategy">Trigger / stop</label>
+        <label><input type="checkbox" data-overlay="markers">Entries / exits</label>
+      </div>
+      <p id="workspace-loading" role="status"></p>
+      <p id="chart-range" class="muted"></p>
+      <div id="stock-chart" class="chart primary-chart" aria-label="Selected-stock price and volume chart"></div>
+      <p id="chart-detail" class="muted" aria-live="polite">Hover over a candle for OHLC and volume.</p>
+      <div class="setup-strip">
+        <section>
+          <span>Why it matters</span>
+          <strong id="setup-why">Waiting for selected evidence</strong>
+        </section>
+        <section>
+          <span>Confirmation</span>
+          <strong id="setup-confirmation">Recorded trigger required</strong>
+        </section>
+        <section>
+          <span>Invalidation / expiry</span>
+          <strong id="setup-invalidation">No active setup</strong>
+        </section>
+      </div>
+      <details class="chart-limitations">
+        <summary>Chart data and review limitations</summary>
+        <p id="chart-limitations" class="muted"></p>
+      </details>
+    </main>
+
+    <aside class="panel execution" aria-label="Eligibility and action">
+      <div class="panel-head">
+        <div>
+          <h2>Eligibility and action</h2>
+          <small>One decision, all blockers visible</small>
+        </div>
+        <span class="badge">PAPER DEFAULT</span>
+      </div>
+      <section id="decision-desk" class="decision-desk" aria-label="Selected stock decision"></section>
+      <section>
+        <h3>Eligibility gates</h3>
+        <div id="eligibility-gates" class="gate-list"></div>
+        <button id="primary-decision-action" class="primary-action" type="button" disabled>No action available</button>
+      </section>
+      <section class="eligibility-section">
+        <h3>Option readiness</h3>
+        <p id="option-readiness" role="status"></p>
+        <label>Selected analytics contract<select id="contract"></select></label>
+        <div id="option-detail"></div>
+      </section>
+      <section>
+        <h3>Strategy trigger and risk</h3>
+        <div id="strategies"></div>
+      </section>
+      <details id="price-alert-desk" open>
+        <summary>Create private paper alert</summary>
+        <form id="price-alert-form">
+          <button id="pick-alert-level" type="button" aria-pressed="false">Pick level on chart</button>
+          <label>Price<input id="alert-level" type="number" min="0.000001" step="any" required></label>
+          <label>Trigger<select id="alert-direction"><option value="ABOVE">Cross above</option><option value="BELOW">Cross below</option></select></label>
+          <label>Expires<select id="alert-minutes"><option value="15">15 minutes</option><option value="60">1 hour</option><option value="1440" selected>24 hours</option><option value="4320">3 days</option><option value="10080">7 days</option></select></label>
+          <button type="submit" class="primary-action">Create private alert</button>
+        </form>
+        <p id="price-alert-status" role="status"></p>
+        <div id="price-alert-list"></div>
+      </details>
+      <a class="execution-boundary" href="{% url 'nifty_live' %}">Live NIFTY execution is locked behind a separate permission step</a>
+    </aside>
+  </div>
+
+  <section class="secondary-workspace" id="system-flow">
+    <details class="panel assistant-desk" open>
+      <summary>Priority assistant, trigger report and evidence</summary>
+      <p id="assistant-status" role="status"></p>
+      <div id="priority-lists" class="context-grid">
+        <section><h3 class="positive">Bullish watch priority</h3><div id="bullish-shortlist"></div></section>
+        <section><h3 class="negative">Bearish watch priority</h3><div id="bearish-shortlist"></div></section>
+      </div>
+      <details><summary>Data coverage and gaps</summary><div id="assistant-coverage"></div></details>
+      <details><summary>All trigger report</summary><div id="trigger-report"></div></details>
+      <details><summary>Recent paper lifecycle and delivery</summary><div id="assistant-exceptions"></div></details>
+      <details id="assistant-research-drawer"><summary>Strategy evidence and momentum research</summary><div id="assistant-research"></div></details>
+    </details>
+
+    <details class="panel market-drawer">
+      <summary>Selected option chart, market context and notes</summary>
+      <h2>Selected option candles, volume and RSI</h2>
+      <div id="option-heading"></div>
+      <div id="option-chart" class="chart" aria-label="Selected option candles, volume and RSI"></div>
+      <p id="option-chart-detail" class="muted" aria-live="polite">Hover or focus a candle for details.</p>
+      <p id="indicator-definition" class="muted"></p>
+      <div id="metrics" class="metrics"></div>
+      <details><summary>Metric definitions and coverage</summary><div id="definitions"></div></details>
+      <div class="context-grid">
+        <section><h2>News and catalysts</h2><div id="news"></div></section>
+        <section><h2>Personal watch notes</h2>
+          <form id="notes-form">
+            <label>Watched price level<input id="watched-level" type="number" step="any" min="0.000001"></label>
+            <label>Notes<textarea id="notes" rows="5" maxlength="2000"></textarea></label>
+            <button type="submit">Save notes and watch</button>
+            <span id="notes-status" role="status"></span>
+          </form>
+        </section>
+      </div>
+      <section><h2>Version-specific paper performance</h2><div id="performance"></div></section>
+    </details>
+
+    <details class="panel contract-drawer">
+      <summary>Contract catalogue, premium history and positions</summary>
+      <details id="contract-catalogue"><summary>Analytics contract catalogue (not executable recommendations)</summary>
+        <div class="table-scroll"><table><thead><tr><th>Contract</th><th>Bid / ask</th><th>Depth / OI</th><th>Age / momentum</th></tr></thead><tbody id="contracts"></tbody></table></div>
+      </details>
+      <div id="premium-chart" class="chart premium" aria-label="Selected option premium history"></div>
+      <div id="positions"></div>
+    </details>
+
+    <details class="panel diagnostics-drawer">
+      <summary>System health and collection diagnostics</summary>
+      <div id="health" class="health" aria-live="polite"></div>
+    </details>
+  </section>
+
+  <section class="fallback panel" id="server-fallback">
+    <h2>Recorded opportunities / non-JavaScript paper actions</h2>
+    {% if workspace.selected %}
+      {% for item in workspace.selected.opportunities %}
+        <article><h3>{{ item.strategy }} {{ item.version }} / {{ item.display_state }}</h3>
+          <p>{{ item.reason }}</p>
+          {% if item.can_acknowledge %}
+            <form method="post" action="{% url 'radar_acknowledge' item.id %}">{% csrf_token %}
+              <input type="hidden" name="symbol" value="{{ workspace.selected.symbol }}">
+              <button name="action" value="take">Take PAPER position</button><button name="action" value="skip">Skip</button>
+            </form>
+          {% elif item.action_block %}<p>{{ item.action_block }}</p>{% endif %}
+        </article>
+      {% empty %}<p>No opportunities recorded.</p>{% endfor %}
+    {% else %}<p>No opportunities recorded. Sync the F&O registry and start the paper collector.</p>{% endif %}
+  </section>
+  <form hidden id="csrf-form">{% csrf_token %}</form>
+  {{ workspace|json_script:"workspace-data" }}
+</div>
+{% endblock %}

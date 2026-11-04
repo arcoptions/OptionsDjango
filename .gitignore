@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 staticfiles/
+runtime/radar/
 
 # Research artefacts: regenerable, and ~1.8 GB in total.
 # research/cache/ is the 246-session npz option cache; the pickles are
@@ -61,6 +62,9 @@ research/daily_panel.csv
 # Run logs from long research jobs. The .txt write-up beside each script is the
 # artefact worth keeping; these are just the console scrolling past.
 research/*.log
+
+# Downloaded Telegram channel histories and their media (third-party content).
+research/telegram/
 
 # Written into the deployment package by the workflow so the running host can
 # name its own commit. Never committed -- it is per-deploy, not per-revision.

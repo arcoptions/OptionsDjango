@@ -1,0 +1,180 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+
+{# ---- 1. tonight's contracts -------------------------------------------- #}
+<div class="panel" style="border-color:#c7d2fe; background:#f8f9ff;">
+  <div class="row" style="justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+    <div>
+      <div class="muted">Strength dips as call options &mdash; buy at the open, sell on the close of session {{ plan.hold }}, no stop</div>
+      <div style="font-size:34px; font-weight:800; line-height:1.15;">
+        {% if latest_day %}{{ tonight|length }} contract{{ tonight|length|pluralize }}{% else %}No option trades yet{% endif %}
+      </div>
+      <div class="muted">
+        {% if latest_day %}From the close of <strong>{{ latest_day|date:"D d M Y" }}</strong>, live.
+        {% else %}The evening build opens one for each stock the <a href="{% url 'swing_alerts' %}">Strength Dips</a> book takes.{% endif %}
+      </div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(3,minmax(130px,1fr)); min-width:420px;">
+      <div class="stat"><div class="label">Per trade, net of {{ plan.cost|floatformat:0 }}% costs</div>
+        <div class="value" style="font-size:19px;">+{{ exp.mean.0|floatformat:1 }}% / +{{ exp.mean.1|floatformat:1 }}%</div>
+        <div class="muted">2016&ndash;21 / 2022&ndash;26, modelled</div></div>
+      <div class="stat"><div class="label">Typical (median) trade</div>
+        <div class="value" style="font-size:19px; color:var(--danger);">{{ exp.median.0|floatformat:0 }}% / {{ exp.median.1|floatformat:0 }}%</div>
+        <div class="muted">{{ exp.win.0|floatformat:0 }}% of trades win</div></div>
+      <div class="stat"><div class="label">Leaders bought on a random day</div>
+        <div class="value" style="font-size:19px;">+{{ exp.control.0|floatformat:1 }}% / +{{ exp.control.1|floatformat:1 }}%</div>
+        <div class="muted">what the dip adds is the gap</div></div>
+    </div>
+  </div>
+
+  {% if stale %}
+  <div class="muted" style="color:var(--danger); margin-bottom:10px;">The newest contracts are {{ age_days }} days old &mdash; check the evening build.</div>
+  {% endif %}
+
+  <form method="get" class="row" style="gap:8px; align-items:center; margin-bottom:10px;">
+    <span class="muted">Capital</span>
+    <input type="number" name="capital" value="{{ capital|floatformat:0 }}" step="50000" style="width:140px;">
+    <button type="submit">Size</button>
+    <span class="muted">Budget per trade: {{ risk_pct|floatformat:0 }}% = &#8377;{{ risk_rupees|floatformat:0 }} of premium. That premium is the whole risk.</span>
+  </form>
+
+  {% if tonight %}
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>Stock</th><th>Contract</th><th>Expiry</th>
+      <th style="text-align:right;">Premium</th><th style="text-align:right;">Spread</th>
+      <th style="text-align:right;">Lot</th><th style="text-align:right;">One lot</th>
+      <th style="text-align:right;">% of capital</th><th style="text-align:right;">Lots at {{ risk_pct|floatformat:0 }}%</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>
+      {% for item in tonight %}
+      <tr>
+        <td><strong>{{ item.row.symbol }}</strong></td>
+        <td>{{ item.row.contract|default:"–" }}</td>
+        <td>{{ item.row.expiry|date:"d M" }}</td>
+        <td style="text-align:right;">{% if item.row.signal_premium %}&#8377;{{ item.row.signal_premium }}{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;" class="muted">{% if item.row.signal_spread_pct is not None %}{{ item.row.signal_spread_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;">{{ item.row.lot_size }}</td>
+        <td style="text-align:right;">{% if item.lot_cost %}&#8377;{{ item.lot_cost|floatformat:0 }}{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right; {% if item.lot_pct and item.lot_pct > 2 %}color:var(--danger); font-weight:700;{% endif %}">
+          {% if item.lot_pct %}{{ item.lot_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right; font-weight:700;">{{ item.lots }}</td>
+        <td>{% if item.row.exit_reason == "NO CONTRACT" %}<span class="muted">no usable contract</span>
+            {% elif item.row.status == "PENDING" %}<strong style="color:var(--green);">buy at open</strong>
+            {% else %}{{ item.row.get_status_display }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="margin:8px 0 0;">
+    Premium is the last trade on the signal evening; the book records the actual open as the fill.
+    A <span style="color:var(--danger); font-weight:700;">red</span> lot is more than 2% of capital &mdash;
+    one lot already risks more than the plan allows. Skip it or trade the stock instead.
+  </p>
+  {% endif %}
+</div>
+
+{# ---- 2. held ------------------------------------------------------------- #}
+<div class="panel">
+  <strong style="font-size:16px;">Options held &mdash; {{ held|length }}</strong>
+  {% if held %}
+  <div style="overflow-x:auto; margin-top:8px;">
+  <table>
+    <thead><tr><th>Contract</th><th>Bought</th><th style="text-align:right;">Entry</th>
+      <th style="text-align:right;">Last</th><th style="text-align:right;">Move</th>
+      <th style="text-align:right;">Session</th><th>Sell on the close of</th></tr></thead>
+    <tbody>
+      {% for item in held %}
+      <tr>
+        <td><strong>{{ item.row.contract }}</strong></td>
+        <td>{{ item.row.entry_day|date:"d M" }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.entry_premium }}</td>
+        <td style="text-align:right;">{% if item.row.last_premium %}&#8377;{{ item.row.last_premium }}{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right; font-weight:700; color:{% if item.move is not None and item.move < 0 %}var(--danger){% else %}var(--green){% endif %};">
+          {% if item.move is not None %}{{ item.move|floatformat:0 }}%{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;">{{ item.row.sessions_held }}/{{ plan.hold }}</td>
+        <td>{{ item.exit_by|date:"D d M" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin:8px 0 0;">Nothing held.</p>
+  {% endif %}
+</div>
+
+{# ---- 3. record ----------------------------------------------------------- #}
+<div class="panel">
+  <strong style="font-size:16px;">Live record</strong>
+  {% if record %}
+  <div class="grid" style="margin-top:8px;">
+    <div class="stat"><div class="label">Closed</div><div class="value">{{ record.trades }}</div></div>
+    <div class="stat"><div class="label">Mean net</div><div class="value">{{ record.mean|floatformat:1 }}%</div>
+      <div class="muted">research: +{{ exp.mean.1|floatformat:1 }}%</div></div>
+    <div class="stat"><div class="label">Median net</div><div class="value">{{ record.median|floatformat:1 }}%</div>
+      <div class="muted">research: {{ exp.median.1|floatformat:1 }}%</div></div>
+    <div class="stat"><div class="label">Win rate</div><div class="value">{{ record.win|floatformat:0 }}%</div>
+      <div class="muted">research: {{ exp.win.1|floatformat:0 }}%</div></div>
+    <div class="stat"><div class="label">Lost over half</div><div class="value">{{ record.lost_half|floatformat:0 }}%</div>
+      <div class="muted">research: {{ exp.lost_half.1|floatformat:0 }}%</div></div>
+  </div>
+  <div style="overflow-x:auto; margin-top:10px;">
+  <table>
+    <thead><tr><th>Contract</th><th>Bought</th><th>Sold</th><th>Why</th>
+      <th style="text-align:right;">Entry</th><th style="text-align:right;">Exit</th><th style="text-align:right;">Net</th></tr></thead>
+    <tbody>
+      {% for item in closed %}
+      <tr><td>{{ item.row.contract }}</td><td>{{ item.row.entry_day|date:"d M" }}</td><td>{{ item.row.exit_day|date:"d M" }}</td>
+        <td class="muted">{{ item.row.exit_reason|lower }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.entry_premium }}</td><td style="text-align:right;">&#8377;{{ item.row.exit_premium }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if item.net < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ item.net|floatformat:0 }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin:8px 0 0;">No closed option trades yet &mdash; each one takes {{ plan.hold }} sessions.</p>
+  {% endif %}
+</div>
+
+{# ---- 4. why this exit plan ---------------------------------------------- #}
+<div class="panel" style="border-color:#fde68a; background:#fffdf5;">
+  <strong style="font-size:16px;">Why there is no stop-loss, and why ten sessions</strong>
+  <p style="margin:8px 0 10px; line-height:1.6;">
+    Eight ways of cutting losses early and riding winners were tested on 6,600 signals from 2016 to 2026.
+    <strong>Every early exit made it worse</strong> &mdash; a lower average trade and a deeper drawdown for the book.
+    These are dip-buys: the losers usually recover within days, so a stop turns a temporary dip into a
+    realised &minus;50%, and the winners are the whole return, so a trail or target cuts off what pays for
+    everything. What does control risk is <strong>time and size</strong>: sell on session {{ plan.hold }}
+    (half the stock book's hold, before time decay bites) and keep one trade's premium near
+    {{ risk_pct|floatformat:0 }}% of capital.
+  </p>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>Exit plan</th><th style="text-align:right;">Mean 2016&ndash;21</th>
+      <th style="text-align:right;">Mean 2022&ndash;26</th><th style="text-align:right;">Book CAGR / max drawdown</th></tr></thead>
+    <tbody>
+      {% for name, a, b, book in plans %}
+      <tr {% if forloop.first %}style="font-weight:700;"{% endif %}><td>{{ name }}</td>
+        <td style="text-align:right;">{{ a|floatformat:1 }}%</td><td style="text-align:right;">{{ b|floatformat:1 }}%</td>
+        <td style="text-align:right;">{{ book }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="margin:10px 0 0; line-height:1.6;">
+    Book figures at 1% of equity in premium per trade unless marked (2%), max 10 open, 2016&ndash;2026.
+    The same plan on leaders bought on a random day compounds at {{ exp.control_cagr|floatformat:1 }}% against
+    {{ exp.cagr|floatformat:1 }}%. Option prices are <em>modelled</em> (Black&ndash;Scholes on the stock's real path,
+    IV = 1.02&times; 20-day realised vol, falling as the stock rises) because no usable history of a 10-session
+    option hold exists; the entry price matched quoted ATM premiums to a median &minus;0.7%. 2025 and 2026 were losing
+    years. See <code>research/STRENGTH_DIP_OPTIONS_REPORT.md</code>.
+  </p>
+</div>
+
+{% endblock %}

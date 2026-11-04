@@ -212,14 +212,6 @@ class Command(BaseCommand):
             update_status("ERROR", message, force=True)
             self.stderr.write(f"[{observed_at:%H:%M:%S}] {message}")
 
-        client = DhanCasClient(
-            access_token=access_token,
-            client_id=client_id,
-            security_ids=security_ids,
-            on_packet=on_packet,
-            on_error=on_error,
-            should_continue=collector_enabled,
-        )
         while True:
             if not collector_enabled():
                 update_status(
@@ -241,6 +233,23 @@ class Command(BaseCommand):
                     time.sleep(max(1.0, options["reconnect_delay"]))
                     close_old_connections()
                     continue
+            access_token, client_id = get_dhan_credentials()
+            if not access_token or not client_id:
+                message = "Dhan credentials are not configured"
+                on_error(message, timezone.localtime())
+                if options["once"]:
+                    raise CommandError(message)
+                time.sleep(max(45.0, options["reconnect_delay"]))
+                close_old_connections()
+                continue
+            client = DhanCasClient(
+                access_token=access_token,
+                client_id=client_id,
+                security_ids=security_ids,
+                on_packet=on_packet,
+                on_error=on_error,
+                should_continue=collector_enabled,
+            )
             update_status("CONNECTING", "Opening Dhan CAS feed", force=True)
             try:
                 client.run()
@@ -266,9 +275,10 @@ class Command(BaseCommand):
                 configured_delay=max(1.0, options["reconnect_delay"]),
             )
             if collector_enabled():
+                reason = str(client.last_error) if client.last_error else "CAS feed disconnected"
                 update_status(
                     "RECONNECTING",
-                    f"CAS feed disconnected; retrying in {delay:g} seconds",
+                    f"{reason}; retrying in {delay:g} seconds",
                     force=True,
                 )
                 self.stderr.write(f"CAS feed disconnected; reconnecting in {delay:g} seconds")

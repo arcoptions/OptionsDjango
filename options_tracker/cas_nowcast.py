@@ -28,6 +28,16 @@ CAS_UNSUBSCRIBE_CODE = 24
 CAS_DISCONNECT_CODE = 12
 CAS_PACKET_SIZE = 128
 CAS_INDEX_PACKET_SIZE = 33
+CAS_DISCONNECT_REASONS = {
+    800: "Internal server error",
+    804: "Requested instrument limit exceeded",
+    805: "Too many requests or WebSocket connections",
+    806: "Data APIs not subscribed; check the account's Pro Traders Plan",
+    807: "Access token expired",
+    808: "Authentication failed: invalid client ID or access token",
+    809: "Access token invalid",
+    810: "Client ID invalid",
+}
 NIFTY_50_CSV_URL = "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv"
 CAS_CONNECT_FROM = clock_time(15, 14)
 CAS_CONNECT_UNTIL = clock_time(15, 35)
@@ -65,11 +75,24 @@ def reconnect_delay_seconds(
 ) -> float:
     """Choose a reconnect delay that cannot exhaust Dhan's socket quota."""
     status_code = getattr(error, "status_code", None)
-    if status_code == 429 or "429 Too Many Requests" in str(error):
+    if (
+        status_code == 429
+        or "429 Too Many Requests" in str(error)
+        or isinstance(error, CasFeedDisconnect) and error.reason_code == 805
+    ):
         return max(120.0, configured_delay)
     if not received_packet:
         return max(45.0, configured_delay)
     return max(10.0, configured_delay)
+
+
+class CasFeedDisconnect(RuntimeError):
+    """Preserve the reason supplied in Dhan's binary disconnect packet."""
+
+    def __init__(self, reason_code: int) -> None:
+        self.reason_code = reason_code
+        reason = CAS_DISCONNECT_REASONS.get(reason_code, "Unknown disconnect reason")
+        super().__init__(f"Dhan CAS disconnected ({reason_code}): {reason}")
 
 
 @dataclass(frozen=True)
@@ -316,7 +339,11 @@ def resolve_nifty_security_ids(refresh_master: bool = False) -> tuple[list[str],
 
 
 class DhanCasClient:
-    """Run the Dhan CAS WebSocket and deliver decoded binary packets."""
+    """Deliver CAS packets and report Dhan's binary disconnect reason codes.
+
+    The CAS endpoint intentionally follows the CAS Live Feed documentation,
+    rather than the versioned URL in the general market-feed documentation.
+    """
 
     def __init__(
         self,
@@ -391,6 +418,12 @@ class DhanCasClient:
         if data_type != websocket.ABNF.OPCODE_BINARY or not isinstance(data, bytes):
             self.on_error(f"Ignored non-binary CAS message of type {data_type}", observed_at)
             return
+        if len(data) == 10 and data[0] == 50:
+            reason_code = struct.unpack_from("<h", data, 8)[0]
+            self.last_error = CasFeedDisconnect(reason_code)
+            self.on_error(str(self.last_error), observed_at)
+            _app.close()
+            return
         try:
             packet = decode_cas_packet(data)
         except ValueError as error:
@@ -404,6 +437,8 @@ class DhanCasClient:
             app.close()
 
     def _on_error(self, _app: websocket.WebSocketApp, error: object) -> None:
+        if isinstance(self.last_error, CasFeedDisconnect):
+            return
         self.last_error = error
         self.on_error(f"WebSocket error: {error}", timezone.localtime())
 

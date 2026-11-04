@@ -1,0 +1,212 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+
+{# ---- 1. tonight's signals ---------------------------------------------- #}
+<div class="panel" style="border-color:#bbf7d0; background:#f7fef9;">
+  <div class="row" style="justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+    <div>
+      <div class="muted">F&amp;O leaders on a short, sharp dip &mdash; buy at the next open, hold {{ rule.hold }} sessions</div>
+      <div style="font-size:34px; font-weight:800; line-height:1.15;">
+        {% if latest_day %}{{ today|length }} signal{{ today|length|pluralize }}{% else %}No signals yet{% endif %}
+      </div>
+      <div class="muted">
+        {% if latest_day %}
+          From the close of <strong>{{ latest_day|date:"D d M Y" }}</strong>
+          {% if latest_is_live %}
+            &mdash; recorded live, before the outcome existed
+          {% else %}
+            &mdash; <span style="color:var(--danger);">reconstructed from history, not a live suggestion</span>
+          {% endif %}
+        {% else %}
+          Run <code>manage.py build_swing_alerts --once</code> to produce one.
+        {% endif %}
+      </div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(3,minmax(130px,1fr)); min-width:400px;">
+      <div class="stat"><div class="label">Per trade, net of costs</div>
+        <div class="value" style="font-size:19px;">+{{ exp.mean|floatformat:1 }}%</div>
+        <div class="muted">10-year research mean</div></div>
+      <div class="stat"><div class="label">Trades that end positive</div>
+        <div class="value" style="font-size:19px;">{{ exp.win|floatformat:0 }}%</div>
+        <div class="muted">hold {{ rule.hold }} sessions</div></div>
+      <div class="stat"><div class="label">Over the F&amp;O average</div>
+        <div class="value" style="font-size:19px;">+{{ exp.excess|floatformat:1 }}%</div>
+        <div class="muted">+{{ exp.anyday|floatformat:2 }}% buying leaders any day</div></div>
+    </div>
+  </div>
+
+  {% if stale %}
+  <div class="muted" style="color:var(--danger); margin-bottom:10px;">
+    The newest signals are {{ age_days }} days old. The evening build has not run &mdash; check
+    <code>/home/LogFiles/swing-alerts.log</code> before trading from this page.
+  </div>
+  {% endif %}
+  {% if not bot_ready %}
+  <div class="muted" style="margin-bottom:10px;">
+    Telegram delivery is off: set <code>TELEGRAM_BOT_TOKEN</code> and <code>TELEGRAM_ALERT_CHAT_ID</code>.
+  </div>
+  {% endif %}
+
+  {% if today %}
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>#</th><th>Symbol</th><th>Action</th>
+      <th style="text-align:right;">Close</th>
+      <th style="text-align:right;">RSI(2)</th>
+      <th style="text-align:right;">Strength</th>
+      <th style="text-align:right;">Last 5 days</th>
+      <th style="text-align:right;">3 months</th>
+      <th style="text-align:right;">12 months</th>
+      <th style="text-align:right;">Turnover</th>
+    </tr></thead>
+    <tbody>
+      {% for item in today %}
+      <tr>
+        <td class="muted">{{ item.row.rank }}</td>
+        <td><strong>{{ item.row.symbol }}</strong></td>
+        <td>{% if item.row.status == "WATCH" %}<span class="muted">no free slot</span>{% else %}<strong style="color:var(--green);">buy next open</strong>{% endif %}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.close }}</td>
+        <td style="text-align:right; font-weight:700;">{{ item.row.rsi2|floatformat:1 }}</td>
+        <td style="text-align:right;">{{ item.strength|floatformat:0 }}</td>
+        <td style="text-align:right; color:var(--danger);">{{ item.ret5|floatformat:1 }}%</td>
+        <td style="text-align:right;">{{ item.ret63|floatformat:0 }}%</td>
+        <td style="text-align:right;">{% if item.ret252 is not None %}{{ item.ret252|floatformat:0 }}%{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;" class="muted">&#8377;{{ item.row.turnover_cr|floatformat:0 }} cr</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% elif latest_day %}
+  <div style="padding:6px 2px; line-height:1.6;">
+    <strong>No leader dipped today.</strong> Signals bunch in sell-offs and go quiet in steady
+    rallies; an empty evening is the rule declining to trade.
+  </div>
+  {% endif %}
+</div>
+
+{# ---- 2. the book -------------------------------------------------------- #}
+<div class="panel">
+  <strong style="font-size:16px;">Live paper book &mdash; {{ book|length }}/{{ rule.slots }} slots</strong>
+  {% if book %}
+  <div style="overflow-x:auto; margin-top:8px;">
+  <table>
+    <thead><tr><th>Symbol</th><th>Signal</th><th>Bought</th>
+      <th style="text-align:right;">Entry</th><th style="text-align:right;">Last close</th>
+      <th style="text-align:right;">Move</th><th style="text-align:right;">Stop</th>
+      <th style="text-align:right;">Session</th></tr></thead>
+    <tbody>
+      {% for item in book %}
+      <tr>
+        <td><strong>{{ item.row.symbol }}</strong></td>
+        <td class="muted">{{ item.row.day|date:"d M" }}</td>
+        <td>{% if item.row.entry_day %}{{ item.row.entry_day|date:"d M" }}{% else %}<span class="muted">next open</span>{% endif %}</td>
+        <td style="text-align:right;">{% if item.row.entry_price %}&#8377;{{ item.row.entry_price }}{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;">{% if item.row.last_close %}&#8377;{{ item.row.last_close }}{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right; font-weight:700; color:{% if item.move is not None and item.move < 0 %}var(--danger){% else %}var(--green){% endif %};">
+          {% if item.move is not None %}{{ item.move|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+        <td style="text-align:right;" class="muted">{% if item.row.stop_price %}&#8377;{{ item.row.stop_price }}{% else %}{{ rule.stop }}% below fill{% endif %}</td>
+        <td style="text-align:right;">{{ item.row.sessions_held }}/{{ rule.hold }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin:8px 0 0;">No live positions. The book fills from the next evening with a signal.</p>
+  {% endif %}
+</div>
+
+{# ---- 3. the record ------------------------------------------------------ #}
+<div class="panel">
+  <strong style="font-size:16px;">How it has done</strong>
+  <p class="muted" style="margin:6px 0 10px;">
+    Live and backfill are separate books and are never added together. Returns are per trade,
+    net of a {{ rule.cost|floatformat:2 }}% round trip; the book figure compounds each trade at
+    one tenth of capital, in exit order.
+  </p>
+  <div class="grid" style="grid-template-columns:repeat(2,minmax(260px,1fr));">
+    <div class="stat">
+      <div class="label">Live</div>
+      {% if live %}
+        <div class="value" style="font-size:19px;">{{ live.trades }} trades &middot; {{ live.win|floatformat:0 }}% win</div>
+        <div class="muted">mean {{ live.mean|floatformat:2 }}% &middot; median {{ live.median|floatformat:2 }}% &middot;
+          {{ live.stops }} stopped &middot; book {{ live.compounded|floatformat:1 }}%</div>
+        <div class="muted">{{ live.first|date:"d M Y" }} &ndash; {{ live.last|date:"d M Y" }}</div>
+      {% else %}
+        <div class="value" style="font-size:19px;">No closed trades yet</div>
+        <div class="muted">each trade takes {{ rule.hold }} sessions to close unless stopped</div>
+      {% endif %}
+    </div>
+    <div class="stat">
+      <div class="label">Backfill (reconstructed)</div>
+      {% if backtest %}
+        <div class="value" style="font-size:19px;">{{ backtest.trades }} trades &middot; {{ backtest.win|floatformat:0 }}% win</div>
+        <div class="muted">mean {{ backtest.mean|floatformat:2 }}% &middot; median {{ backtest.median|floatformat:2 }}% &middot;
+          {{ backtest.stops }} stopped &middot; book {{ backtest.compounded|floatformat:1 }}%</div>
+        <div class="muted">{{ backtest.first|date:"d M Y" }} &ndash; {{ backtest.last|date:"d M Y" }}</div>
+      {% else %}
+        <div class="value" style="font-size:19px;">Not built</div>
+        <div class="muted"><code>manage.py build_swing_alerts --rebuild-history 250</code></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if recent or recent_backfill %}
+  <div style="overflow-x:auto; margin-top:12px;">
+  <table>
+    <thead><tr><th>Book</th><th>Symbol</th><th>Bought</th><th>Sold</th><th>Why</th>
+      <th style="text-align:right;">Entry</th><th style="text-align:right;">Exit</th>
+      <th style="text-align:right;">Net</th></tr></thead>
+    <tbody>
+      {% for item in recent %}
+      <tr><td>live</td><td><strong>{{ item.row.symbol }}</strong></td>
+        <td>{{ item.row.entry_day|date:"d M" }}</td><td>{{ item.row.exit_day|date:"d M" }}</td>
+        <td class="muted">{{ item.row.exit_reason|lower }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.entry_price }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.exit_price }}</td>
+        <td style="text-align:right; font-weight:700; color:{% if item.net < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ item.net|floatformat:1 }}%</td></tr>
+      {% endfor %}
+      {% for item in recent_backfill %}
+      <tr class="muted"><td>backfill</td><td>{{ item.row.symbol }}</td>
+        <td>{{ item.row.entry_day|date:"d M y" }}</td><td>{{ item.row.exit_day|date:"d M y" }}</td>
+        <td>{{ item.row.exit_reason|lower }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.entry_price }}</td>
+        <td style="text-align:right;">&#8377;{{ item.row.exit_price }}</td>
+        <td style="text-align:right; color:{% if item.net < 0 %}var(--danger){% else %}var(--green){% endif %};">{{ item.net|floatformat:1 }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{# ---- 4. the rule -------------------------------------------------------- #}
+<div class="panel" style="border-color:#fde68a; background:#fffdf5;">
+  <strong style="font-size:16px;">What the rule is, and why it is not a breakout</strong>
+  <p style="margin:8px 0 10px; line-height:1.6;">
+    Every evening the F&amp;O universe (20-day turnover of &#8377;{{ rule.turnover }} cr or more) is ranked
+    on its 3, 6 and 12-month return. A <strong>leader</strong> is in the top {{ rule.leader }}%.
+    A <strong>signal</strong> is a leader whose 2-day RSI closed below {{ rule.rsi }}: a strong stock
+    having a sharp, short pullback. Buy at the next open, hold {{ rule.hold }} sessions, and exit
+    early on a close {{ rule.stop }}% below the fill. {{ rule.slots }} equal slots; the strongest
+    leaders are taken first.
+  </p>
+  <p style="margin:0 0 10px; line-height:1.6;">
+    Ten years of F&amp;O data found no breakout &mdash; 52-week high, all-time high, Donchian,
+    multi-touch horizontal level, gap-and-go &mdash; that beats the F&amp;O average over 10 or 20
+    sessions, and buying a leader on its breakout day did <em>worse</em> than buying it on an
+    ordinary day. Strength is what predicts; the dip is the better moment to act on it.
+  </p>
+  <p style="margin:0; line-height:1.6;" class="muted">
+    Simulated over 2017&ndash;2026 the ten-slot book compounded at {{ exp.cagr|floatformat:1 }}% a year,
+    against {{ exp.rand_leader|floatformat:1 }}% for random leaders and {{ exp.rand_stock|floatformat:1 }}%
+    for random F&amp;O stocks under the same rules. Most of the headline number is the universe itself
+    (today's F&amp;O list is made of survivors); the gap to the random books is the part the rule earns.
+    It lagged the F&amp;O average badly in 2025. See <code>research/BREAKOUT_ALERTS_REPORT.md</code>.
+  </p>
+</div>
+
+{% endblock %}

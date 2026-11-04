@@ -3,8 +3,14 @@ from __future__ import annotations
 import json
 import struct
 from datetime import datetime, timedelta, timezone
+from io import StringIO
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlsplit
 
+import websocket
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
@@ -12,8 +18,10 @@ from django.utils import timezone as dj_timezone
 from .cas_nowcast import (
     CAS_INDEX_PACKET_SIZE,
     CAS_PACKET_SIZE,
+    CasFeedDisconnect,
     CasIndexPacket,
     CasInstrumentPacket,
+    DhanCasClient,
     NiftyCloseNowcaster,
     cas_connection_state,
     decode_cas_packet,
@@ -22,6 +30,57 @@ from .cas_nowcast import (
     reconnect_delay_seconds,
 )
 from .models import AppSetting, CasAuctionEvent, DhanOrderEvent
+
+
+class DhanCasClientTests(SimpleTestCase):
+    def setUp(self):
+        self.on_packet = Mock()
+        self.on_error = Mock()
+        self.app = Mock()
+        self.client = DhanCasClient(
+            "test-token", "test-client", ["1333"], self.on_packet, self.on_error,
+        )
+
+    def test_uses_documented_cas_url_and_subscription(self):
+        self.assertEqual(parse_qs(urlsplit(self.client.url).query), {
+            "token": ["test-token"], "clientId": ["test-client"], "authType": ["2"],
+        })
+        self.client._on_open(self.app)
+        self.assertEqual(json.loads(self.app.send.call_args.args[0]), {
+            "RequestCode": 23,
+            "InstrumentCount": 1,
+            "InstrumentList": [{"ExchangeSegment": "NSE_EQ", "SecurityId": "1333"}],
+        })
+
+    def test_reports_server_disconnect_reasons_without_counting_market_data(self):
+        for reason_code in (800, 804, 805, 806, 807, 808, 809, 810, 999):
+            with self.subTest(reason_code=reason_code):
+                payload = struct.pack("<BHBIh", 50, 10, 0, 0, reason_code)
+                self.client._on_data(self.app, payload, websocket.ABNF.OPCODE_BINARY, True)
+                self.assertIsInstance(self.client.last_error, CasFeedDisconnect)
+                self.assertIn(str(reason_code), self.on_error.call_args.args[0])
+                self.assertFalse(self.client.received_packet)
+        self.on_packet.assert_not_called()
+        self.assertEqual(self.app.close.call_count, 9)
+
+    def test_generic_socket_error_preserves_server_reason(self):
+        payload = struct.pack("<BHBIh", 50, 10, 0, 0, 807)
+        self.client._on_data(self.app, payload, websocket.ABNF.OPCODE_BINARY, True)
+        self.client._on_error(self.app, RuntimeError("Connection to remote host was lost."))
+        self.assertEqual(self.client.last_error.reason_code, 807)
+        self.on_error.assert_called_once()
+
+    def test_connection_limit_disconnect_uses_long_cooldown(self):
+        self.assertEqual(reconnect_delay_seconds(
+            CasFeedDisconnect(805), received_packet=False, configured_delay=5,
+        ), 120)
+
+    def test_delivers_valid_index_packet(self):
+        payload = struct.pack("<HBB21sd", 33, 42, 0, b"NIFTY 50", 23157.15)
+        self.client._on_data(self.app, payload, websocket.ABNF.OPCODE_BINARY, True)
+        self.assertTrue(self.client.received_packet)
+        self.assertAlmostEqual(self.on_packet.call_args.args[0].indicative_close, 23157.15)
+        self.on_error.assert_not_called()
 
 
 class CasPacketDecoderTests(SimpleTestCase):
@@ -203,3 +262,31 @@ class CasDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(AppSetting.objects.filter(key="nifty_cas_enabled").exists())
+
+    def test_collector_reloads_credentials_before_each_connection(self):
+        command_module = "options_tracker.management.commands.run_cas_nowcast"
+        with (
+            TemporaryDirectory() as output_dir,
+            patch(f"{command_module}.get_dhan_credentials", side_effect=[
+                ("startup-token", "test-client"),
+                ("first-token", "test-client"),
+                ("renewed-token", "test-client"),
+            ]),
+            patch(f"{command_module}.DhanCasClient") as client_class,
+            patch(f"{command_module}.time.sleep"),
+        ):
+            client_class.return_value.run.side_effect = [None, KeyboardInterrupt]
+            client_class.return_value.last_error = None
+            client_class.return_value.received_packet = False
+            call_command(
+                "run_cas_nowcast",
+                security_ids="1333",
+                output_dir=output_dir,
+                stdout=StringIO(),
+                stderr=StringIO(),
+            )
+
+        self.assertEqual(
+            [call.kwargs["access_token"] for call in client_class.call_args_list],
+            ["first-token", "renewed-token"],
+        )
