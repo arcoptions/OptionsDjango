@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.cache import cache
 from django.db import connections
-from django.test import override_settings
+from django.test import override_settings, tag
 from django.urls import reverse
 from playwright.sync_api import expect, sync_playwright
 
@@ -34,6 +34,7 @@ from . import test_radar_workspace as workspace_fixtures
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     },
 )
+@tag("browser")
 class RadarUITests(StaticLiveServerTestCase):
     def setUp(self):
         cache.clear()

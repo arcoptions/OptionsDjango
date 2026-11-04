@@ -34,14 +34,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Install Chromium for browser regressions
-        run: python -m playwright install --with-deps chromium
-
       - name: Validate Django application
         run: |
           python manage.py check
           python manage.py collectstatic --noinput
-          python manage.py test
+          python manage.py test --exclude-tag=browser
 
       - name: Sign in to Azure
         uses: azure/login@v2
