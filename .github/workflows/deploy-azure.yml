@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: Production
       url: https://arc-options-2fa45de1.azurewebsites.net
