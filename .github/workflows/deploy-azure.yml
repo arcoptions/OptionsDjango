@@ -48,12 +48,11 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Stamp the commit into the package
-        # App Service unpacks a zip with no .git in it, so this file is the only
-        # way it can know which commit it is serving. `record_deployment` reads
-        # it on startup and publishes it; the trading VM follows that row rather
-        # than origin/master, so it never runs code whose migration has not been
-        # applied yet. See options_tracker/deployment.py.
-        run: echo "${{ github.sha }}" > DEPLOYED_SHA
+        # Oryx builds the runtime into output.tar.zst and excludes unknown
+        # root-level files. Stamp a Python module so the running application can
+        # publish the exact commit after migrations succeed; the trading VM
+        # follows that database marker rather than origin/master.
+        run: printf 'DEPLOYED_SHA = "%s"\n' "${{ github.sha }}" > options_tracker/deployed_sha.py
 
       - name: Trim the deployment package
         # research/ is two hundred scripts and their output. The site reads

@@ -2290,6 +2290,12 @@ class DeployedCommitSyncTests(TestCase):
 		# the commit into the package and this is the only way to read it back.
 		self.assertEqual(deployed_commit(), self.NEW)
 
+	def test_record_deployment_prefers_the_oryx_packaged_python_stamp(self):
+		with patch("options_tracker.deployment.PACKAGED_COMMIT", self.NEW):
+			call_command("record_deployment", stdout=StringIO())
+
+		self.assertEqual(deployed_commit(), self.NEW)
+
 	def test_it_will_not_restart_the_engine_with_a_position_open(self):
 		record_deployed_commit(self.NEW)
 

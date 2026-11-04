@@ -21,6 +21,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from .deployed_sha import DEPLOYED_SHA as PACKAGED_COMMIT
 from .models import AppSetting
 
 DEPLOYED_COMMIT_KEY = "deployed_commit"
@@ -53,7 +54,7 @@ def running_commit():
         stamped = (Path(settings.BASE_DIR) / SHA_FILE).read_text(encoding="utf-8").strip()
     except OSError:
         stamped = ""
-    return stamped or git_head()
+    return PACKAGED_COMMIT.strip() or stamped or git_head()
 
 
 def git_head(repo=None):
