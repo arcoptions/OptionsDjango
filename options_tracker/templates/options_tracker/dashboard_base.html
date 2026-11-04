@@ -188,8 +188,8 @@
       <a class="side-button side-primary" href="/options/?panel=trade#quick-actions">Log New Trade</a>
       <a class="side-button side-link" href="{% url 'dhan_settings' %}">Dhan API Setup</a>
       <div class="side-nav">
-        {% for label, url in shell_nav_items %}
-          <a class="nav-item {% if request.path == url %}active{% endif %}" href="{{ url }}">{{ label }}</a>
+        {% for item in shell_nav_items %}
+          <a class="nav-item {% if item.active %}active{% endif %}" href="{{ item.url }}">{{ item.label }}</a>
         {% endfor %}
       </div>
       <div class="card" style="margin-top:auto; background: rgba(255,255,255,0.58);">
@@ -206,8 +206,8 @@
           <span class="muted">{{ shell_subtitle }}</span>
         </div>
         <div class="tabs" style="margin-bottom:0; border-bottom:0; padding-bottom:0;">
-          {% for label, url in shell_nav_items %}
-            <a href="{{ url }}">{{ label }}</a>
+          {% for item in shell_nav_items %}
+            <a href="{{ item.url }}">{{ item.label }}</a>
           {% endfor %}
           <a href="{% url 'dhan_settings' %}">Dhan API Setup</a>
         </div>

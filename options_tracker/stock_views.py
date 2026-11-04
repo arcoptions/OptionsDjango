@@ -7,6 +7,7 @@ import datetime as dt
 import json
 from collections import defaultdict
 
+from django.core.cache import cache
 from django.db.models import Avg, Count, Max, Min, Sum
 from django.shortcuts import render
 
@@ -40,27 +41,41 @@ def _rupees(value):
     return sign + ",".join(parts + [tail])
 
 
-def _coverage():
+_COVERAGE_CACHE_KEY = "stock-option-coverage-v2"
+_COVERAGE_CACHE_SECONDS = 15 * 60
+
+
+def _calculate_coverage():
     """Bars on hand per symbol, for both feeds, in one pass each."""
     equity = {
         row["symbol"]: row
-        for row in StockEquityCandle.objects.values("symbol").annotate(
+        for row in StockEquityCandle.objects.order_by().values("symbol").annotate(
             bars=Count("id"), first=Min("timestamp"), last=Max("timestamp")
         )
     }
     options = {
         row["symbol"]: row
-        for row in StockOptionCandle.objects.values("symbol").annotate(
-            bars=Count("id"), strikes=Count("relative_strike", distinct=True)
-        )
+        for row in StockOptionCandle.objects.order_by().values("symbol").annotate(bars=Count("id"))
     }
-    return equity, options
+    totals = {
+        "equity": sum(row["bars"] for row in equity.values()),
+        "options": sum(row["bars"] for row in options.values()),
+    }
+    return equity, options, totals
+
+
+def _coverage():
+    coverage = cache.get(_COVERAGE_CACHE_KEY)
+    if coverage is None:
+        coverage = _calculate_coverage()
+        cache.set(_COVERAGE_CACHE_KEY, coverage, _COVERAGE_CACHE_SECONDS)
+    return coverage
 
 
 def stock_options(request):
     """Every stock the account has actually traded, and what data we hold on it."""
     stocks = list(TrackedStock.objects.filter(is_active=True).order_by("priority"))
-    equity, options = _coverage()
+    equity, options, totals = _coverage()
 
     sort = request.GET.get("sort", "priority")
     query = (request.GET.get("q") or "").strip().upper()
@@ -88,7 +103,6 @@ def stock_options(request):
             "first_bar": cover.get("first"),
             "last_bar": cover.get("last"),
             "option_bars": opt.get("bars", 0),
-            "option_strikes": opt.get("strikes", 0),
         })
 
     if query:
@@ -119,8 +133,8 @@ def stock_options(request):
         "query": query,
         "total_stocks": len(stocks),
         "shown": len(rows),
-        "equity_bars": StockEquityCandle.objects.count(),
-        "option_bars": StockOptionCandle.objects.count(),
+        "equity_bars": totals["equity"],
+        "option_bars": totals["options"],
         "covered": sum(1 for row in rows if row["equity_bars"] > 0),
         "option_covered": sum(1 for row in rows if row["option_bars"] > 0),
         "job_table": sorted(

@@ -14,13 +14,27 @@ def layout_shell(request):
     latest_oi = IndexOISnapshot.objects.order_by("-created_at").first()
     nifty_ticker = IndexOISnapshot.objects.filter(underlying="NIFTY").order_by("-created_at").first()
 
+    options_url = reverse("options_tracker")
+    tracker_tab = request.GET.get("tab", "options")
+    is_tracker_path = request.path.startswith(options_url)
     nav_items = [
-        ("Trading Workspace", reverse("radar")),
-        ("NIFTY Execution", reverse("nifty_live")),
-        ("Trade Journal", reverse("trade_journal")),
-        ("Research & Archive", reverse("research_report")),
-        ("Signal Archive", reverse("archive")),
-        ("Admin", reverse("admin:index")),
+        {
+            "label": "Options",
+            "url": f"{options_url}?tab=options",
+            "active": is_tracker_path and tracker_tab != "equities",
+        },
+        {
+            "label": "Equities",
+            "url": f"{options_url}?tab=equities",
+            "active": is_tracker_path and tracker_tab == "equities",
+        },
+        {"label": "Stock & Option Data", "url": reverse("stock_options"), "active": request.path == reverse("stock_options")},
+        {"label": "Trading Workspace", "url": reverse("radar"), "active": request.path == reverse("radar")},
+        {"label": "NIFTY Execution", "url": reverse("nifty_live"), "active": request.path == reverse("nifty_live")},
+        {"label": "Trade Journal", "url": reverse("trade_journal"), "active": request.path == reverse("trade_journal")},
+        {"label": "Research & Archive", "url": reverse("research_report"), "active": request.path == reverse("research_report")},
+        {"label": "Signal Archive", "url": reverse("archive"), "active": request.path == reverse("archive")},
+        {"label": "Admin", "url": reverse("admin:index"), "active": request.path.startswith(reverse("admin:index"))},
     ]
 
     return {

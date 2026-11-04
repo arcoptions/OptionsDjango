@@ -482,9 +482,19 @@ def option_live_prices(request):
     })
 
 
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "POST"])
 def option_edit(request, signal_id):
     signal = get_object_or_404(TipSignal, id=signal_id)
+    tracker_tab = "equities" if signal.direction == Direction.EQ else "options"
+    return_url = f"{reverse('options_tracker')}?tab={tracker_tab}"
+    if request.method == "GET":
+        return render(request, "options_tracker/option_edit.html", {
+            "title": f"Edit {signal.option_symbol}",
+            "signal": signal,
+            "form": TrackedOptionEditForm(instance=signal),
+            "return_url": return_url,
+        })
+
     form = TrackedOptionEditForm(request.POST, instance=signal)
     if form.is_valid():
         signal = form.save(commit=False)
@@ -500,7 +510,7 @@ def option_edit(request, signal_id):
         messages.error(request, "Could not update option: " + "; ".join(
             error for errors in form.errors.values() for error in errors
         ))
-    return redirect("options_tracker")
+    return redirect(return_url)
 
 
 @require_http_methods(["POST"])

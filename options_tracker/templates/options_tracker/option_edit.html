@@ -1,0 +1,44 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block content %}
+<div class="panel edit-panel">
+  <div class="edit-heading">
+    <div>
+      <strong>Edit tracked {% if signal.direction == "EQ" %}equity{% else %}option{% endif %}</strong>
+      <div class="muted">Update the journal entry. Saving clears its cached Dhan contract so the next refresh resolves it again.</div>
+    </div>
+    <a class="btn secondary" href="{{ return_url }}">&larr; Back to tracker</a>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="edit-grid">
+      {% for field in form %}
+        <label>
+          <span>{{ field.label }}</span>
+          {{ field }}
+          {% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        </label>
+      {% endfor %}
+    </div>
+    <div class="edit-actions">
+      <button class="btn" type="submit">Save changes</button>
+      <a class="btn secondary" href="{{ return_url }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<style>
+  .edit-panel { margin: 0 auto; max-width: 860px; }
+  .edit-heading { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; margin-bottom: 20px; }
+  .edit-heading strong { display: block; font-size: 18px; margin-bottom: 5px; }
+  .edit-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .edit-grid label > span { color: var(--muted); display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .field-error { color: var(--danger); display: block; margin-top: 5px; }
+  .edit-actions { display: flex; gap: 10px; margin-top: 20px; }
+  @media (max-width: 760px) {
+    .edit-heading { flex-direction: column; }
+    .edit-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
