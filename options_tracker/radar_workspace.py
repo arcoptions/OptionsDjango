@@ -15,7 +15,7 @@ from django.db.models import Count, Min, Max, Q, Sum
 
 from .capital_pnl import estimate_option_charges
 from .models import (
-    IndexOISnapshot, RadarAlert, RadarBar, RadarInstrument, RadarOpportunity,
+    AppSetting, IndexOISnapshot, RadarAlert, RadarBar, RadarInstrument, RadarOpportunity,
     RadarOptionPoint, RadarQuote, RadarWatch, RadarWorker, RadarWorkspace,
 )
 from .radar import (
@@ -728,6 +728,11 @@ def workspace_payload(user, query: dict, now: datetime, cached_metrics=False) ->
                 "last_checked_at": news_worker.heartbeat_at.isoformat() if news_worker else None,
                 "coverage": "Latest public BeatTheStreet text/captions only; not complete history, image OCR or verified catalysts.",
             },
+            "monitor": (
+                json.loads(monitor_state.value)
+                if (monitor_state := AppSetting.objects.filter(key="radar_monitor_state").first())
+                else None
+            ),
             "history": {
                 "state": ("INTERRUPTED / STALE" if history_worker.state == "DOWNLOADING" and history_worker.lease_until <= now else history_worker.state) if history_worker else "NOT STARTED",
                 "detail": history_worker.detail if history_worker else "Run radar_backfill explicitly to reuse cached minute data and download missing history.",

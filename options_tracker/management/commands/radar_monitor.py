@@ -1,6 +1,7 @@
 """Independent local readiness monitor; host-loss detection needs an external host."""
 
 import json
+import os
 import time
 
 from django.core.management.base import BaseCommand, CommandError
@@ -12,6 +13,10 @@ from options_tracker.radar_assistant import worker_health
 from options_tracker.radar_feed import acquire_worker, heartbeat
 from options_tracker.radar_history import credentials
 from options_tracker.services import _token_expiry, get_dhan_credentials
+
+
+def health_notifications_enabled():
+    return os.getenv("RADAR_HEALTH_TELEGRAM", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def upcoming_credential_expiry(now):
@@ -58,18 +63,23 @@ def monitor_once(now):
     due = last is None or (now-timezone.datetime.fromisoformat(last)).total_seconds() >= 900
     retry_due = bool(previous.get("delivery_error")) and due
     notify = (bool(failures) and (changed or retry_due)) or (not failures and bool(previous.get("signature")))
+    notified = False
     state = {"signature": signature, "checked_at": now.isoformat(),
              "attempted_at": previous.get("attempted_at"), "delivery_error": previous.get("delivery_error", ""),
              "warned_expiry": previous.get("warned_expiry")}
-    if notify:
+    if notify and health_notifications_enabled():
         text = ("<b>ARC assistant needs attention</b>\n"+"\n".join(failures) if failures else
                 "<b>ARC assistant recovered</b>\nLocal worker/data readiness checks are passing.")
         ok, error = telegram_bot.send(text)
+        notified = True
         state["attempted_at"] = now.isoformat()
         state["delivery_error"] = "" if ok else error or "Monitor notification failed."
         if not ok:
             AppSetting.objects.update_or_create(key="radar_monitor_state", defaults={"value": json.dumps(state)})
             raise ValueError(f"Health notification failed: {state['delivery_error']}")
+    elif notify:
+        state["attempted_at"] = now.isoformat()
+        state["delivery_error"] = ""
     expiry = upcoming_credential_expiry(now)
     warned = bool(expiry and state["warned_expiry"] != expiry.isoformat())
     if warned and expiry is not None:
@@ -85,8 +95,9 @@ def monitor_once(now):
             raise ValueError(f"Credential reminder failed: {state['delivery_error']}")
         state["warned_expiry"] = expiry.isoformat()
         state["delivery_error"] = ""
+        notified = True
     AppSetting.objects.update_or_create(key="radar_monitor_state", defaults={"value": json.dumps(state)})
-    return {"healthy": not failures, "problems": failures, "advisories": warnings, "notified": notify or warned,
+    return {"healthy": not failures, "problems": failures, "advisories": warnings, "notified": notified,
             "credential_expires_at": expiry.isoformat() if expiry else None}
 
 

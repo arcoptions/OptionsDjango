@@ -330,16 +330,29 @@ class ReadinessTests(RadarTestCase):
     def test_monitor_failure_throttle_and_recovery(self, _expiry):
         from .management.commands.radar_monitor import monitor_once
         target = "options_tracker.management.commands.radar_monitor"
-        with patch(target+".problems", return_value=["collector offline"]), patch(
+        with patch.dict("os.environ", {"RADAR_HEALTH_TELEGRAM": "1"}), patch(
             target+".telegram_bot.send", return_value=(True, None),
         ) as send:
-            self.assertFalse(monitor_once(NOW)["healthy"])
-            self.assertFalse(monitor_once(NOW+timedelta(seconds=20))["notified"])
-            self.assertFalse(monitor_once(NOW+timedelta(minutes=16))["notified"])
-            self.assertEqual(send.call_count, 1)
-        with patch(target+".problems", return_value=[]), patch(target+".telegram_bot.send", return_value=(True, None)) as send:
-            self.assertTrue(monitor_once(NOW+timedelta(minutes=17))["notified"])
-            self.assertIn("recovered", send.call_args.args[0])
+            with patch(target+".problems", return_value=["collector offline"]):
+                self.assertFalse(monitor_once(NOW)["healthy"])
+                self.assertFalse(monitor_once(NOW+timedelta(seconds=20))["notified"])
+                self.assertFalse(monitor_once(NOW+timedelta(minutes=16))["notified"])
+                self.assertEqual(send.call_count, 1)
+            with patch(target+".problems", return_value=[]):
+                self.assertTrue(monitor_once(NOW+timedelta(minutes=17))["notified"])
+                self.assertIn("recovered", send.call_args.args[0])
+
+    @patch("options_tracker.management.commands.radar_monitor.upcoming_credential_expiry", return_value=None)
+    def test_monitor_records_failures_without_telegram_when_health_notifications_disabled(self, _expiry):
+        from .management.commands.radar_monitor import monitor_once
+        target = "options_tracker.management.commands.radar_monitor"
+        with patch.dict("os.environ", {"RADAR_HEALTH_TELEGRAM": "0"}), patch(
+            target+".problems", return_value=["collector offline"]), patch(
+            target+".telegram_bot.send") as send:
+            result = monitor_once(NOW)
+        self.assertFalse(result["notified"])
+        self.assertEqual(result["problems"], ["collector offline"])
+        send.assert_not_called()
 
     @patch("options_tracker.management.commands.radar_monitor.upcoming_credential_expiry", return_value=None)
     def test_monitor_does_not_page_for_public_news_advisory(self, _expiry):
@@ -358,7 +371,8 @@ class ReadinessTests(RadarTestCase):
     def test_monitor_failed_delivery_is_not_reported_as_success(self, _expiry):
         from .management.commands.radar_monitor import monitor_once
         target = "options_tracker.management.commands.radar_monitor"
-        with patch(target+".problems", return_value=["collector offline"]), patch(
+        with patch.dict("os.environ", {"RADAR_HEALTH_TELEGRAM": "1"}), patch(
+            target+".problems", return_value=["collector offline"]), patch(
             target+".telegram_bot.send", return_value=(False, "network: Timeout"),
         ), self.assertRaises(ValueError):
             monitor_once(NOW)
