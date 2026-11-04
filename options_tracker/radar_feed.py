@@ -168,14 +168,40 @@ def sync_instruments(rows: list[dict], now: datetime) -> dict:
         fields = ("symbol", "kind", "expiry", "strike", "side")
         existing = {(row.segment, row.security_id): row for row in
                     RadarInstrument.objects.only("segment", "security_id", *fields)}
+        strike_adjustments = {}
         for record in records:
             old = existing.get((record["segment"], record["security_id"]))
-            if old and any(getattr(old, field) != record[field] for field in fields):
+            if old is None:
+                continue
+            changed = {field for field in fields if getattr(old, field) != record[field]}
+            if not changed:
+                continue
+            if changed == {"strike"} and old.kind == record["kind"] == "OPTION":
+                strike_adjustments.setdefault(record["symbol"], []).append((old, record))
+                continue
+            raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
+        for symbol, adjustments in strike_adjustments.items():
+            matched = [
+                record for record in records
+                if record["kind"] == "OPTION" and record["symbol"] == symbol
+                and (record["segment"], record["security_id"]) in existing
+            ]
+            deltas = {round(record["strike"] - old.strike, 8) for old, record in adjustments}
+            contract_ids = [old.pk for old, _ in adjustments]
+            coordinated = (
+                len(adjustments) >= 2
+                and len(adjustments) == len(matched)
+                and {record["side"] for _, record in adjustments} == {"CE", "PE"}
+                and len(deltas) == 1
+                and 0 not in deltas
+            )
+            if not coordinated or RadarOpportunity.objects.filter(contract_id__in=contract_ids).exists():
                 raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
         RadarInstrument.objects.all().update(active=False)
         RadarInstrument.objects.bulk_create(
             instances, update_conflicts=True,
-            unique_fields=["segment", "security_id"], update_fields=["name", "lot_size", "active", "refreshed_at"],
+            unique_fields=["segment", "security_id"],
+            update_fields=["name", "strike", "lot_size", "active", "refreshed_at"],
         )
     return {"underlyings": len(symbols), "options": len(options)}
 

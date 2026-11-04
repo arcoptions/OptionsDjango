@@ -190,6 +190,26 @@ class RegistryTests(RadarTestCase):
         self.option.refresh_from_db()
         self.assertEqual(self.option.strike, 100)
 
+    def test_coordinated_unused_contract_strike_adjustment_is_applied(self):
+        rows = master_rows()
+        for row in rows[1:]:
+            row["STRIKE_PRICE"] = "89.75"
+        sync_instruments(rows, NOW)
+        self.assertEqual(
+            set(RadarInstrument.objects.filter(kind="OPTION").values_list("strike", flat=True)),
+            {89.75},
+        )
+
+    def test_used_contract_blocks_coordinated_strike_adjustment(self):
+        self.opportunity(contract=self.option)
+        rows = master_rows()
+        for row in rows[1:]:
+            row["STRIKE_PRICE"] = "89.75"
+        with self.assertRaisesMessage(ValueError, "identity changed"):
+            sync_instruments(rows, NOW)
+        self.option.refresh_from_db()
+        self.assertEqual(self.option.strike, 100)
+
     def test_stale_master_missing_equity_rolls_back(self):
         with self.assertRaises(ValueError):
             sync_instruments(master_rows()[1:], NOW)

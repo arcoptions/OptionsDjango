@@ -377,6 +377,7 @@ class AssistantTests(RadarTestCase):
 class ResearchTests(RadarTestCase):
     def test_protocol_freezes_rules_policy_and_next_session(self):
         protocol = register_protocol(NOW)
+        self.assertEqual(protocol.name, "stock-trap-forward-v17")
         self.assertEqual(protocol.specification["primary"], "S1")
         self.assertGreater(protocol.starts_at, NOW)
         self.assertEqual(register_protocol(NOW).pk, protocol.pk)

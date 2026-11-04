@@ -26,9 +26,6 @@ def problems(now):
     for name in ["paper-radar", "radar-evaluator", "paper-alerts"]:
         if not health["workers"][name]["alive"]:
             failures.append(f"{name}: heartbeat/lease unavailable")
-    news = RadarWorker.objects.filter(name="radar-news").first()
-    if not news or news.lease_until <= now or now-news.heartbeat_at > timezone.timedelta(seconds=90):
-        failures.append("Public BeatTheStreet collector offline/stale")
     if health["market_open_weekday_only"]:
         if not health["healthy"]:
             failures.append(f"Fresh equity coverage below 80% ({health['fresh']}/{health['universe']})")
@@ -43,15 +40,24 @@ def problems(now):
     return failures
 
 
+def advisories(now):
+    news = RadarWorker.objects.filter(name="radar-news").first()
+    if not news or news.lease_until <= now or now-news.heartbeat_at > timezone.timedelta(seconds=90):
+        return ["Public BeatTheStreet collector offline/stale"]
+    return []
+
+
 def monitor_once(now):
     failures = problems(now)
+    warnings = advisories(now)
     row = AppSetting.objects.filter(key="radar_monitor_state").first()
     previous = json.loads(row.value) if row else {}
     signature = "|".join(failures)
     changed = signature != previous.get("signature", "")
     last = previous.get("attempted_at")
     due = last is None or (now-timezone.datetime.fromisoformat(last)).total_seconds() >= 900
-    notify = (bool(failures) and (changed or due)) or (not failures and bool(previous.get("signature")))
+    retry_due = bool(previous.get("delivery_error")) and due
+    notify = (bool(failures) and (changed or retry_due)) or (not failures and bool(previous.get("signature")))
     state = {"signature": signature, "checked_at": now.isoformat(),
              "attempted_at": previous.get("attempted_at"), "delivery_error": previous.get("delivery_error", ""),
              "warned_expiry": previous.get("warned_expiry")}
@@ -80,7 +86,7 @@ def monitor_once(now):
         state["warned_expiry"] = expiry.isoformat()
         state["delivery_error"] = ""
     AppSetting.objects.update_or_create(key="radar_monitor_state", defaults={"value": json.dumps(state)})
-    return {"healthy": not failures, "problems": failures, "notified": notify or warned,
+    return {"healthy": not failures, "problems": failures, "advisories": warnings, "notified": notify or warned,
             "credential_expires_at": expiry.isoformat() if expiry else None}
 
 

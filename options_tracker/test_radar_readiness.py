@@ -335,11 +335,24 @@ class ReadinessTests(RadarTestCase):
         ) as send:
             self.assertFalse(monitor_once(NOW)["healthy"])
             self.assertFalse(monitor_once(NOW+timedelta(seconds=20))["notified"])
-            self.assertTrue(monitor_once(NOW+timedelta(minutes=16))["notified"])
-            self.assertEqual(send.call_count, 2)
+            self.assertFalse(monitor_once(NOW+timedelta(minutes=16))["notified"])
+            self.assertEqual(send.call_count, 1)
         with patch(target+".problems", return_value=[]), patch(target+".telegram_bot.send", return_value=(True, None)) as send:
             self.assertTrue(monitor_once(NOW+timedelta(minutes=17))["notified"])
             self.assertIn("recovered", send.call_args.args[0])
+
+    @patch("options_tracker.management.commands.radar_monitor.upcoming_credential_expiry", return_value=None)
+    def test_monitor_does_not_page_for_public_news_advisory(self, _expiry):
+        from .management.commands.radar_monitor import monitor_once
+        target = "options_tracker.management.commands.radar_monitor"
+        with patch(target+".problems", return_value=[]), patch(
+            target+".advisories", return_value=["Public BeatTheStreet collector offline/stale"],
+        ), patch(target+".telegram_bot.send") as send:
+            result = monitor_once(NOW)
+        self.assertTrue(result["healthy"])
+        self.assertFalse(result["notified"])
+        self.assertEqual(result["advisories"], ["Public BeatTheStreet collector offline/stale"])
+        send.assert_not_called()
 
     @patch("options_tracker.management.commands.radar_monitor.upcoming_credential_expiry", return_value=None)
     def test_monitor_failed_delivery_is_not_reported_as_success(self, _expiry):
