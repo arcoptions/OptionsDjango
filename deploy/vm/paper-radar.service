@@ -1,0 +1,21 @@
+[Unit]
+Description=F&O paper radar workers
+After=network-online.target dhan-token.service
+Wants=network-online.target dhan-token.service
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/opt/optionsdjango
+EnvironmentFile=/etc/optionsdjango.env
+# Collection belongs on this VM with token renewal. Running it on a laptop
+# leaves production empty after the VM renews and invalidates the laptop token.
+ExecStart=/opt/optionsdjango/.venv/bin/python -u manage.py radar_supervise
+Restart=always
+RestartSec=30
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

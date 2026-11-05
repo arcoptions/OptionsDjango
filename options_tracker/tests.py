@@ -2316,7 +2316,9 @@ class DeployedCommitSyncTests(TestCase):
 		moved, restarted = self._sync(market_open=True, position=None)
 
 		moved.assert_called_once()
-		restarted.assert_called_once()
+		restarted.assert_called_once_with(
+			"sudo -n systemctl restart nifty-live.service paper-radar.service"
+		)
 		self.assertFalse(AppSetting.objects.filter(key="vm_update_pending").exists())
 
 	def test_a_closed_market_is_reason_enough_to_update(self):

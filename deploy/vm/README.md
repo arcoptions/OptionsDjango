@@ -1,4 +1,9 @@
-# The trading VM
+---
+title: Trading VM
+description: Services and operating procedures for the static-IP trading host
+---
+
+## Host layout
 
 One Azure VM (`vm-options-trader`, 20.197.60.99) runs the live engine. It exists
 because Dhan whitelists a single IP for order placement and App Service manages
@@ -26,6 +31,7 @@ ssh -i ~/.ssh/optionsvm azureuser@20.197.60.99
 |---|---|
 | `nifty-live.service` | The trading engine, `manage.py run_nifty_live` |
 | `dhan-token.service` | Renews the Dhan token at 08:20 IST and publishes it to Postgres |
+| `paper-radar.service` | Collects F&O quotes and runs paper evaluation against shared Postgres |
 | `optionsdjango-sync.timer` | Every 5 min: check out the commit App Service deployed, restart the engine when it is safe |
 
 The VM does **not** migrate. App Service owns the schema, and the deploy marker
@@ -38,7 +44,7 @@ not in place yet.
 ```sh
 sudo cp deploy/vm/*.service deploy/vm/*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now nifty-live.service dhan-token.service optionsdjango-sync.timer
+sudo systemctl enable --now nifty-live.service dhan-token.service paper-radar.service optionsdjango-sync.timer
 ```
 
 Set `DHAN_TOKEN_FILE=/opt/optionsdjango/.dhan_token` in
@@ -49,9 +55,10 @@ host reads. App Service sets `DHAN_TOKEN_OWNER=0` (or nothing) and never renews.
 ## Checking on it
 
 ```sh
-systemctl status nifty-live dhan-token
+systemctl status nifty-live dhan-token paper-radar
 systemctl list-timers optionsdjango-sync
 journalctl -u optionsdjango-sync -n 50
+journalctl -u paper-radar -n 50
 /opt/optionsdjango/.venv/bin/python manage.py renew_dhan_token --check
 /opt/optionsdjango/.venv/bin/python manage.py sync_to_deployed_commit --dry-run
 ```

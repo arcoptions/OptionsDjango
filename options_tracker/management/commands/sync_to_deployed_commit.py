@@ -1,4 +1,4 @@
-"""Move this host onto the commit App Service is serving, and restart the engine.
+"""Move this host onto the commit App Service is serving, and restart its workers.
 
     python manage.py sync_to_deployed_commit --dry-run
     python manage.py sync_to_deployed_commit
@@ -41,17 +41,17 @@ from options_tracker.services import is_dhan_market_open
 # What the dashboard reads to say an update is waiting on the close.
 PENDING_KEY = VM_PENDING_KEY
 
-DEFAULT_RESTART = "sudo -n systemctl restart nifty-live.service"
+DEFAULT_RESTART = "sudo -n systemctl restart nifty-live.service paper-radar.service"
 
 
 class Command(BaseCommand):
-    help = "Check out the commit App Service deployed and restart the live engine."
+    help = "Check out the commit App Service deployed and restart the VM workers."
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true",
                             help="Report what would happen and change nothing.")
         parser.add_argument("--restart-command", default=DEFAULT_RESTART,
-                            help="How to restart the engine once the tree has moved.")
+                            help="How to restart the VM workers once the tree has moved.")
         parser.add_argument("--force", action="store_true",
                             help="Update mid-session even with a position open. Rarely right.")
 
