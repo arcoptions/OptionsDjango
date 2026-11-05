@@ -1,6 +1,6 @@
 """Custom alert isolation, source imports and operating checks."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import StringIO
 import json
 from pathlib import Path
@@ -12,6 +12,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import RadarNotificationRoute, RadarPriceAlert, RadarSector
 from .radar_price_alerts import process_price_alerts
@@ -290,6 +291,25 @@ class ReadinessTests(RadarTestCase):
         self.assertIn("--collect-only", output.getvalue())
         self.assertIn("--accept-incomplete", output.getvalue())
         self.assertNotIn("execute", output.getvalue())
+
+    def test_supervisor_never_starts_daily_preflight_mid_session(self):
+        from options_tracker.management.commands.radar_supervise import daily_preflight_window
+
+        before_open = timezone.make_aware(datetime(2026, 11, 5, 8, 45))
+        mid_session = timezone.make_aware(datetime(2026, 11, 5, 12, 45))
+
+        self.assertTrue(daily_preflight_window(before_open))
+        self.assertFalse(daily_preflight_window(mid_session))
+
+    def test_reconcile_loop_does_not_backfill_during_market_hours(self):
+        target = "options_tracker.management.commands.radar_reconcile"
+        mid_session = timezone.make_aware(datetime(2026, 11, 5, 12, 45))
+        with patch(target+".timezone.localtime", return_value=mid_session), patch(
+            target+".call_command",
+        ) as backfill, patch(target+".time.sleep", side_effect=KeyboardInterrupt):
+            call_command("radar_reconcile", loop=True, stdout=StringIO())
+
+        backfill.assert_not_called()
 
     def test_supervisor_restarts_exited_and_hung_owned_children_after_lease_backoff(self):
         target = "options_tracker.management.commands.radar_supervise"

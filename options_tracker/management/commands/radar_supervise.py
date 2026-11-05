@@ -31,6 +31,11 @@ def worker_specs():
     return specs
 
 
+def daily_preflight_window(local):
+    minute = local.hour*60+local.minute
+    return local.weekday() < 5 and 8*60+40 <= minute < 9*60+15
+
+
 class Command(BaseCommand):
     help = "Supervise local paper workers. Install with your OS scheduler for logon/restart; not a cloud deployment."
 
@@ -67,7 +72,7 @@ class Command(BaseCommand):
                 now = timezone.now()
                 heartbeat(owner, "SUPERVISING", "Paper workers only; no broker execution.", now, name="radar-supervisor")
                 local = timezone.localtime(now)
-                if (local.weekday() < 5 and local.hour*60+local.minute >= 8*60+40 and daily_at != local.date()
+                if (daily_preflight_window(local) and daily_at != local.date()
                         and time.monotonic() >= daily_retry_at):
                     # Reference refresh runs in a child so it cannot starve socket collection.
                     process = children.get("preflight")

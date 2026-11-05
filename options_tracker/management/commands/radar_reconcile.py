@@ -1,4 +1,4 @@
-"""Scheduled, rate-limited repair of absent minutes with immutable conflict audit."""
+"""Post-close repair of absent minutes with immutable conflict audit."""
 
 import time
 
@@ -9,7 +9,7 @@ from options_tracker.radar_history import accept_incomplete_repairs
 
 
 class Command(BaseCommand):
-    help = "Explicit history reconciliation --once or --loop (15-minute cadence in weekday market hours). No orders."
+    help = "Explicit history reconciliation --once or --loop (one post-close run each weekday). No orders."
 
     def add_arguments(self, parser):
         mode = parser.add_mutually_exclusive_group(required=True)
@@ -19,16 +19,24 @@ class Command(BaseCommand):
         parser.add_argument("--accept-incomplete", action="store_true", help="Replace incomplete canonical bars only after preserving original/proposed audit versions.")
 
     def handle(self, *args, **options):
+        reconciled_on = None
         try:
             while True:
                 local = timezone.localtime()
-                if options["once"] or (local.weekday() < 5 and 9*60+15 <= local.hour*60+local.minute <= 15*60+45):
+                minute = local.hour*60+local.minute
+                due = (
+                    local.weekday() < 5
+                    and 15*60+45 <= minute < 18*60
+                    and reconciled_on != local.date()
+                )
+                if options["once"] or due:
                     call_command("radar_backfill", days=1, symbols=options["symbols"])
                     if options["accept_incomplete"]:
                         self.stdout.write(f"Audited incomplete repairs accepted: {accept_incomplete_repairs(timezone.now(), options['symbols'])}")
                     if options["once"]:
                         return
-                    time.sleep(900)
+                    reconciled_on = local.date()
+                    time.sleep(60)
                 else:
                     time.sleep(60)
         except KeyboardInterrupt:
