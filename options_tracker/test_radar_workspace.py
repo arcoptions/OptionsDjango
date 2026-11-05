@@ -15,7 +15,7 @@ from django.urls import reverse
 
 from .capital_pnl import estimate_option_charges
 from .models import (
-    IndexOISnapshot, RadarBar, RadarInstrument, RadarOptionPoint, RadarQuote,
+    AppSetting, IndexOISnapshot, RadarBar, RadarInstrument, RadarOptionPoint, RadarQuote,
     RadarWatch, RadarWorkspace,
 )
 from .radar import S, acknowledge
@@ -80,6 +80,14 @@ class WorkspaceTests(RadarTestCase):
         self.assertContains(response, 'id="workspace-data"')
         self.assertContains(response, static("options_tracker/radar_workspace.css"))
         self.assertContains(response, static("options_tracker/radar_workspace.js"))
+
+    def test_workspace_decodes_persisted_monitor_state(self):
+        state = {"signature": "", "checked_at": NOW.isoformat(), "delivery_error": ""}
+        AppSetting.objects.create(key="radar_monitor_state", value=json.dumps(state))
+
+        payload = workspace_payload(self.user, {}, NOW)
+
+        self.assertEqual(payload["health"]["monitor"], state)
 
     def test_closed_session_lookup_uses_indexable_timestamp_bounds(self):
         self.day_bars(NOW.date(), count=10)
