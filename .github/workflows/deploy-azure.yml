@@ -117,3 +117,21 @@ jobs:
             echo "::error::az webapp deploy exited $code: $(tail -c 800 /tmp/deploy.log | tr '\n\r' '  ')"
             exit $code
           fi
+
+      - name: Warm and verify the deployed web application
+        run: |
+          base_url="https://arc-options-2fa45de1.azurewebsites.net"
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error --max-time 20 \
+              "${base_url}/admin/login/" --output /tmp/login.html &&
+              curl --fail --silent --show-error --max-time 20 \
+              "${base_url}/static/options_tracker/radar_workspace.css" \
+              --output /tmp/radar-workspace.css; then
+              echo "Deployment warm-up passed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Warm-up attempt ${attempt} failed; retrying in 15 seconds."
+            sleep 15
+          done
+          echo "::error::Deployment completed but web/static warm-up did not pass."
+          exit 1

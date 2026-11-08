@@ -1,5 +1,6 @@
 """Regression tests for the reviewed manual Dhan order path."""
 
+import os
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -147,3 +148,32 @@ class ManualExecutionTests(TestCase):
 
         self.assertContains(response, "signal terms changed after review")
         place_order.assert_not_called()
+
+    @patch("options_tracker.views.get_dhan_credentials", return_value=("token", "12345678"))
+    @patch("options_tracker.views.place_super_order")
+    def test_preview_mode_blocks_confirmed_manual_order(self, place_order, _credentials):
+        self.client.force_login(self.user)
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "preview"}):
+            preview = self.client.post(
+                self.url,
+                {
+                    "action": "preview",
+                    "signal_id": self.signal.id,
+                    "quantity": 65,
+                    "journal_reason": "Validated breakout with bounded risk.",
+                },
+            )
+            response = self.client.post(
+                self.url,
+                {
+                    "action": "confirm",
+                    "order_token": preview.context["order_preview"]["token"],
+                    "confirm_live_order": "1",
+                },
+                follow=True,
+            )
+
+        self.assertContains(response, "Broker orders are blocked in preview mode")
+        place_order.assert_not_called()
+        self.assertFalse(DhanOrderEvent.objects.exists())
+        self.assertFalse(TradeExecution.objects.exists())

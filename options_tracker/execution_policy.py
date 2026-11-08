@@ -5,6 +5,8 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 
+from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +32,17 @@ class ExecutionPolicy:
     def allows_position_management(self) -> bool:
         return self.mode is not ExecutionMode.PREVIEW
 
+    @property
+    def allows_broker_mutations(self) -> bool:
+        return self.mode is not ExecutionMode.PREVIEW
+
 
 def execution_policy() -> ExecutionPolicy:
     """Return the process execution policy, defaulting safely to manual review."""
-    raw_mode = os.getenv(EXECUTION_MODE_ENV, "").strip().lower()
+    forced_mode = str(
+        getattr(settings, "ARC_FORCE_EXECUTION_MODE", ""),
+    ).strip().lower()
+    raw_mode = forced_mode or os.getenv(EXECUTION_MODE_ENV, "").strip().lower()
     if not raw_mode:
         return ExecutionPolicy(ExecutionMode.MANUAL)
 

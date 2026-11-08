@@ -93,6 +93,7 @@ checklist.
 * [x] Add approaching and confirmed scanner labels with cooldown and deduplication.
 * [x] Add browser alert permission, local suppression, and POST-only acknowledgement.
 * [x] Add private Telegram scanner delivery with alert-version deduplication and bounded retries.
+* [x] Add the advisory scanner evaluator to the App Service worker schedule.
 * [x] Add a separate Investment Desk for theses, invalidation, and accumulation zones.
 * [x] Add dedicated holdings, allocation, dividends, and review reminders.
 * [x] Keep investment records separate from paper positions and broker execution records.
@@ -102,6 +103,8 @@ checklist.
 * [x] Add unified broker and paper performance without mixing evidence classes.
 * [x] Add win rate, expectancy, profit factor, paper drawdown, and grouped cuts.
 * [x] Add Trade Journal evidence search, date and state filters, and formula-safe CSV export.
+* [x] Add fail-closed staging settings with isolated PostgreSQL naming and code-forced preview execution.
+* [x] Add bounded post-deployment web and static-asset warm-up checks to CI.
 * [ ] Automate approved research publication checks.
 * [ ] Move workers only after ownership and idempotency proof.
 * [ ] Retire duplicate identity fields only after verified backfill.

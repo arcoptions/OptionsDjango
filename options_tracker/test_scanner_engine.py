@@ -1,7 +1,10 @@
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -173,6 +176,19 @@ class ScannerEngineTests(TestCase):
         self.assertEqual(self.client.post(url).status_code, 302)
         match.refresh_from_db()
         self.assertIsNotNone(match.acknowledged_at)
+
+    @patch(
+        "options_tracker.management.commands.run_scanners.deliver_scanner_alerts",
+        return_value={"sent": 0, "failed": 0},
+    )
+    def test_scanner_command_runs_once_and_rejects_unsafe_intervals(self, _delivery):
+        output = StringIO()
+
+        call_command("run_scanners", stdout=output)
+
+        self.assertIn('"scanners": 0', output.getvalue())
+        with self.assertRaises(CommandError):
+            call_command("run_scanners", interval_seconds=1, stdout=StringIO())
 
     @patch("options_tracker.scanner_alerts.telegram_bot.send")
     def test_scanner_telegram_delivery_is_private_advisory_and_deduplicated(

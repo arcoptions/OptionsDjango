@@ -15,6 +15,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from .execution_policy import execution_policy
 from .models import AppSetting, DhanOrderEvent, Direction, OptionOutcome, SignalStatus, TipSignal, TradeExecution, TradeState, TradeStyle
 
 
@@ -1026,6 +1027,15 @@ def sync_index_oi_from_legacy():
 
 
 def place_super_order(signal, quantity):
+    policy = execution_policy()
+    if not policy.allows_broker_mutations:
+        return {
+            "ok": False,
+            "error": (
+                f"Broker mutation blocked by ARC execution mode "
+                f"{policy.mode.value!r}."
+            ),
+        }
     access_token, dhan_client_id = get_dhan_credentials()
     if not access_token or not dhan_client_id:
         return {"ok": False, "error": "Missing DHAN_ACCESS_TOKEN or DHAN_CLIENT_ID env vars."}

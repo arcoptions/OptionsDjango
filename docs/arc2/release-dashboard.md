@@ -34,13 +34,13 @@ working tree, but production behavior has not changed.
 
 ## Evidence snapshot
 
-Last evidence refresh: 2026-11-08.
+Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 544 passed |
-| Test files | 28 |
-| Test classes | 68 |
+| Django application tests | 549 passed |
+| Test files | 31 |
+| Test classes | 71 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
@@ -50,6 +50,8 @@ Last evidence refresh: 2026-11-08.
 | Latest local browser smoke | Passed for 10 critical authenticated pages; 366-559 ms DOM readiness |
 | Latest Release 1 production smoke | Not performed |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
+| Production App Service | Running on Linux Basic in Central India; verified read-only through Azure MCP |
+| Production PostgreSQL | Version 16, Standard B1ms, 32 GB, seven-day backup retention, geo-redundant backup disabled |
 | Execution default in local Release 1 work | Manual |
 | Explicit automatic compatibility mode | `ARC_EXECUTION_MODE=legacy_auto` |
 
@@ -61,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally except legacy-auto decision | 544 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally except legacy-auto decision | 549 application tests passed; browser and deployment gates remain | Not deployed | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
@@ -80,7 +82,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R1-03 | Protected manual order review and confirmation | Implemented locally | Passed | Not deployed | Signed 10-minute review, live confirmation, actor audit, stale-term rejection |
 | R1-04 | Manual execution mode by default | Implemented locally | Passed | Not deployed | Central `manual`, `preview`, and `legacy_auto` policy |
 | R1-05 | Existing-position protection while entries are disarmed | Implemented locally | Passed | Not deployed | Engine manages an open position even when new entries are disabled |
-| R1-06 | Emergency execution kill switch | Partial | Passed | Not deployed | Entry switch exists; preview blocks broker mutations; operator workflow needs browser smoke |
+| R1-06 | Emergency execution kill switch | Implemented locally | Passed | Not deployed | Preview mode blocks worker and manually confirmed broker mutations at both view and service boundaries |
 | R1-07 | No unattended live orders | Blocked | Partial | Not deployed | Default is safe, but explicit `legacy_auto` remains capable of automatic entry pending final legacy-engine decision |
 | R1-08 | Telegram ingestion fails closed | Implemented locally | Passed | Not deployed | Missing secret returns 503; invalid secret returns 401; valid Telegram secret is tested |
 | R1-09 | GET mutations converted to POST | Implemented locally | Passed | Not deployed | Legacy sync and archive controls are POST-only; read views filter expired contracts without changing records |
@@ -159,7 +161,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R5-05 | Fundamental screener | Implemented locally | Passed | Not deployed | Safe scanner fields use current provider-attributed investment score and confidence evidence while requiring a fresh market quote |
 | R5-06 | F&O scanner | Verified baseline | Passed | Production baseline | Paper radar has deterministic F&O readiness and opportunity rules |
 | R5-07 | Gap and delivery-volume scanners | Partial | Passed for gap scope | Not deployed | Fresh quote day-open versus previous-close gap scanning is implemented; delivery-volume evidence still requires an approved provider |
-| R5-08 | Configurable scanner definitions | Implemented locally | Passed | Not deployed | Staff-only builder accepts numeric fields and whitelisted operators without evaluating arbitrary code |
+| R5-08 | Configurable scanner definitions | Implemented locally | Passed | Not deployed | Staff-only builder accepts numeric fields and whitelisted operators; the bounded evaluator is wired into the App Service worker schedule |
 | R5-09 | In-app and Telegram alerts | Implemented locally | Passed | Not deployed | Scanner matches use private staff notification routes, alert-version deduplication, bounded retries, and explicit advisory-only text |
 | R5-10 | Browser notifications | Implemented locally | Partial | Not deployed | Permission-based notifications use alert-version local suppression; browser journey evidence remains |
 | R5-11 | Acknowledgement, suppression, and duplicate prevention | Implemented locally | Passed | Not deployed | Scanner matches deduplicate by definition and symbol, reset on state or cooldown, and support POST-only acknowledgement |
@@ -238,18 +240,18 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 544 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 549 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
-| G-05 | Staging isolation | Open | Separate database, secrets, workers, domain, and broker-safe settings |
+| G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL database name, and code-forced preview mode; cloud staging resources and isolated workers remain |
 | G-06 | Migration rehearsal | Partial | `0024`-`0032` pass an empty test database; existing-data PostgreSQL rehearsal and rollback evidence remain |
 | G-07 | Production-sized data validation | Open | Query, lock, duration, and backfill-resume evidence |
 | G-08 | Performance budgets | Partial | Query ceilings pass; local browser DOM readiness was 366-559 ms across 10 critical pages, while production load and polling measurements remain |
-| G-09 | Backup and restore rehearsal | Open | Fresh backup plus verified restore |
+| G-09 | Backup and restore rehearsal | Partial | Azure confirms seven-day automated retention; geo-redundant backup is disabled and no isolated restore has been rehearsed |
 | G-10 | Staging workflow smoke | Open | All critical journeys pass with deterministic evidence |
 | G-11 | Production approval | Blocked | Explicit user approval after staging report |
-| G-12 | Production deployment report | Open | Commit, migrations, assets, feeds, workers, auth, execution mode, and rollback status |
+| G-12 | Production deployment report | Open | Workflow now warms the login and critical static asset after deployment; commit, migrations, feeds, workers, auth, execution mode, and rollback evidence remain required |
 
 ## Critical workflow acceptance
 

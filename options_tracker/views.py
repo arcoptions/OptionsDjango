@@ -25,6 +25,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .access import staff_required_for_unsafe_methods
 from .deployment import sync_status
+from .execution_policy import execution_policy
 from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
 from .live_config import (
@@ -1002,6 +1003,13 @@ def dhan_orders(request):
                 messages.error(request, "Confirm that this order will be sent to Dhan.")
                 return redirect("dhan_orders")
             else:
+                policy = execution_policy()
+                if not policy.allows_broker_mutations:
+                    messages.error(
+                        request,
+                        f"Broker orders are blocked in {policy.mode.value} mode.",
+                    )
+                    return redirect("dhan_orders")
                 DhanOrderEvent.objects.create(
                     order_id="",
                     correlation_id="",

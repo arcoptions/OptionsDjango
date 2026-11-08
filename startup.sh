@@ -36,6 +36,10 @@ python -u manage.py build_daily_shortlist --daemon > /home/LogFiles/daily-shortl
 # ownership of one.
 python -u manage.py build_swing_alerts --daemon > /home/LogFiles/swing-alerts.log 2>&1 &
 python -u manage.py collect_index_oi > /home/LogFiles/index-oi-collector.log 2>&1 &
+if [ "${ARC_SCANNER_WORKER:-1}" = "1" ]; then
+	python -u manage.py run_scanners --daemon \
+	  > /home/LogFiles/arc-scanners.log 2>&1 &
+fi
 # The dashboard switch controls whether this daemon holds the CAS socket open.
 # Packets are persisted to the shared database for replay and model tuning.
 python -u manage.py run_cas_nowcast \

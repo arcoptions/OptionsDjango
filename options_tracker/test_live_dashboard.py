@@ -19,7 +19,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from . import live_config, live_dashboard, live_engine
@@ -136,6 +136,15 @@ class ExecutionPolicyTests(TestCase):
         self.assertEqual(policy.mode, ExecutionMode.MANUAL)
         self.assertFalse(policy.allows_automatic_entries)
         self.assertIn("Invalid ARC_EXECUTION_MODE", policy.configuration_error)
+
+    @override_settings(ARC_FORCE_EXECUTION_MODE="preview")
+    def test_forced_preview_cannot_be_overridden_by_environment(self):
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "legacy_auto"}):
+            policy = execution_policy()
+
+        self.assertEqual(policy.mode, ExecutionMode.PREVIEW)
+        self.assertFalse(policy.allows_broker_mutations)
+        self.assertFalse(policy.allows_position_management)
 
     @patch("options_tracker.live_engine._write_status")
     @patch("options_tracker.live_engine.save_state")
