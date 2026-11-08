@@ -13,13 +13,17 @@ have happened, not a projection, so it has to land on the published figure
 exactly -- Rs 38,625.64 over 51 trades.
 """
 import json
+import os
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from . import live_config, live_dashboard, live_engine
+from .execution_policy import ExecutionMode, execution_policy
 from .models import AppSetting, DhanOrderEvent, Direction, TipSignal, TradeExecution
 from .nifty_trail_strategy import nifty_trail_config
 
@@ -107,6 +111,131 @@ class LiveConfigMidTradeTests(ClearsConfigCache):
             "stop_percent": 0.10, "trail_gap_r": 1.5,
         }
         self.assertEqual(live_engine._trailed_stop(fresh, 120.0), 105.0)
+
+
+class ExecutionPolicyTests(TestCase):
+    def test_unset_mode_defaults_to_manual(self):
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": ""}):
+            policy = execution_policy()
+
+        self.assertEqual(policy.mode, ExecutionMode.MANUAL)
+        self.assertFalse(policy.allows_automatic_entries)
+        self.assertTrue(policy.allows_position_management)
+
+    def test_legacy_auto_requires_an_explicit_mode(self):
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "legacy_auto"}):
+            policy = execution_policy()
+
+        self.assertEqual(policy.mode, ExecutionMode.LEGACY_AUTO)
+        self.assertTrue(policy.allows_automatic_entries)
+
+    def test_invalid_mode_fails_closed_with_a_visible_error(self):
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "automatic"}):
+            policy = execution_policy()
+
+        self.assertEqual(policy.mode, ExecutionMode.MANUAL)
+        self.assertFalse(policy.allows_automatic_entries)
+        self.assertIn("Invalid ARC_EXECUTION_MODE", policy.configuration_error)
+
+    @patch("options_tracker.live_engine._write_status")
+    @patch("options_tracker.live_engine.save_state")
+    @patch("options_tracker.live_engine._entry_allowed", return_value=(False, "entry window closed"))
+    @patch("options_tracker.live_engine.missed_bars", return_value=[])
+    @patch("options_tracker.live_engine.manage_position", return_value=[])
+    @patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+    @patch("options_tracker.live_engine.engine_enabled", return_value=True)
+    @patch("options_tracker.live_engine.load_state")
+    def test_manual_mode_keeps_existing_position_management_live(
+        self,
+        load_state,
+        _enabled,
+        _market_open,
+        manage_position,
+        _missed_bars,
+        _entry_allowed,
+        _save_state,
+        _write_status,
+    ):
+        state = {
+            "date": timezone.localdate().isoformat(),
+            "trades_today": 0,
+            "realized_r": 0.0,
+            "position": {"order_id": "OPEN-1"},
+        }
+        load_state.return_value = state
+        now = timezone.localtime().replace(hour=15, minute=15, second=0, microsecond=0)
+
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "manual"}):
+            status = live_engine.tick(now=now)
+
+        manage_position.assert_called_once_with(state, now, False)
+        self.assertTrue(status["dry_run"])
+        self.assertTrue(status["position_management_live"])
+
+    @patch("options_tracker.live_engine._write_status")
+    @patch("options_tracker.live_engine.save_state")
+    @patch("options_tracker.live_engine._entry_allowed", return_value=(False, "entry window closed"))
+    @patch("options_tracker.live_engine.missed_bars", return_value=[])
+    @patch("options_tracker.live_engine.manage_position", return_value=[])
+    @patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+    @patch("options_tracker.live_engine.engine_enabled", return_value=True)
+    @patch("options_tracker.live_engine.load_state")
+    def test_preview_mode_blocks_existing_position_management(
+        self,
+        load_state,
+        _enabled,
+        _market_open,
+        manage_position,
+        _missed_bars,
+        _entry_allowed,
+        _save_state,
+        _write_status,
+    ):
+        state = {
+            "date": timezone.localdate().isoformat(),
+            "trades_today": 0,
+            "realized_r": 0.0,
+            "position": {"order_id": "OPEN-1"},
+        }
+        load_state.return_value = state
+        now = timezone.localtime().replace(hour=15, minute=15, second=0, microsecond=0)
+
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "preview"}):
+            status = live_engine.tick(now=now)
+
+        manage_position.assert_called_once_with(state, now, True)
+        self.assertTrue(status["dry_run"])
+        self.assertFalse(status["position_management_live"])
+
+    @patch("options_tracker.live_engine._write_status")
+    @patch("options_tracker.live_engine.save_state")
+    @patch("options_tracker.live_engine.manage_position", return_value=[])
+    @patch("options_tracker.live_engine.is_dhan_market_open", return_value=True)
+    @patch("options_tracker.live_engine.engine_enabled", return_value=False)
+    @patch("options_tracker.live_engine.load_state")
+    def test_disarming_new_entries_does_not_abandon_an_open_position(
+        self,
+        load_state,
+        _enabled,
+        _market_open,
+        manage_position,
+        _save_state,
+        _write_status,
+    ):
+        state = {
+            "date": timezone.localdate().isoformat(),
+            "trades_today": 0,
+            "realized_r": 0.0,
+            "position": {"order_id": "OPEN-1"},
+        }
+        load_state.return_value = state
+        now = timezone.localtime().replace(hour=11, minute=0, second=0, microsecond=0)
+
+        with patch.dict(os.environ, {"ARC_EXECUTION_MODE": "manual"}):
+            status = live_engine.tick(now=now)
+
+        manage_position.assert_called_once_with(state, now, False)
+        self.assertEqual(status["state"], "MANAGING_POSITION")
 
 
 class LiveDashboardTests(ClearsConfigCache):
@@ -199,6 +328,15 @@ class LiveDashboardTests(ClearsConfigCache):
 
 
 class NiftyLiveViewTests(ClearsConfigCache):
+    def setUp(self):
+        super().setUp()
+        user = get_user_model().objects.create_user(
+            username="nifty-operator",
+            password="test-password",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
     def test_every_tab_renders(self):
         for tab in ("live", "trades", "metrics", "risk"):
             response = self.client.get(f"/nifty-live/?tab={tab}")
@@ -236,3 +374,6 @@ class NiftyLiveViewTests(ClearsConfigCache):
         payload = self.client.get("/api/nifty-live/status/").json()
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["stale"])
+        self.assertEqual(payload["execution_mode"], "manual")
+        self.assertFalse(payload["automatic_entries"])
+        self.assertTrue(payload["position_management_live"])

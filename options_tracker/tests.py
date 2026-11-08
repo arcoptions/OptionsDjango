@@ -138,6 +138,9 @@ class TelegramTipParserTests(TestCase):
 
 
 class ActionListTests(TestCase):
+	def setUp(self):
+		self.client.force_login(get_user_model().objects.create_user("action-list-reader"))
+
 	def make_signal(self, **overrides):
 		values = {
 			"source_type": "TELEGRAM",
@@ -180,7 +183,7 @@ class ActionListTests(TestCase):
 			self.assertNotIn(("TipSignal", signal.option_symbol), rows)
 			self.assertNotContains(response, signal.option_symbol)
 		expired.refresh_from_db()
-		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(expired.status, SignalStatus.CANDIDATE)
 		self.assertEqual(response.context["buy_count"], 1)
 
 	def test_buy_ready_requires_complete_current_plan_and_active_is_manage_only(self):
@@ -253,6 +256,14 @@ class ActionListTests(TestCase):
 
 
 class DhanOptionTrackingTests(TestCase):
+	def setUp(self):
+		user = get_user_model().objects.create_user(
+			username="option-operator",
+			password="test-password",
+			is_staff=True,
+		)
+		self.client.force_login(user)
+
 	def make_signal(self, **overrides):
 		values = {
 			"option_symbol": "NIFTY 24000 CE",
@@ -265,7 +276,7 @@ class DhanOptionTrackingTests(TestCase):
 		values.update(overrides)
 		return TipSignal.objects.create(**values)
 
-	def test_tracker_automatically_archives_expired_contracts_and_preserves_history(self):
+	def test_tracker_hides_expired_contracts_without_mutating_on_get(self):
 		expired = self.make_signal(
 			expiry_date=timezone.localdate() - timedelta(days=1),
 			live_price=Decimal("80"),
@@ -279,7 +290,7 @@ class DhanOptionTrackingTests(TestCase):
 		response = self.client.get("/options/")
 
 		expired.refresh_from_db()
-		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(expired.status, SignalStatus.NEW)
 		self.assertEqual(expired.live_price, Decimal("80"))
 		self.assertEqual(expired.outcome_status, OptionOutcome.TARGET_1)
 		self.assertEqual(expired.quote_updated_at, quote_time)
@@ -304,14 +315,14 @@ class DhanOptionTrackingTests(TestCase):
 		self.assertEqual(current.status, SignalStatus.NEW)
 		self.assertEqual(future.status, SignalStatus.NEW)
 
-	def test_archive_page_automatically_includes_newly_expired_contracts(self):
+	def test_archive_page_includes_expired_contracts_without_mutating_on_get(self):
 		expired = self.make_signal(expiry_date=timezone.localdate() - timedelta(days=1))
 
 		response = self.client.get("/archive/")
 
 		self.assertContains(response, expired.option_symbol)
 		expired.refresh_from_db()
-		self.assertEqual(expired.status, SignalStatus.ARCHIVED)
+		self.assertEqual(expired.status, SignalStatus.NEW)
 
 	@patch("options_tracker.services.requests.post")
 	@patch("options_tracker.services._load_dhan_contracts")
@@ -772,6 +783,9 @@ class DhanOptionTrackingTests(TestCase):
 
 
 class IndexOIIntelligenceTests(TestCase):
+	def setUp(self):
+		self.client.force_login(get_user_model().objects.create_user("index-oi-reader"))
+
 	def _create_nifty_put_setup(self, bearish_context=True, trade_date=date(2026, 8, 14)):
 		start = timezone.make_aware(datetime.combine(trade_date, time(9, 15)))
 		latest = None
@@ -1218,7 +1232,7 @@ class IndexOIIntelligenceTests(TestCase):
 
 
 class TelegramWebhookTests(TestCase):
-	def test_ingests_native_channel_post(self):
+	def test_missing_ingest_token_fails_closed(self):
 		with patch.dict(os.environ, {"TELEGRAM_INGEST_TOKEN": ""}):
 			response = self.client.post(
 				"/api/telegram/ingest/",
@@ -1232,6 +1246,26 @@ class TelegramWebhookTests(TestCase):
 					}
 				),
 				content_type="application/json",
+			)
+
+		self.assertEqual(response.status_code, 503)
+		self.assertFalse(ChatMessage.objects.exists())
+
+	def test_ingests_native_channel_post_with_valid_token(self):
+		with patch.dict(os.environ, {"TELEGRAM_INGEST_TOKEN": "webhook-secret"}):
+			response = self.client.post(
+				"/api/telegram/ingest/",
+				data=json.dumps(
+					{
+						"update_id": 123,
+						"channel_post": {
+							"chat": {"title": "Options Channel", "type": "channel"},
+							"text": "NIFTY 25000 CE SL 100 TARGET 150",
+						},
+					}
+				),
+				content_type="application/json",
+				HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN="webhook-secret",
 			)
 
 		self.assertEqual(response.status_code, 200)
@@ -2357,6 +2391,9 @@ class PublishedResearchTableTests(TestCase):
 	rather than rendering an empty section in production.
 	"""
 
+	def setUp(self):
+		self.client.force_login(get_user_model().objects.create_user("research-reader"))
+
 	def test_every_table_the_page_reads_is_published(self):
 		missing = [name for name in PAGE_TABLES if not (PUBLISHED / name).exists()]
 		self.assertEqual(missing, [], "run: manage.py publish_research_tables")
@@ -2389,6 +2426,14 @@ class SyncStatusTests(TestCase):
 	"""
 	OLD = "a" * 40
 	NEW = "b" * 40
+
+	def setUp(self):
+		user = get_user_model().objects.create_user(
+			username="sync-operator",
+			password="test-password",
+			is_staff=True,
+		)
+		self.client.force_login(user)
 
 	def test_a_vm_that_has_never_reported_reads_as_unknown(self):
 		record_deployed_commit(self.NEW)
@@ -2526,6 +2571,9 @@ class ReferenceDataSeedTests(TestCase):
 
 class SwingAlertTests(TestCase):
 	"""Strength dips: features match the research, the book moves the way the simulation did."""
+
+	def setUp(self):
+		self.client.force_login(get_user_model().objects.create_user("swing-reader"))
 
 	@staticmethod
 	def _universe(days=300, names=10, dip_names=("AAA", "BBB")):
@@ -2696,6 +2744,9 @@ class SwingAlertTests(TestCase):
 
 class SwingOptionTests(TestCase):
 	"""Option leg of the strength-dip book: contract choice, fill at the open, sell on session 10."""
+
+	def setUp(self):
+		self.client.force_login(get_user_model().objects.create_user("swing-option-reader"))
 
 	CONTRACTS = {"AAA": [
 		{"security_id": "11", "strike": 100.0, "option_type": "CE", "expiry": "2025-03-06", "lot_size": 500, "display": "AAA 06 MAR 100 CALL"},

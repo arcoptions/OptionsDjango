@@ -52,6 +52,13 @@ Set `DHAN_TOKEN_FILE=/opt/optionsdjango/.dhan_token` in
 engine alive through a database blip; the database row is the copy the other
 host reads. App Service sets `DHAN_TOKEN_OWNER=0` (or nothing) and never renews.
 
+The execution policy defaults to `manual` when `ARC_EXECUTION_MODE` is absent.
+Manual mode evaluates and records valid entries without submitting them, while
+continuing to manage any existing live position. Use `preview` to block every
+broker mutation, including position management. Set
+`ARC_EXECUTION_MODE=legacy_auto` only after explicit approval to restore
+automatic entries through the existing NIFTY engine.
+
 ## Checking on it
 
 ```sh

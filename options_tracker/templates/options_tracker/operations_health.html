@@ -1,0 +1,84 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Operations & Data Health | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <section class="panel">
+    <h2>Execution safety</h2>
+    <div class="row"><strong>Mode</strong><span class="active-pill">{{ operations.execution.mode }}</span></div>
+    <div class="muted">Automatic entries: {{ operations.execution.automatic_entries|yesno:"enabled,disabled" }}</div>
+    <div class="muted">Position management: {{ operations.execution.position_management|yesno:"enabled,disabled" }}</div>
+    {% if operations.execution.configuration_error %}
+      <div class="msg error">{{ operations.execution.configuration_error }}</div>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <h2>Deployment ownership</h2>
+    <div class="row"><strong>App Service</strong><code>{{ operations.deployment.deployed_short|default:"unknown" }}</code></div>
+    <div class="row"><strong>Static-IP VM</strong><code>{{ operations.deployment.vm_short|default:"unknown" }}</code></div>
+    <div class="row"><strong>Web process</strong><code>{{ operations.deployment.running_short|default:"unknown" }}</code></div>
+    <div class="muted">VM heartbeat age: {{ operations.deployment.age_minutes|default_if_none:"unknown" }} minute{{ operations.deployment.age_minutes|pluralize }}</div>
+    {% if operations.deployment.in_sync and not operations.deployment.stale %}
+      <div class="msg success">App Service and VM deployment markers are synchronized.</div>
+    {% else %}
+      <div class="msg warning">Deployment markers are missing, stale, or out of sync.</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Provider freshness</h2>
+  <p class="muted">{{ operations.healthy_provider_count }} of {{ operations.provider_count }} provider checks are current.</p>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Provider</th><th>Status</th><th>Last evidence</th><th>Age</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for provider in operations.providers %}
+        <tr>
+          <td>{{ provider.name }}</td>
+          <td><span class="active-pill">{{ provider.status }}</span></td>
+          <td>{{ provider.updated_at|date:"d M Y H:i:s"|default:"-" }}</td>
+          <td>{% if provider.age_seconds is not None %}{{ provider.age_seconds }}s{% else %}-{% endif %}</td>
+          <td>{{ provider.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Worker ownership and heartbeats</h2>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Worker</th><th>Owner</th><th>State</th><th>Heartbeat</th><th>Age</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for worker in operations.workers %}
+        <tr>
+          <td>{{ worker.name }}</td>
+          <td>{{ worker.owner|default:"-" }}</td>
+          <td><span class="active-pill">{{ worker.state }}</span></td>
+          <td>{{ worker.heartbeat_at|date:"d M Y H:i:s" }}</td>
+          <td>{{ worker.age_seconds }}s</td>
+          <td>{{ worker.detail|default:"-" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No worker heartbeats have been recorded.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>NIFTY engine</h2>
+  <div class="grid">
+    <div class="stat"><div class="label">State</div><div class="value">{{ operations.engine.state }}</div></div>
+    <div class="stat"><div class="label">Heartbeat age</div><div class="value">{{ operations.engine.age_seconds|default_if_none:"-" }}s</div></div>
+    <div class="stat"><div class="label">Trades today</div><div class="value">{{ operations.engine.trades_today }}</div></div>
+    <div class="stat"><div class="label">Position</div><div class="value">{{ operations.engine.position|yesno:"OPEN,NONE" }}</div></div>
+  </div>
+  {% if operations.engine.stale %}<div class="msg warning">The NIFTY engine heartbeat is stale or missing.</div>{% endif %}
+</section>
+{% endblock %}

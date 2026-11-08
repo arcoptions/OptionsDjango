@@ -6,8 +6,10 @@ import logging
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models.deletion import ProtectedError
@@ -19,6 +21,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
+from .access import staff_required_for_unsafe_methods
 from .deployment import sync_status
 from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
 from .jump_detector import historical_jump_report, jump_detector_state, live_jump_candidates
@@ -75,6 +78,7 @@ from .services import (
 )
 from .strategy_backtest import NIFTY_PUT_RESEARCH_SUMMARY
 from .action_workspace import action_list_context
+from .command_centre import command_centre_context
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +86,14 @@ NIFTY_LTP_CACHE_KEY = "market_ticker_nifty_ltp"
 
 
 def home(request):
-    return redirect("radar")
+    return render(
+        request,
+        "options_tracker/command_centre.html",
+        {
+            "title": "Command Centre",
+            "command": command_centre_context(),
+        },
+    )
 
 
 def action_list(request):
@@ -272,12 +283,18 @@ def telegram_ingest_api(request):
     expected_token = str(AppSetting.objects.filter(key="telegram_ingest_token").values_list("value", flat=True).first() or "").strip()
     if not expected_token:
         expected_token = str(os.environ.get("TELEGRAM_INGEST_TOKEN", "") or "").strip()
+    if not expected_token:
+        logger.error("Telegram ingestion rejected because no ingest token is configured.")
+        return JsonResponse(
+            {"ok": False, "error": "Telegram ingestion is not configured."},
+            status=503,
+        )
     incoming_token = str(
         request.headers.get("X-Telegram-Bot-Api-Secret-Token")
         or request.headers.get("X-Telegram-Ingest-Token")
         or ""
     ).strip()
-    if expected_token and incoming_token != expected_token:
+    if not secrets.compare_digest(incoming_token, expected_token):
         return JsonResponse({"ok": False, "error": "Unauthorized"}, status=401)
 
     try:
@@ -375,10 +392,10 @@ def telegram_tracker_status_api(request):
     )
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def options_tracker(request):
-    archive_expired_signals()
-    if request.method == "GET" and request.GET.get("sync") == "legacy":
+    if request.method == "POST" and request.POST.get("action") == "sync_legacy":
         created, status_msg = sync_telegram_from_legacy(limit=300, trade_style=TradeStyle.INTRADAY)
         if status_msg == "OK":
             messages.success(request, f"Synced {created} option tips from legacy Telegram feed.")
@@ -404,7 +421,12 @@ def options_tracker(request):
     if tracker_tab not in {"options", "equities"}:
         tracker_tab = "options"
     f = SignalFilterForm(request.GET)
-    tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED)
+    today = timezone.localdate()
+    tracked_tips = TipSignal.objects.exclude(status=SignalStatus.ARCHIVED).filter(
+        Q(direction=Direction.EQ)
+        | Q(expiry_date__isnull=True)
+        | Q(expiry_date__gte=today)
+    )
     options = tracked_tips.filter(direction__in=[Direction.CE, Direction.PE])
     equities = tracked_tips.filter(direction=Direction.EQ)
     tab_tips = equities if tracker_tab == "equities" else options
@@ -460,6 +482,7 @@ def options_tracker(request):
     return render(request, "options_tracker/options_tracker.html", ctx)
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["POST"])
 def option_live_prices(request):
     archive_expired_signals()
@@ -488,6 +511,7 @@ def option_live_prices(request):
     })
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def option_edit(request, signal_id):
     signal = get_object_or_404(TipSignal, id=signal_id)
@@ -519,6 +543,7 @@ def option_edit(request, signal_id):
     return redirect(return_url)
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["POST"])
 def option_delete(request, signal_id):
     signal = get_object_or_404(TipSignal, id=signal_id)
@@ -531,9 +556,10 @@ def option_delete(request, signal_id):
     return redirect("options_tracker")
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def scanners(request):
-    if request.GET.get("sync") == "1":
+    if request.method == "POST" and request.POST.get("action") == "sync_legacy":
         created, status_msg = sync_chartink_from_legacy(limit=300)
         if status_msg == "OK":
             messages.success(request, f"Synced {created} Chartink triggers from legacy DB.")
@@ -541,7 +567,9 @@ def scanners(request):
             messages.warning(request, f"Sync partial: {created}. {status_msg}")
         return redirect("scanners")
 
-    promote_form = TriggerPromoteForm(request.POST or None)
+    promote_form = TriggerPromoteForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "promote" else None
+    )
     if request.method == "POST" and promote_form.is_valid():
         trigger = get_object_or_404(ChartinkTrigger, id=promote_form.cleaned_data["trigger_id"])
         if trigger.promoted_signal_id:
@@ -594,10 +622,11 @@ def scanners(request):
     )
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def telegram_feed(request):
-    if request.GET.get("sync") == "1":
-        style = request.GET.get("style", "INTRADAY")
+    if request.method == "POST" and request.POST.get("action") == "sync_legacy":
+        style = request.POST.get("style", "INTRADAY")
         created, status_msg = sync_telegram_from_legacy(limit=300, trade_style=style)
         if status_msg == "OK":
             messages.success(request, f"Synced {created} telegram tips from legacy DB.")
@@ -605,7 +634,9 @@ def telegram_feed(request):
             messages.warning(request, f"Sync partial: {created}. {status_msg}")
         return redirect("telegram_feed")
 
-    form = TelegramBulkForm(request.POST or None)
+    form = TelegramBulkForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "import" else None
+    )
     if request.method == "POST" and form.is_valid():
         source = form.cleaned_data["source_name"]
         style = form.cleaned_data["trade_style"]
@@ -708,6 +739,7 @@ def recommendations(request):
     )
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def index_oi(request):
     if request.method == "POST":
@@ -868,39 +900,139 @@ def index_oi(request):
     )
 
 
+def _manual_order_terms(signal):
+    return {
+        "security_id": str(signal.security_id or ""),
+        "direction": signal.direction,
+        "trade_style": signal.trade_style,
+        "entry_price": str(signal.entry_price or ""),
+        "stop_loss": str(signal.stop_loss or ""),
+        "target_1": str(signal.target_1 or ""),
+    }
+
+
+@staff_member_required
 @require_http_methods(["GET", "POST"])
 def dhan_orders(request):
+    order_preview = None
+    selected_signal = None
     if request.method == "POST":
-        signal_id = request.POST.get("signal_id")
-        signal = get_object_or_404(TipSignal, id=signal_id)
-        form = TradeExecutionForm(request.POST)
+        action = request.POST.get("action", "preview")
+        if action == "confirm":
+            try:
+                confirmed = signing.loads(
+                    request.POST.get("order_token", ""),
+                    salt="manual-dhan-order",
+                    max_age=600,
+                )
+            except signing.BadSignature:
+                messages.error(request, "Order review expired or was changed. Review the order again.")
+                return redirect("dhan_orders")
+            selected_signal = get_object_or_404(TipSignal, id=confirmed["signal_id"])
+            if confirmed.get("terms") != _manual_order_terms(selected_signal):
+                messages.error(request, "The signal terms changed after review. Review the order again.")
+                return redirect("dhan_orders")
+            _, current_client_id = get_dhan_credentials()
+            if confirmed.get("account_suffix") != (current_client_id[-4:] if current_client_id else ""):
+                messages.error(request, "The Dhan account changed after review. Review the order again.")
+                return redirect("dhan_orders")
+            form = TradeExecutionForm(
+                {
+                    "quantity": confirmed["quantity"],
+                    "journal_reason": confirmed["journal_reason"],
+                }
+            )
+        else:
+            selected_signal = get_object_or_404(TipSignal, id=request.POST.get("signal_id"))
+            form = TradeExecutionForm(request.POST)
+
         if form.is_valid():
+            missing = [
+                label
+                for label, value in (
+                    ("security ID", selected_signal.security_id),
+                    ("entry price", selected_signal.entry_price),
+                    ("stop loss", selected_signal.stop_loss),
+                    ("target", selected_signal.target_1),
+                )
+                if not value
+            ]
+            if missing:
+                messages.error(
+                    request,
+                    f"Cannot place this order until it has: {', '.join(missing)}.",
+                )
+                return redirect("dhan_orders")
+
             ok, reason = risk_guard()
             if not ok:
                 messages.error(request, reason)
                 return redirect("dhan_orders")
 
-            result = place_super_order(signal, form.cleaned_data["quantity"])
-            if not result.get("ok"):
-                messages.error(request, f"Order failed: {result.get('error')}")
-                return redirect("dhan_orders")
-
-            TradeExecution.objects.create(
-                signal=signal,
-                dhan_order_id=result.get("order_id", ""),
-                correlation_id=result.get("correlation_id", ""),
-                quantity=form.cleaned_data["quantity"],
-                entry_price=signal.entry_price,
-                stop_loss=signal.stop_loss,
-                target_1=signal.target_1,
-                target_2=signal.target_2,
-                target_3=signal.target_3,
-                journal_reason=form.cleaned_data["journal_reason"],
+            quantity = form.cleaned_data["quantity"]
+            max_loss = round(
+                max(float(selected_signal.entry_price) - float(selected_signal.stop_loss), 0)
+                * quantity,
+                2,
             )
-            signal.status = SignalStatus.ACTIVE
-            signal.save(update_fields=["status", "updated_at"])
-            messages.success(request, "Trade placed using Dhan Super Order policy A (T1+SL).")
-            return redirect("dhan_orders")
+            if action != "confirm":
+                _, client_id = get_dhan_credentials()
+                order_preview = {
+                    "signal": selected_signal,
+                    "quantity": quantity,
+                    "journal_reason": form.cleaned_data["journal_reason"],
+                    "deployed": round(float(selected_signal.entry_price or 0) * quantity, 2),
+                    "max_loss": max_loss,
+                    "account": f"...{client_id[-4:]}" if client_id else "not configured",
+                    "environment": "development" if settings.DEBUG else "production",
+                    "token": signing.dumps(
+                        {
+                            "signal_id": selected_signal.id,
+                            "quantity": quantity,
+                            "journal_reason": form.cleaned_data["journal_reason"],
+                            "terms": _manual_order_terms(selected_signal),
+                            "account_suffix": client_id[-4:] if client_id else "",
+                        },
+                        salt="manual-dhan-order",
+                    ),
+                }
+            elif request.POST.get("confirm_live_order") != "1":
+                messages.error(request, "Confirm that this order will be sent to Dhan.")
+                return redirect("dhan_orders")
+            else:
+                DhanOrderEvent.objects.create(
+                    order_id="",
+                    correlation_id="",
+                    status="MANUAL_CONFIRM",
+                    payload_json={
+                        "at": timezone.localtime().isoformat(),
+                        "actor": request.user.get_username(),
+                        "signal_id": selected_signal.id,
+                        "quantity": quantity,
+                        "max_loss": max_loss,
+                    },
+                )
+                result = place_super_order(selected_signal, quantity)
+                if not result.get("ok"):
+                    messages.error(request, f"Order failed: {result.get('error')}")
+                    return redirect("dhan_orders")
+
+                TradeExecution.objects.create(
+                    signal=selected_signal,
+                    dhan_order_id=result.get("order_id", ""),
+                    correlation_id=result.get("correlation_id", ""),
+                    quantity=quantity,
+                    entry_price=selected_signal.entry_price,
+                    stop_loss=selected_signal.stop_loss,
+                    target_1=selected_signal.target_1,
+                    target_2=selected_signal.target_2,
+                    target_3=selected_signal.target_3,
+                    journal_reason=form.cleaned_data["journal_reason"],
+                )
+                selected_signal.status = SignalStatus.ACTIVE
+                selected_signal.save(update_fields=["status", "updated_at"])
+                messages.success(request, "Trade placed using Dhan Super Order policy A (T1+SL).")
+                return redirect("dhan_orders")
     else:
         form = TradeExecutionForm()
 
@@ -922,12 +1054,15 @@ def dhan_orders(request):
             "executions": executions,
             "events": events,
             "form": form,
+            "order_preview": order_preview,
+            "selected_signal": selected_signal,
             "open_count": open_count,
             "today_count": today_count,
         },
     )
 
 
+@staff_required_for_unsafe_methods
 @require_http_methods(["GET", "POST"])
 def trade_journal(request):
     if request.method == "POST":
@@ -956,17 +1091,24 @@ def trade_journal(request):
     return render(request, "options_tracker/trade_journal.html", {"title": "Trade Journal", "rows": rows, "state": state, "q": q})
 
 
+@staff_required_for_unsafe_methods
+@require_http_methods(["GET", "POST"])
 def archive(request):
-    if request.GET.get("run") == "1":
+    if request.method == "POST" and request.POST.get("action") == "run":
         moved = archive_old_signals()
         messages.success(request, f"Archived {moved} expired contracts and older closed records.")
         return redirect("archive")
 
-    archive_expired_signals()
     month = request.GET.get("month", "")
     source = request.GET.get("source", "").strip()
     q = request.GET.get("q", "").strip()
-    rows = TipSignal.objects.filter(status=SignalStatus.ARCHIVED)
+    rows = TipSignal.objects.filter(
+        Q(status=SignalStatus.ARCHIVED)
+        | Q(
+            direction__in=[Direction.CE, Direction.PE],
+            expiry_date__lt=timezone.localdate(),
+        )
+    )
     if month:
         rows = rows.filter(Q(expiry_date__month=month) | Q(executions__closed_at__month=month)).distinct()
     if source:
@@ -999,6 +1141,7 @@ def _proposed_settings(post):
     return proposed
 
 
+@staff_member_required(login_url="admin:login")
 @require_http_methods(["GET", "POST"])
 def nifty_live(request):
     """The live strategy: what the engine is doing, what it did, and its risk."""
@@ -1025,13 +1168,22 @@ def nifty_live(request):
             )
             DhanOrderEvent.objects.create(
                 order_id="", correlation_id="", status="ENGINE_SWITCH",
-                payload_json={"at": timezone.localtime().isoformat(), "action": action},
+                payload_json={
+                    "at": timezone.localtime().isoformat(),
+                    "action": action,
+                    "execution_mode": engine_snapshot()["execution_mode"],
+                },
             )
+            execution_mode = engine_snapshot()["execution_mode"]
             messages.success(
                 request,
-                "Engine armed. It will take the next valid signal."
-                if action == "arm"
-                else "Engine disarmed. Any open position is still managed to its stop.",
+                (
+                    "Engine armed in legacy automatic mode. It may take the next valid signal."
+                    if action == "arm" and execution_mode == "legacy_auto"
+                    else "Monitoring armed. Valid signals will be recorded for manual review."
+                    if action == "arm"
+                    else "Engine disarmed. Any open position is still managed to its stop."
+                ),
             )
             return redirect(reverse("nifty_live"))
 
@@ -1076,6 +1228,7 @@ def nifty_live(request):
     return render(request, "options_tracker/nifty_live.html", context)
 
 
+@staff_member_required(login_url="admin:login")
 @require_http_methods(["GET"])
 def nifty_live_status_api(request):
     """Just the engine's heartbeat, for the Live tab to poll without a reload."""
@@ -1085,6 +1238,10 @@ def nifty_live_status_api(request):
         "ok": True,
         "state": engine["state"],
         "dry_run": engine["dry_run"],
+        "execution_mode": engine["execution_mode"],
+        "automatic_entries": engine["automatic_entries"],
+        "position_management_live": engine["position_management_live"],
+        "configuration_error": engine["configuration_error"],
         "stale": engine["stale"],
         "age_seconds": engine["age_seconds"],
         "at": engine["at"],

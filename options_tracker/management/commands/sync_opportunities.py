@@ -1,0 +1,96 @@
+"""Synchronize legacy signal sources into canonical opportunities."""
+
+import json
+
+from django.core.management.base import BaseCommand
+
+from options_tracker.models import ChatMessage, ChartinkTrigger, SignalStatus, TipSignal, TriggerStatus
+from options_tracker.opportunities import upsert_opportunity
+
+
+class Command(BaseCommand):
+    help = "Report or apply canonical opportunities from active tips, scanner triggers, and unparsed Telegram tips."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--apply", action="store_true")
+
+    def handle(self, *args, **options):
+        tips = list(
+            TipSignal.objects.filter(
+                status__in=[SignalStatus.NEW, SignalStatus.CANDIDATE, SignalStatus.ACTIVE],
+            )
+        )
+        triggers = list(ChartinkTrigger.objects.filter(status=TriggerStatus.MONITORING))
+        chats = list(
+            ChatMessage.objects.filter(source_category="TIPS", linked_signal__isnull=True)
+        )
+        synchronized = 0
+        if options["apply"]:
+            for signal in tips:
+                upsert_opportunity(
+                    source_type=signal.source_type or "TIP",
+                    source_ref=f"TIP:{signal.pk}",
+                    source_name=signal.source_name,
+                    strategy=signal.trade_style,
+                    direction=signal.direction,
+                    timeframe=signal.trade_style,
+                    instrument=signal.instrument,
+                    score=signal.score,
+                    rationale=signal.reason_tags or signal.raw_text,
+                    evidence={
+                        "symbol": signal.option_symbol,
+                        "recommendation": signal.recommendation,
+                        "status": signal.status,
+                    },
+                    plan={
+                        "entry": signal.entry_price,
+                        "stop": signal.stop_loss,
+                        "targets": [signal.target_1, signal.target_2, signal.target_3],
+                        "expiry": signal.expiry_date,
+                    },
+                    next_action="Manage position" if signal.status == SignalStatus.ACTIVE else "Validate trade plan",
+                    source_at=signal.tip_time,
+                )
+                synchronized += 1
+            for trigger in triggers:
+                upsert_opportunity(
+                    source_type="SCANNER",
+                    source_ref=f"CHARTINK:{trigger.pk}",
+                    source_name=trigger.scanner_name,
+                    strategy="SCANNER_TRIGGER",
+                    direction="LONG",
+                    timeframe="INTRADAY",
+                    score=55,
+                    rationale=trigger.notes,
+                    evidence={
+                        "symbol": trigger.symbol,
+                        "trigger_price": trigger.trigger_price,
+                        "live_price": trigger.live_price,
+                    },
+                    next_action="Add stop and target before approval",
+                    source_at=trigger.trigger_time,
+                )
+                synchronized += 1
+            for chat in chats:
+                upsert_opportunity(
+                    source_type="TELEGRAM",
+                    source_ref=f"CHAT:{chat.pk}",
+                    source_name=chat.source_name,
+                    strategy="UNPARSED_TIP",
+                    timeframe="UNKNOWN",
+                    score=0,
+                    rationale=(chat.normalized_text or chat.raw_text)[:500],
+                    evidence={"message": chat.raw_text},
+                    next_action="Parse and validate source claims",
+                    source_at=chat.telegram_message_at or chat.created_at,
+                )
+                synchronized += 1
+        self.stdout.write(json.dumps({
+            "mode": "apply" if options["apply"] else "dry-run",
+            "candidates": {
+                "tips": len(tips),
+                "scanner_triggers": len(triggers),
+                "telegram_messages": len(chats),
+            },
+            "synchronized": synchronized,
+        }))

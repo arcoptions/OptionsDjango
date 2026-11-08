@@ -1,0 +1,47 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Scanner Builder | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Safe scanner builder</h2>
+  <p class="muted">Definitions evaluate fresh stored quotes only. Matches are advisory and cannot place broker orders.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="grid">
+      <label>Name<input name="name" required maxlength="100"></label>
+      <label>Field<select name="field">{% for field in fields %}<option value="{{ field }}">{{ field }}</option>{% endfor %}</select></label>
+      <label>Operator<select name="operator">{% for operator in operators %}<option value="{{ operator }}">{{ operator }}</option>{% endfor %}</select></label>
+      <label>Value<input name="value" type="number" step="any" required></label>
+      <label>Approaching distance %<input name="approaching_threshold_pct" type="number" min="0" max="100" step="0.1" value="10"></label>
+      <label>Alert cooldown minutes<input name="cooldown_minutes" type="number" min="1" max="1440" value="30"></label>
+    </div>
+    <button class="btn" type="submit">Save scanner</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Definitions</h2>
+  <table><thead><tr><th>Name</th><th>Conditions</th><th>Approaching</th><th>Enabled</th></tr></thead>
+  <tbody>{% for definition in definitions %}<tr><td>{{ definition.name }}</td><td>{{ definition.conditions }}</td><td>{{ definition.approaching_threshold_pct }}%</td><td>{{ definition.enabled|yesno:"Yes,No" }}</td></tr>{% empty %}<tr><td colspan="4">No scanner definitions.</td></tr>{% endfor %}</tbody></table>
+</section>
+
+<section class="panel">
+  <div class="page-head"><h2>Latest matches</h2><button class="btn secondary" id="browser-alerts" type="button">Enable browser alerts</button></div>
+  <table><thead><tr><th>Scanner</th><th>Symbol</th><th>State</th><th>Evidence</th><th>Updated</th><th>Action</th></tr></thead>
+  <tbody>{% for match in matches %}<tr data-match-id="{{ match.pk }}" data-alert-version="{{ match.last_alerted_at|date:'U' }}" data-state="{{ match.state }}" data-symbol="{{ match.symbol }}" data-acknowledged="{{ match.acknowledged_at|yesno:'yes,no' }}"><td>{{ match.definition.name }}</td><td>{{ match.symbol }}</td><td><span class="active-pill">{{ match.state }}</span></td><td>{{ match.evidence }}</td><td>{{ match.last_seen_at|date:"d M H:i:s" }}</td><td>{% if match.acknowledged_at %}Acknowledged{% else %}<form method="post" action="{% url 'scanner_match_acknowledge' match.pk %}">{% csrf_token %}<button class="btn secondary" type="submit">Acknowledge</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="6">No approaching or confirmed matches.</td></tr>{% endfor %}</tbody></table>
+</section>
+<script>
+  document.getElementById("browser-alerts")?.addEventListener("click", async () => {
+    if (!("Notification" in window)) return;
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+    document.querySelectorAll("[data-match-id][data-acknowledged='no']").forEach(row => {
+      const key = `arc-scanner-${row.dataset.matchId}-${row.dataset.alertVersion}`;
+      if (localStorage.getItem(key)) return;
+      new Notification(`ARC ${row.dataset.state.toLowerCase()} scanner trigger`, {body: row.dataset.symbol});
+      localStorage.setItem(key, "shown");
+    });
+  });
+</script>
+{% endblock %}

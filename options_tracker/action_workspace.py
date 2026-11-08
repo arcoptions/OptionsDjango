@@ -24,8 +24,6 @@ from .models import (
     TipSignal,
     TriggerStatus,
 )
-from .services import archive_expired_signals
-
 ACTION_LIST_SIGNAL_STATUSES = (
     SignalStatus.NEW,
     SignalStatus.CANDIDATE,
@@ -79,7 +77,6 @@ def _chart_url(symbol: str, radar_symbols: set[str]) -> str:
 
 
 def action_list_context() -> dict[str, object]:
-    archive_expired_signals()
     today = timezone.localdate()
     action_rows: list[dict[str, object]] = []
     radar_symbols = set(

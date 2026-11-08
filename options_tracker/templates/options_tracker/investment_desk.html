@@ -1,0 +1,69 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Investment Desk | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Long-term Investment Desk</h2>
+  <p class="muted">Investment theses and holdings remain separate from paper trades and broker order records.</p>
+  <div class="grid">
+    <div class="stat"><div class="label">Portfolio value</div><div class="value">{{ total_value|floatformat:2 }}</div></div>
+    <div class="stat"><div class="label">Active holdings</div><div class="value">{{ holding_rows|length }}</div></div>
+    <div class="stat"><div class="label">Reviews due</div><div class="value">{{ review_due|length }}</div></div>
+  </div>
+</section>
+
+{% if review_due %}
+<section class="panel">
+  <h2>Review reminders</h2>
+  {% for idea in review_due %}<div class="msg warning"><strong>{{ idea.symbol }}</strong> was due for review on {{ idea.review_on }}. Recheck the thesis and invalidation before adding capital.</div>{% endfor %}
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Record an investment thesis</h2>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create_idea">
+    {{ idea_form.as_p }}
+    <button class="btn" type="submit">Save thesis</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Thesis register</h2>
+  <table>
+    <thead><tr><th>Symbol</th><th>Status</th><th>Thesis</th><th>Invalidation</th><th>Accumulation zone</th><th>Target</th><th>Review</th></tr></thead>
+    <tbody>{% for idea in ideas %}<tr><td>{{ idea.symbol }}</td><td>{{ idea.get_status_display }}</td><td style="white-space:normal;">{{ idea.thesis }}</td><td style="white-space:normal;">{{ idea.invalidation }}</td><td>{{ idea.accumulation_low|default:"-" }} to {{ idea.accumulation_high|default:"-" }}</td><td>{{ idea.target_allocation_pct }}%</td><td>{{ idea.review_on }}</td></tr>{% empty %}<tr><td colspan="7">No investment theses recorded.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Add or update a holding</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_holding">
+      {{ holding_form.as_p }}
+      <button class="btn" type="submit">Save holding</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Record a dividend</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="record_dividend">
+      {{ dividend_form.as_p }}
+      <button class="btn" type="submit">Record dividend</button>
+    </form>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Portfolio allocation</h2>
+  <table>
+    <thead><tr><th>Symbol</th><th>Quantity</th><th>Average cost</th><th>Current price</th><th>Value</th><th>Allocation</th><th>Unrealised</th><th>Dividends</th></tr></thead>
+    <tbody>{% for row in holding_rows %}<tr><td>{{ row.holding.idea.symbol }}</td><td>{{ row.holding.quantity }}</td><td>{{ row.holding.average_cost }}</td><td>{{ row.holding.current_price|default:"-" }}</td><td>{{ row.value|floatformat:2 }}</td><td>{{ row.allocation_pct|floatformat:1 }}%</td><td>{{ row.unrealised|floatformat:2 }}</td><td>{{ row.dividends|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="8">No active holdings.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endblock %}

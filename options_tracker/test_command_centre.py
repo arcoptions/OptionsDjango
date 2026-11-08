@@ -1,0 +1,86 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from .command_centre import command_centre_context, derive_regime
+from .models import IndexOISnapshot
+from .radar_models import RadarInstrument, RadarQuote
+
+
+class CommandCentreTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="command-centre-operator",
+            password="test-password",
+            is_staff=True,
+        )
+
+    def test_regime_requires_index_and_breadth_confirmation(self):
+        self.assertEqual(derive_regime(1.2, 0.8)["label"], "BULLISH / RISK-ON")
+        self.assertEqual(derive_regime(-1.2, -0.8)["label"], "BEARISH / RISK-OFF")
+        self.assertEqual(derive_regime(0.1, 0.1)["label"], "SIDEWAYS / RANGE")
+        self.assertEqual(derive_regime(1.0, -0.5)["label"], "MIXED / DIVERGENT")
+        self.assertEqual(derive_regime(None, 0.5)["label"], "INSUFFICIENT DATA")
+
+    def test_context_combines_fresh_index_and_equity_breadth(self):
+        now = timezone.now()
+        snapshot = IndexOISnapshot.objects.create(
+            underlying="NIFTY",
+            underlying_price=202,
+            underlying_change=2,
+            pcr=1.1,
+        )
+        IndexOISnapshot.objects.filter(pk=snapshot.pk).update(created_at=now)
+        instrument = RadarInstrument.objects.create(
+            security_id="1",
+            segment="NSE_EQ",
+            symbol="TEST",
+            kind="EQUITY",
+        )
+        RadarQuote.objects.create(
+            instrument=instrument,
+            source_at=now,
+            received_at=now,
+            last=102,
+            previous_close=100,
+        )
+
+        context = command_centre_context(now)
+
+        self.assertEqual(context["indexes"][0]["change_percent"], 1.0)
+        self.assertEqual(context["breadth"]["advances"], 1)
+        self.assertEqual(context["regime"]["label"], "BULLISH / RISK-ON")
+        self.assertTrue(context["scenarios"][0]["active"])
+
+    def test_stale_quotes_do_not_enter_breadth(self):
+        now = timezone.now()
+        instrument = RadarInstrument.objects.create(
+            security_id="2",
+            segment="NSE_EQ",
+            symbol="STALE",
+            kind="EQUITY",
+        )
+        RadarQuote.objects.create(
+            instrument=instrument,
+            source_at=now - timedelta(minutes=1),
+            received_at=now - timedelta(minutes=1),
+            last=102,
+            previous_close=100,
+        )
+
+        self.assertEqual(command_centre_context(now)["breadth"]["total"], 0)
+
+    def test_home_requires_login_and_renders_command_centre(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 302)
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "9 AM Command Centre")
+        self.assertContains(response, "Ranked opportunities")
+        self.assertContains(response, "Personal trading desk")

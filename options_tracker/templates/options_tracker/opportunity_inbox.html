@@ -1,0 +1,43 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Opportunity Inbox | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="page-head">
+    <div>
+      <h2>Opportunity Inbox</h2>
+      <p class="muted">Canonical source provenance, independent setup identity, evidence revisions, lifecycle, and next action.</p>
+    </div>
+    <form method="get">
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Instrument</th><th>Setup</th><th>Status</th><th>Score</th><th>Source</th><th>Evidence</th><th>Next action</th><th>Age</th></tr></thead>
+      <tbody>
+      {% for opportunity in opportunities %}
+        <tr>
+          <td>{% if opportunity.instrument %}{{ opportunity.instrument.canonical_symbol }}{% else %}Unmapped{% endif %}</td>
+          <td>{{ opportunity.strategy }}<br><span class="muted">{{ opportunity.direction }} {{ opportunity.timeframe }}</span></td>
+          <td><span class="active-pill">{{ opportunity.status }}</span></td>
+          <td>{{ opportunity.score }}{% if opportunity.confidence is not None %}<br><span class="muted">confidence {{ opportunity.confidence }}</span>{% endif %}</td>
+          <td>{{ opportunity.source_name|default:opportunity.source_type }}<br><span class="muted">{{ opportunity.source_ref }}</span></td>
+          <td>{{ opportunity.revisions.count }} revision{{ opportunity.revisions.count|pluralize }}<br><span class="muted">{{ opportunity.rationale|truncatechars:90 }}</span></td>
+          <td>{{ opportunity.next_action|default:"Review evidence" }}</td>
+          <td>{{ opportunity.source_at|timesince|default:"unknown" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8">No canonical opportunities have been synchronized yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

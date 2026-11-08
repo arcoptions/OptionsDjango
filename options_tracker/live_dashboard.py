@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from .capital_pnl import NIFTY_LOT_SIZE, estimate_option_charges
+from .execution_policy import execution_policy
 from .live_config import live_settings, live_strategy_config, panel_rows, risk_surface
 from .models import AppSetting, DhanOrderEvent, TradeExecution, TradeState
 from .nifty_trail_strategy import sized_ledger
@@ -70,6 +71,7 @@ def _load(key):
 def engine_snapshot(now=None):
     """Is the engine alive, what is it doing, and what is it holding?"""
     now = now or timezone.localtime()
+    policy = execution_policy()
     status = _load(STATUS_KEY)
     state = _load(STATE_KEY)
     config = live_strategy_config()
@@ -101,6 +103,10 @@ def engine_snapshot(now=None):
     return {
         "state": status.get("state", "UNKNOWN"),
         "dry_run": bool(status.get("dry_run", True)),
+        "execution_mode": policy.mode.value,
+        "automatic_entries": policy.allows_automatic_entries,
+        "position_management_live": policy.allows_position_management,
+        "configuration_error": policy.configuration_error,
         "at": status.get("at"),
         "age_seconds": round(age) if age is not None else None,
         "stale": age is None or age > STALE_AFTER_SECONDS,
@@ -477,4 +483,3 @@ def risk_panel():
             for point in points
         ]
     return rows
-

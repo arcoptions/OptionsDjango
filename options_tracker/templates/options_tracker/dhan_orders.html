@@ -14,13 +14,47 @@
     <label>Signal</label>
     <select name="signal_id">
       {% for s in ideas %}
-      <option value="{{ s.id }}">{{ s.option_symbol }} | {{ s.direction }} | Score {{ s.score }} | SL {{ s.stop_loss }} | SecID {{ s.security_id }}</option>
+      <option value="{{ s.id }}" {% if selected_signal.id == s.id %}selected{% endif %}>{{ s.option_symbol }} | {{ s.direction }} | Score {{ s.score }} | SL {{ s.stop_loss }} | SecID {{ s.security_id }}</option>
       {% endfor %}
     </select>
     {{ form.as_p }}
-    <div><button class="btn" type="submit">Place Super Order</button></div>
+    <div><button class="btn" type="submit" name="action" value="preview">Review order</button></div>
   </form>
 </div>
+
+{% if order_preview %}
+<div class="card">
+  <h3>Confirm Live Dhan Order</h3>
+  <p class="muted">Review every field. This confirmation expires in 10 minutes.</p>
+  <table>
+    <tbody>
+      <tr><th>Environment</th><td>{{ order_preview.environment }}</td></tr>
+      <tr><th>Broker account</th><td>{{ order_preview.account }}</td></tr>
+      <tr><th>Option</th><td>{{ order_preview.signal.option_symbol }}</td></tr>
+      <tr><th>Security ID</th><td>{{ order_preview.signal.security_id }}</td></tr>
+      <tr><th>Quantity</th><td>{{ order_preview.quantity }}</td></tr>
+      <tr><th>Entry</th><td>&#8377; {{ order_preview.signal.entry_price }}</td></tr>
+      <tr><th>Stop</th><td>&#8377; {{ order_preview.signal.stop_loss }}</td></tr>
+      <tr><th>Target</th><td>&#8377; {{ order_preview.signal.target_1 }}</td></tr>
+      <tr><th>Capital deployed</th><td>&#8377; {{ order_preview.deployed|floatformat:2 }}</td></tr>
+      <tr><th>Maximum stop loss</th><td>&#8377; {{ order_preview.max_loss|floatformat:2 }}</td></tr>
+      <tr><th>Journal reason</th><td>{{ order_preview.journal_reason }}</td></tr>
+    </tbody>
+  </table>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <input type="hidden" name="order_token" value="{{ order_preview.token }}">
+    <p>
+      <label>
+        <input type="checkbox" name="confirm_live_order" value="1" required>
+        I confirm that this order will be sent to the live Dhan account.
+      </label>
+    </p>
+    <button class="btn" type="submit">Confirm and place live order</button>
+  </form>
+</div>
+{% endif %}
 
 <div class="card">
   <h3>Executions</h3>

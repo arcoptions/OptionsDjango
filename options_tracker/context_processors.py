@@ -19,26 +19,71 @@ def layout_shell(request):
     is_tracker_path = request.path.startswith(options_url)
     nav_items = [
         {
+            "area": "Command Centre",
+            "label": "Home",
+            "url": reverse("home"),
+            "active": request.path == reverse("home"),
+        },
+        {
+            "area": "Opportunity Inbox",
+            "label": "Opportunity Inbox",
+            "url": reverse("opportunity_inbox"),
+            "active": request.path.startswith(reverse("opportunity_inbox")),
+        },
+        {
+            "area": "Command Centre",
+            "label": "Action List",
+            "url": reverse("action_list"),
+            "active": request.path.startswith(reverse("action_list")),
+        },
+        {
+            "area": "Command Centre",
             "label": "Options",
             "url": f"{options_url}?tab=options",
             "active": is_tracker_path and tracker_tab != "equities",
         },
         {
+            "area": "Command Centre",
             "label": "Equities",
             "url": f"{options_url}?tab=equities",
             "active": is_tracker_path and tracker_tab == "equities",
         },
-        {"label": "Stock & Option Data", "url": reverse("stock_options"), "active": request.path == reverse("stock_options")},
-        {"label": "Trading Workspace", "url": reverse("radar"), "active": request.path == reverse("radar")},
-        {"label": "NIFTY Execution", "url": reverse("nifty_live"), "active": request.path == reverse("nifty_live")},
-        {"label": "Trade Journal", "url": reverse("trade_journal"), "active": request.path == reverse("trade_journal")},
-        {"label": "Research & Archive", "url": reverse("research_report"), "active": request.path == reverse("research_report")},
-        {"label": "Signal Archive", "url": reverse("archive"), "active": request.path == reverse("archive")},
-        {"label": "Admin", "url": reverse("admin:index"), "active": request.path.startswith(reverse("admin:index"))},
+        {"area": "Stock Intelligence", "label": "Stock & Option Data", "url": reverse("stock_options"), "active": request.path.startswith(reverse("stock_options"))},
+        {"area": "Market Scanner", "label": "Scanner Builder", "url": reverse("scanner_builder"), "active": request.path.startswith(reverse("scanner_builder"))},
+        {"area": "Opportunity Inbox", "label": "Trading Workspace", "url": reverse("radar"), "active": request.path.startswith(reverse("radar"))},
+        {"area": "Trading Desk", "label": "NIFTY Execution", "url": reverse("nifty_live"), "active": request.path.startswith(reverse("nifty_live"))},
+        {"area": "Trading Desk", "label": "F&O Research", "url": reverse("fno_desk"), "active": request.path.startswith(reverse("fno_desk"))},
+        {"area": "Trading Desk", "label": "Trade Journal", "url": reverse("trade_journal"), "active": request.path.startswith(reverse("trade_journal"))},
+        {"area": "Investment Desk", "label": "Long-term Portfolio", "url": reverse("investment_desk"), "active": request.path.startswith(reverse("investment_desk"))},
+        {"area": "Strategy Lab", "label": "Strategy Builder", "url": reverse("strategy_lab"), "active": request.path.startswith(reverse("strategy_lab"))},
+        {"area": "Strategy Lab", "label": "Research & Archive", "url": reverse("research_report"), "active": request.path.startswith(reverse("research_report"))},
+        {"area": "Performance & AI", "label": "Performance", "url": reverse("performance_dashboard"), "active": request.path.startswith(reverse("performance_dashboard"))},
+        {"area": "Opportunity Inbox", "label": "Signal Archive", "url": reverse("archive"), "active": request.path.startswith(reverse("archive"))},
+        {"area": "System & Admin", "label": "Operations Health", "url": reverse("operations_health"), "active": request.path.startswith(reverse("operations_health"))},
+        {"area": "System & Admin", "label": "Admin", "url": reverse("admin:index"), "active": request.path.startswith(reverse("admin:index"))},
+    ]
+    area_order = [
+        "Command Centre",
+        "Opportunity Inbox",
+        "Stock Intelligence",
+        "Market Scanner",
+        "Trading Desk",
+        "Investment Desk",
+        "Strategy Lab",
+        "Performance & AI",
+        "System & Admin",
+    ]
+    nav_groups = [
+        {
+            "label": area,
+            "items": [item for item in nav_items if item["area"] == area],
+        }
+        for area in area_order
     ]
 
     return {
         "shell_nav_items": nav_items,
+        "shell_nav_groups": nav_groups,
         "shell_active_trades": active_trades,
         "shell_today_trades": today_trades,
         "shell_active_signals": active_signals,

@@ -5,6 +5,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 
+from options_tracker.execution_policy import ExecutionMode, execution_policy
 from options_tracker.live_engine import tick
 
 
@@ -26,15 +27,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # The daemon is started by startup.sh with no arguments, so observe-only
-        # has to be reachable from the environment too. Defaulting the *flag* to
-        # off and the env var to on would be the wrong way round: an unset
-        # variable must never be the thing that arms real money.
+        policy = execution_policy()
         dry_run = options["dry_run"] or os.getenv("NIFTY_LIVE_DRY_RUN", "").strip().lower() in {
             "1", "true", "yes", "on",
         }
         if dry_run:
-            self.stdout.write("observe-only: signals and quotes are logged, no order is sent")
+            self.stdout.write("preview: no broker mutation is allowed")
+        elif policy.mode is ExecutionMode.MANUAL:
+            self.stdout.write(
+                "manual: signals are logged for review; existing live positions remain managed"
+            )
+        elif policy.mode is ExecutionMode.LEGACY_AUTO:
+            self.stdout.write("legacy-auto: valid signals may place live broker orders")
+        if policy.configuration_error:
+            self.stderr.write(policy.configuration_error)
 
         while True:
             try:

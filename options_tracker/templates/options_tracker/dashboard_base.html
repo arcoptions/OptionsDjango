@@ -31,15 +31,16 @@
       gap: 14px;
     }
     .brand-card {
-      background: linear-gradient(180deg, #121a29 0%, #101826 100%);
+      background: linear-gradient(145deg, #ffffff 0%, #f5e2b0 100%);
+      border: 1px solid #dfc277;
       border-radius: 14px;
       padding: 18px 14px;
       min-height: 180px;
-      color: #fff;
+      color: #1f2937;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      box-shadow: 0 18px 35px rgba(15, 23, 42, 0.14);
+      box-shadow: 0 12px 28px rgba(111, 79, 31, 0.12);
       overflow: hidden;
       position: relative;
     }
@@ -47,10 +48,10 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(255,255,255,0.04), transparent 35%, rgba(209,165,83,0.08));
+      background: linear-gradient(135deg, rgba(255,255,255,0.7), transparent 40%, rgba(209,165,83,0.12));
     }
-    .brand-mark { font-size: 54px; font-weight: 800; letter-spacing: 2px; line-height: 0.85; color: #f2f4f8; }
-    .brand-text { font-size: 14px; color: #cbd5e1; margin-top: 10px; letter-spacing: 0.8px; }
+    .brand-mark { font-size: 54px; font-weight: 800; letter-spacing: 2px; line-height: 0.85; color: #6f4f1f; }
+    .brand-text { font-size: 14px; color: #64748b; margin-top: 10px; letter-spacing: 0.8px; }
     .side-button, .side-link {
       display: flex;
       align-items: center;
@@ -70,7 +71,16 @@
       color: #1f2937;
       font-weight: 700;
     }
-    .side-nav { display: grid; gap: 8px; }
+    .side-nav { display: grid; gap: 12px; }
+    .nav-group { display: grid; gap: 4px; }
+    .nav-group-label {
+      padding: 0 12px;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .nav-item { padding: 10px 12px; border-radius: 8px; border: 1px solid transparent; color: #334155; background: transparent; }
     .nav-item.active { background: #fff; border-color: #dbe2ea; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04); color: #d08f10; font-weight: 700; }
     .nav-item:hover { background: rgba(255,255,255,0.7); }
@@ -188,8 +198,15 @@
       <a class="side-button side-primary" href="/options/?panel=trade#quick-actions">Log New Trade</a>
       <a class="side-button side-link" href="{% url 'dhan_settings' %}">Dhan API Setup</a>
       <div class="side-nav">
-        {% for item in shell_nav_items %}
-          <a class="nav-item {% if item.active %}active{% endif %}" href="{{ item.url }}">{{ item.label }}</a>
+        {% for group in shell_nav_groups %}
+          {% if group.items %}
+            <section class="nav-group" aria-labelledby="nav-group-{{ forloop.counter }}">
+              <div id="nav-group-{{ forloop.counter }}" class="nav-group-label">{{ group.label }}</div>
+              {% for item in group.items %}
+                <a class="nav-item {% if item.active %}active{% endif %}" href="{{ item.url }}">{{ item.label }}</a>
+              {% endfor %}
+            </section>
+          {% endif %}
         {% endfor %}
       </div>
       <div class="card" style="margin-top:auto; background: rgba(255,255,255,0.58);">
@@ -206,8 +223,10 @@
           <span class="muted">{{ shell_subtitle }}</span>
         </div>
         <div class="tabs" style="margin-bottom:0; border-bottom:0; padding-bottom:0;">
-          {% for item in shell_nav_items %}
-            <a href="{{ item.url }}">{{ item.label }}</a>
+          {% for group in shell_nav_groups %}
+            {% for item in group.items %}
+              <a href="{{ item.url }}">{{ item.label }}</a>
+            {% endfor %}
           {% endfor %}
           <a href="{% url 'dhan_settings' %}">Dhan API Setup</a>
         </div>

@@ -1,0 +1,52 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}F&amp;O Desk | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="page-head">
+    <div><h2>F&amp;O research desk</h2><p class="muted">Index OI, derivatives opportunities, readiness scores, and open positions in one research view.</p></div>
+    <div class="msg warning"><strong>{{ execution.mode.value|upper }}</strong><br>Research evidence cannot bypass the manual execution boundary.</div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Index positioning</h2>
+  <div class="grid">
+    {% for index in indexes %}
+    <article class="card">
+      <strong>{{ index.underlying }}</strong>
+      <div class="muted">{{ index.source }} · {{ index.created_at|date:"d M H:i" }}</div>
+      <p>Spot {{ index.underlying_price|default:"-" }} · PCR {{ index.pcr|default:"-" }}</p>
+      <p>Support {{ index.support_strike|default:"-" }} · resistance {{ index.resistance_strike|default:"-" }} · max pain {{ index.max_pain|default:"-" }}</p>
+      <p class="active-pill">{{ index.regime|default:"UNCLASSIFIED" }}</p>
+    </article>
+    {% empty %}<p class="muted">No stored index OI evidence.</p>{% endfor %}
+  </div>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Canonical derivatives opportunities</h2>
+    <table><thead><tr><th>Instrument</th><th>Strategy</th><th>Direction</th><th>Score</th><th>Status</th></tr></thead>
+    <tbody>{% for item in opportunities %}<tr><td>{{ item.instrument.canonical_symbol|default:item.source_ref }}</td><td>{{ item.strategy }}</td><td>{{ item.direction }}</td><td>{{ item.score|floatformat:1 }}</td><td>{{ item.status }}</td></tr>{% empty %}<tr><td colspan="5">No active canonical derivatives opportunities.</td></tr>{% endfor %}</tbody></table>
+  </section>
+  <section class="panel">
+    <h2>Paper radar setups</h2>
+    <table><thead><tr><th>Symbol</th><th>Strategy</th><th>Side</th><th>State</th><th>Valid until</th></tr></thead>
+    <tbody>{% for item in radar_opportunities %}<tr><td>{{ item.symbol }}</td><td>{{ item.strategy }}</td><td>{{ item.side }}</td><td>{{ item.state }}</td><td>{{ item.valid_until|date:"d M H:i" }}</td></tr>{% empty %}<tr><td colspan="5">No active paper radar setups.</td></tr>{% endfor %}</tbody></table>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>F&amp;O readiness scores</h2>
+  <table><thead><tr><th>Symbol</th><th>Score</th><th>Confidence</th><th>Missing evidence</th><th>Version</th></tr></thead>
+  <tbody>{% for score in scores %}<tr><td><a href="{% url 'stock_option_detail' score.symbol %}">{{ score.symbol }}</a></td><td>{{ score.score|floatformat:1|default:"-" }}</td><td>{{ score.confidence|floatformat:2 }}</td><td>{{ score.missing_data|join:", "|default:"None" }}</td><td>{{ score.version }}</td></tr>{% empty %}<tr><td colspan="5">No persisted F&amp;O scores.</td></tr>{% endfor %}</tbody></table>
+</section>
+
+<section class="panel">
+  <h2>Open execution records</h2>
+  <table><thead><tr><th>Instrument</th><th>Quantity</th><th>Entry</th><th>Stop</th><th>Target</th><th>Opened</th></tr></thead>
+  <tbody>{% for trade in open_trades %}<tr><td>{{ trade.signal.option_symbol }}</td><td>{{ trade.quantity }}</td><td>{{ trade.entry_price|default:"-" }}</td><td>{{ trade.stop_loss }}</td><td>{{ trade.target_1|default:"-" }}</td><td>{{ trade.opened_at|date:"d M H:i" }}</td></tr>{% empty %}<tr><td colspan="6">No open execution records.</td></tr>{% endfor %}</tbody></table>
+</section>
+{% endblock %}

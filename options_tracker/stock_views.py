@@ -19,6 +19,7 @@ from .models import (
     StockOptionCandle,
     TrackedStock,
 )
+from .stock_intelligence import stock_intelligence_context
 
 
 def _rupees(value):
@@ -225,6 +226,24 @@ def stock_option_detail(request, symbol):
     for trade in trades:
         trade["pnl_text"] = _rupees(trade["realised_pnl"])
 
+    intelligence = stock_intelligence_context(symbol)
+    timeframe_json = json.dumps([
+        {
+            "label": timeframe["label"],
+            "interval": timeframe["interval_minutes"],
+            "rows": [
+                {
+                    "t": row["timestamp"].isoformat(),
+                    "o": float(row["open"]) if row["open"] is not None else None,
+                    "h": float(row["high"]) if row["high"] is not None else None,
+                    "l": float(row["low"]) if row["low"] is not None else None,
+                    "c": float(row["close"]) if row["close"] is not None else None,
+                }
+                for row in timeframe["rows"]
+            ],
+        }
+        for timeframe in intelligence["timeframes"]
+    ])
     context = {
         "symbol": symbol,
         "stock": stock,
@@ -240,6 +259,8 @@ def stock_option_detail(request, symbol):
         "trade_count": len(trades),
         "traded_pnl": _rupees(sum(float(t["realised_pnl"] or 0) for t in trades)),
         "title": symbol,
+        "intelligence": intelligence,
+        "timeframe_json": timeframe_json,
     }
     return render(request, "options_tracker/stock_option_detail.html", context)
 

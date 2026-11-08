@@ -45,6 +45,7 @@ import requests
 from django.utils import timezone
 
 from .capital_pnl import NIFTY_LOT_SIZE
+from .execution_policy import execution_policy
 from .index_oi_services import DHAN_INTRADAY_URL, INDEX_CONFIG
 from .live_config import live_sizing, live_strategy_config
 from .models import (
@@ -1042,10 +1043,22 @@ def tick(now=None, dry_run=False):
     """One pass of the engine. Safe to call as often as you like."""
     now = now or timezone.localtime()
     config = live_strategy_config()
+    policy = execution_policy()
+    entry_dry_run = dry_run or not policy.allows_automatic_entries
+    position_dry_run = dry_run or not policy.allows_position_management
     state = load_state()
-    status = {"at": now.isoformat(), "dry_run": dry_run, "notes": []}
+    status = {
+        "at": now.isoformat(),
+        "dry_run": entry_dry_run,
+        "execution_mode": policy.mode.value,
+        "position_management_live": not position_dry_run,
+        "notes": [],
+    }
+    if policy.configuration_error:
+        status["notes"].append(policy.configuration_error)
 
-    if not engine_enabled():
+    enabled = engine_enabled()
+    if not enabled and not state.get("position"):
         status["state"] = "DISABLED"
         _write_status(status)
         return status
@@ -1057,11 +1070,21 @@ def tick(now=None, dry_run=False):
 
     try:
         if state.get("position"):
-            status["notes"].extend(manage_position(state, now, dry_run))
+            status["notes"].extend(manage_position(state, now, position_dry_run))
 
         if now.time() >= SQUARE_OFF:
-            status["notes"].extend(square_off(state, now, dry_run))
+            status["notes"].extend(square_off(state, now, position_dry_run))
             status["state"] = "FLAT_FOR_THE_DAY"
+            save_state(state)
+            _write_status(status)
+            return status
+
+        if not enabled:
+            status["state"] = "MANAGING_POSITION"
+            status["notes"].append("new entries are disarmed; the existing position remains managed")
+            status["position"] = state.get("position")
+            status["trades_today"] = state.get("trades_today")
+            status["realized_r"] = state.get("realized_r")
             save_state(state)
             _write_status(status)
             return status
@@ -1085,7 +1108,7 @@ def tick(now=None, dry_run=False):
             spot_rows = spot_series(now.date())
             status["session"] = session_context(spot_rows, config)
             status["notes"].extend(
-                recover_missed_bars(state, spot_rows, now, config, dry_run)
+                recover_missed_bars(state, spot_rows, now, config, entry_dry_run)
             )
             allowed, blocker = _entry_allowed(state, now, config)
         if allowed:
@@ -1093,7 +1116,7 @@ def tick(now=None, dry_run=False):
             status["rejections"] = reasons
             status["session"] = context
             if candidate:
-                position, entry_notes = open_position(candidate, state, now, dry_run)
+                position, entry_notes = open_position(candidate, state, now, entry_dry_run)
                 status["notes"].extend(entry_notes)
                 if position:
                     status["notes"].append(

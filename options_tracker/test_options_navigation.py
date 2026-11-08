@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
@@ -10,6 +11,12 @@ from .stock_views import _coverage
 
 class OptionsNavigationTests(TestCase):
     def setUp(self):
+        user = get_user_model().objects.create_user(
+            username="navigation-operator",
+            password="test-password",
+            is_staff=True,
+        )
+        self.client.force_login(user)
         self.signal = TipSignal.objects.create(
             option_symbol="RELIANCE 1500 CE",
             direction=Direction.CE,
@@ -21,6 +28,16 @@ class OptionsNavigationTests(TestCase):
 
         self.assertContains(response, 'href="/options/?tab=options"')
         self.assertContains(response, 'href="/options/?tab=equities"')
+
+    def test_sidebar_groups_existing_destinations_into_arc_areas(self):
+        response = self.client.get(reverse("options_tracker"))
+
+        self.assertContains(response, "Command Centre")
+        self.assertContains(response, "Stock Intelligence")
+        self.assertContains(response, "Opportunity Inbox")
+        self.assertContains(response, "Trading Desk")
+        self.assertContains(response, "Strategy Lab")
+        self.assertContains(response, "System &amp; Admin")
 
     def test_equities_sidebar_item_is_active_on_equities_tab(self):
         response = self.client.get(f"{reverse('options_tracker')}?tab=equities")

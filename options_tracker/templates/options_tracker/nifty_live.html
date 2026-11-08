@@ -44,10 +44,12 @@
   <div class="live-head">
     {% if not enabled %}
       <span class="badge off">DISARMED</span>
-    {% elif engine.dry_run %}
-      <span class="badge observe">OBSERVE ONLY</span>
+    {% elif engine.execution_mode == "manual" %}
+      <span class="badge observe">MANUAL REVIEW</span>
+    {% elif engine.execution_mode == "preview" or engine.dry_run %}
+      <span class="badge observe">PREVIEW ONLY</span>
     {% else %}
-      <span class="badge armed">ARMED &middot; LIVE ORDERS</span>
+      <span class="badge armed">LEGACY AUTO &middot; LIVE ORDERS</span>
     {% endif %}
     {% if engine.stale %}<span class="badge stale">NO HEARTBEAT</span>{% endif %}
     <span class="muted">
@@ -58,10 +60,25 @@
       {% if enabled %}
         <button class="btn secondary" name="action" value="disarm">Disarm</button>
       {% else %}
-        <button class="btn" name="action" value="arm">Arm engine</button>
+        <button class="btn" name="action" value="arm">
+          {% if engine.execution_mode == "legacy_auto" %}Arm legacy auto{% else %}Arm monitoring{% endif %}
+        </button>
       {% endif %}
     </form>
   </div>
+  {% if engine.configuration_error %}
+    <div class="msg error" style="margin-top:12px;">{{ engine.configuration_error }}</div>
+  {% elif engine.execution_mode == "manual" %}
+    <div class="msg info" style="margin-top:12px;">
+      Manual mode records valid signals without sending an entry order. Existing live positions
+      continue to be managed. Set <code>ARC_EXECUTION_MODE=legacy_auto</code> on the trading VM
+      only when automatic entries are explicitly approved.
+    </div>
+  {% elif engine.execution_mode == "preview" %}
+    <div class="msg warning" style="margin-top:12px;">
+      Preview mode blocks entry, stop, cancellation, and square-off requests to Dhan.
+    </div>
+  {% endif %}
   <div class="muted" style="margin-top:8px; font-size:12px;">
     {% if not deploy.vm %}
       the trading VM has never reported its commit &mdash; is <code>optionsdjango-sync.timer</code> running?

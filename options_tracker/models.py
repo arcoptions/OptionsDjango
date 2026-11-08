@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -37,7 +39,163 @@ class OptionOutcome(models.TextChoices):
     UNRESOLVED = "UNRESOLVED", "Instrument Not Found"
 
 
+class InstrumentKind(models.TextChoices):
+    EQUITY = "EQUITY", "Equity"
+    INDEX = "INDEX", "Index"
+    FUTURE = "FUTURE", "Future"
+    OPTION = "OPTION", "Option"
+
+
+class CanonicalInstrument(models.Model):
+    canonical_symbol = models.CharField(max_length=80, db_index=True)
+    display_name = models.CharField(max_length=160, blank=True)
+    kind = models.CharField(max_length=12, choices=InstrumentKind.choices)
+    exchange_segment = models.CharField(max_length=24)
+    security_id = models.CharField(max_length=40)
+    underlying_symbol = models.CharField(max_length=80, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    strike = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    option_type = models.CharField(max_length=2, choices=[("CE", "CE"), ("PE", "PE")], blank=True)
+    lot_size = models.PositiveIntegerField(default=1)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["canonical_symbol", "expiry_date", "strike", "option_type"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exchange_segment", "security_id"],
+                name="canonical_instrument_security",
+            ),
+        ]
+
+
+class InstrumentAlias(models.Model):
+    instrument = models.ForeignKey(
+        CanonicalInstrument,
+        on_delete=models.CASCADE,
+        related_name="aliases",
+    )
+    provider = models.CharField(max_length=30)
+    value = models.CharField(max_length=120)
+    exchange_segment = models.CharField(max_length=24, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["provider", "value"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "value", "exchange_segment"],
+                name="instrument_alias_identity",
+            ),
+        ]
+
+
+class OpportunityStatus(models.TextChoices):
+    NEW = "NEW", "New"
+    VALIDATED = "VALIDATED", "Validated"
+    PLANNED = "PLANNED", "Planned"
+    APPROVED = "APPROVED", "Approved"
+    EXECUTED = "EXECUTED", "Executed"
+    CLOSED = "CLOSED", "Closed"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class UnifiedOpportunity(models.Model):
+    instrument = models.ForeignKey(
+        CanonicalInstrument,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="opportunities",
+    )
+    fingerprint = models.CharField(max_length=64, unique=True)
+    source_type = models.CharField(max_length=30)
+    source_ref = models.CharField(max_length=120)
+    source_name = models.CharField(max_length=120, blank=True)
+    strategy = models.CharField(max_length=80)
+    direction = models.CharField(max_length=12, blank=True)
+    timeframe = models.CharField(max_length=30, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=OpportunityStatus.choices,
+        default=OpportunityStatus.NEW,
+    )
+    score = models.FloatField(default=0)
+    confidence = models.FloatField(null=True, blank=True)
+    rationale = models.TextField(blank=True)
+    plan = models.JSONField(default=dict, blank=True)
+    next_action = models.CharField(max_length=160, blank=True)
+    source_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-score", "-source_at", "-pk"]
+        indexes = [
+            models.Index(fields=["status", "-score"], name="idx_opportunity_status_score"),
+        ]
+
+
+class OpportunityRevision(models.Model):
+    opportunity = models.ForeignKey(
+        UnifiedOpportunity,
+        on_delete=models.PROTECT,
+        related_name="revisions",
+    )
+    version = models.PositiveIntegerField()
+    evidence_fingerprint = models.CharField(max_length=64)
+    evidence = models.JSONField(default=dict)
+    source_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["opportunity", "-version"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["opportunity", "version"],
+                name="opportunity_revision_version",
+            ),
+            models.UniqueConstraint(
+                fields=["opportunity", "evidence_fingerprint"],
+                name="opportunity_revision_evidence",
+            ),
+        ]
+
+
+class OpportunityStatusEvent(models.Model):
+    opportunity = models.ForeignKey(
+        UnifiedOpportunity,
+        on_delete=models.PROTECT,
+        related_name="status_events",
+    )
+    from_status = models.CharField(max_length=16, blank=True)
+    to_status = models.CharField(max_length=16, choices=OpportunityStatus.choices)
+    reason = models.TextField()
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    context = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+
 class TipSignal(models.Model):
+    instrument = models.ForeignKey(
+        CanonicalInstrument,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="tip_signals",
+    )
     source_type = models.CharField(max_length=20, default="MANUAL")
     source_name = models.CharField(max_length=120, blank=True)
     source_ref = models.CharField(max_length=80, blank=True)
@@ -339,6 +497,429 @@ class StockOptionCandle(models.Model):
             models.Index(fields=["symbol", "timestamp"], name="idx_opt_sym_time"),
             models.Index(fields=["symbol", "option_type", "relative_strike"], name="idx_opt_sym_type_rel"),
         ]
+
+
+class StockFundamentalSnapshot(models.Model):
+    symbol = models.CharField(max_length=40, db_index=True)
+    provider = models.CharField(max_length=40)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    market_cap = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    pe_ratio = models.FloatField(null=True, blank=True)
+    price_to_book = models.FloatField(null=True, blank=True)
+    return_on_equity = models.FloatField(null=True, blank=True)
+    debt_to_equity = models.FloatField(null=True, blank=True)
+    revenue_growth = models.FloatField(null=True, blank=True)
+    earnings_growth = models.FloatField(null=True, blank=True)
+    dividend_yield = models.FloatField(null=True, blank=True)
+    free_cash_flow = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-source_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["symbol", "provider", "source_at"],
+                name="stock_fundamental_identity",
+            ),
+        ]
+
+
+class StockFinancialResult(models.Model):
+    symbol = models.CharField(max_length=40, db_index=True)
+    provider = models.CharField(max_length=40)
+    period_end = models.DateField()
+    period_type = models.CharField(max_length=12, choices=[("QUARTER", "Quarter"), ("ANNUAL", "Annual")])
+    revenue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    operating_profit = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    net_profit = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    eps = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    revenue_growth = models.FloatField(null=True, blank=True)
+    profit_growth = models.FloatField(null=True, blank=True)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    raw_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-period_end", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["symbol", "provider", "period_end", "period_type"],
+                name="stock_result_identity",
+            ),
+        ]
+
+
+class StockNewsItem(models.Model):
+    symbol = models.CharField(max_length=40, db_index=True)
+    provider = models.CharField(max_length=40)
+    source_ref = models.CharField(max_length=200)
+    headline = models.CharField(max_length=500)
+    url = models.URLField(max_length=1000, blank=True)
+    published_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    sentiment = models.CharField(max_length=16, blank=True)
+    summary = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-published_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "source_ref"],
+                name="stock_news_identity",
+            ),
+        ]
+
+
+class StockCorporateAction(models.Model):
+    symbol = models.CharField(max_length=40, db_index=True)
+    provider = models.CharField(max_length=40)
+    source_ref = models.CharField(max_length=200)
+    action_type = models.CharField(max_length=30)
+    ex_date = models.DateField()
+    description = models.TextField()
+    ratio = models.CharField(max_length=40, blank=True)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-ex_date", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "source_ref"],
+                name="stock_action_identity",
+            ),
+        ]
+
+
+class MarketContextCategory(models.TextChoices):
+    GLOBAL_INDEX = "GLOBAL_INDEX", "Global index"
+    MACRO = "MACRO", "Macro"
+    FLOW = "FLOW", "Institutional flow"
+    SECTOR = "SECTOR", "Sector"
+
+
+class MarketContextSnapshot(models.Model):
+    category = models.CharField(max_length=20, choices=MarketContextCategory.choices)
+    key = models.CharField(max_length=100)
+    value = models.DecimalField(max_digits=20, decimal_places=4)
+    unit = models.CharField(max_length=20, blank=True)
+    provider = models.CharField(max_length=60)
+    source_ref = models.CharField(max_length=300)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["category", "key", "-source_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["category", "key", "provider", "source_at"],
+                name="market_context_evidence_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["category", "key", "-source_at"],
+                name="idx_market_context_latest",
+            ),
+        ]
+
+
+class EconomicEvent(models.Model):
+    title = models.CharField(max_length=200)
+    event_type = models.CharField(max_length=30)
+    starts_at = models.DateTimeField()
+    importance = models.CharField(
+        max_length=10,
+        choices=[("LOW", "Low"), ("MEDIUM", "Medium"), ("HIGH", "High")],
+    )
+    provider = models.CharField(max_length=60)
+    source_ref = models.CharField(max_length=300)
+    received_at = models.DateTimeField(default=timezone.now)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["starts_at", "title"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "source_ref", "starts_at"],
+                name="economic_event_identity",
+            ),
+        ]
+
+
+class StockScoreSnapshot(models.Model):
+    symbol = models.CharField(max_length=40, db_index=True)
+    score_type = models.CharField(
+        max_length=16,
+        choices=[("INVESTMENT", "Investment"), ("SWING", "Swing"), ("FNO", "F&O")],
+    )
+    version = models.CharField(max_length=20)
+    score = models.FloatField(null=True, blank=True)
+    confidence = models.FloatField(default=0)
+    components = models.JSONField(default=dict)
+    missing_data = models.JSONField(default=list)
+    source_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-source_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["symbol", "score_type", "version", "source_at"],
+                name="stock_score_identity",
+            ),
+        ]
+
+
+class ScannerDefinition(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    enabled = models.BooleanField(default=True)
+    conditions = models.JSONField(default=list)
+    approaching_threshold_pct = models.FloatField(default=10)
+    cooldown_minutes = models.PositiveIntegerField(default=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+
+class ScannerRun(models.Model):
+    definition = models.ForeignKey(
+        ScannerDefinition,
+        on_delete=models.PROTECT,
+        related_name="runs",
+    )
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=16, default="RUNNING")
+    scanned = models.PositiveIntegerField(default=0)
+    approaching = models.PositiveIntegerField(default=0)
+    confirmed = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at", "-pk"]
+
+
+class ScannerMatch(models.Model):
+    definition = models.ForeignKey(
+        ScannerDefinition,
+        on_delete=models.PROTECT,
+        related_name="matches",
+    )
+    symbol = models.CharField(max_length=40)
+    state = models.CharField(
+        max_length=16,
+        choices=[("APPROACHING", "Approaching"), ("CONFIRMED", "Confirmed")],
+    )
+    evidence = models.JSONField(default=dict)
+    first_seen_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    last_alerted_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-last_seen_at", "symbol"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["definition", "symbol"],
+                name="scanner_match_identity",
+            ),
+        ]
+
+
+class InvestmentIdeaStatus(models.TextChoices):
+    WATCHING = "WATCHING", "Watching"
+    HOLDING = "HOLDING", "Holding"
+    EXITED = "EXITED", "Exited"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class InvestmentIdea(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="investment_ideas",
+    )
+    instrument = models.ForeignKey(
+        CanonicalInstrument,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="investment_ideas",
+    )
+    symbol = models.CharField(max_length=40, db_index=True)
+    thesis = models.TextField()
+    invalidation = models.TextField()
+    accumulation_low = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    accumulation_high = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    target_allocation_pct = models.DecimalField(max_digits=5, decimal_places=2)
+    review_on = models.DateField()
+    status = models.CharField(
+        max_length=12,
+        choices=InvestmentIdeaStatus.choices,
+        default=InvestmentIdeaStatus.WATCHING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if (
+            self.accumulation_low is not None
+            and self.accumulation_high is not None
+            and self.accumulation_low > self.accumulation_high
+        ):
+            raise ValidationError({
+                "accumulation_high": "Accumulation high must not be below the low.",
+            })
+        if not 0 < self.target_allocation_pct <= 100:
+            raise ValidationError({
+                "target_allocation_pct": "Target allocation must be above 0 and at most 100.",
+            })
+
+    class Meta:
+        ordering = ["review_on", "symbol"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "symbol"],
+                condition=models.Q(status__in=[
+                    InvestmentIdeaStatus.WATCHING,
+                    InvestmentIdeaStatus.HOLDING,
+                ]),
+                name="active_investment_idea",
+            ),
+        ]
+
+
+class InvestmentHolding(models.Model):
+    idea = models.OneToOneField(
+        InvestmentIdea,
+        on_delete=models.PROTECT,
+        related_name="holding",
+    )
+    quantity = models.DecimalField(max_digits=18, decimal_places=4)
+    average_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    current_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    opened_on = models.DateField()
+    closed_on = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.quantity <= 0:
+            raise ValidationError({"quantity": "Quantity must be above 0."})
+        if self.average_cost <= 0:
+            raise ValidationError({"average_cost": "Average cost must be above 0."})
+        if self.current_price is not None and self.current_price <= 0:
+            raise ValidationError({"current_price": "Current price must be above 0."})
+        if self.closed_on is not None and self.closed_on < self.opened_on:
+            raise ValidationError({"closed_on": "Closed date cannot precede opened date."})
+
+
+class InvestmentDividend(models.Model):
+    holding = models.ForeignKey(
+        InvestmentHolding,
+        on_delete=models.PROTECT,
+        related_name="dividends",
+    )
+    ex_date = models.DateField()
+    amount_total = models.DecimalField(max_digits=14, decimal_places=2)
+    source = models.CharField(max_length=80, blank=True)
+    received_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.amount_total <= 0:
+            raise ValidationError({"amount_total": "Dividend amount must be above 0."})
+
+    class Meta:
+        ordering = ["-ex_date", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["holding", "ex_date", "amount_total"],
+                name="investment_dividend_identity",
+            ),
+        ]
+
+
+class StrategyDefinition(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="strategy_definitions",
+    )
+    name = models.CharField(max_length=100)
+    template = models.CharField(max_length=40)
+    symbol = models.CharField(max_length=40)
+    interval_minutes = models.PositiveSmallIntegerField(default=15)
+    parameters = models.JSONField(default=dict)
+    cost_model = models.JSONField(default=dict)
+    version = models.PositiveIntegerField(default=1)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "-version"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "name", "version"],
+                name="strategy_definition_version",
+            ),
+        ]
+
+
+class StrategyRunManifest(models.Model):
+    definition = models.ForeignKey(
+        StrategyDefinition,
+        on_delete=models.PROTECT,
+        related_name="manifests",
+    )
+    manifest_hash = models.CharField(max_length=64, unique=True)
+    definition_snapshot = models.JSONField()
+    cost_snapshot = models.JSONField()
+    data_start = models.DateTimeField()
+    data_end = models.DateTimeField()
+    data_rows = models.PositiveIntegerField()
+    data_hash = models.CharField(max_length=64)
+    code_version = models.CharField(max_length=80)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Strategy run manifests are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Strategy run manifests are immutable.")
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
 
 
 class DownloadJob(models.Model):

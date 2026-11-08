@@ -1,0 +1,137 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Command Centre | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="page-head" style="margin-bottom:0;">
+    <div>
+      <h2 style="margin:0 0 6px;">9 AM Command Centre</h2>
+      <p class="muted">Market context, ranked actions, risk, and system readiness in one evidence-aware view.</p>
+    </div>
+    <div class="msg {{ command.regime.tone }}" style="margin:0;">
+      <strong>{{ command.regime.label }}</strong><br>{{ command.regime.approach }}
+    </div>
+  </div>
+</section>
+
+<div class="grid">
+  {% for index in command.indexes %}
+  <section class="panel">
+    <div class="muted">{{ index.source }}{% if index.age_seconds is not None %} · {{ index.age_seconds }}s old{% endif %}</div>
+    <h2>{{ index.symbol }}</h2>
+    <div style="font-size:28px; font-weight:800;">{{ index.price|default:"-" }}</div>
+    <div class="{% if index.change >= 0 %}success{% else %}error{% endif %}">
+      {{ index.change|default:"-" }} ({{ index.change_percent|default:"-" }}%)
+    </div>
+    <div class="muted">PCR {{ index.pcr|default:"-" }} · {{ index.regime }}</div>
+    {% if index.stale %}<div class="msg warning">Stale or missing index evidence.</div>{% endif %}
+  </section>
+  {% endfor %}
+  <section class="panel">
+    <div class="muted">{{ command.breadth.source }}</div>
+    <h2>Market breadth</h2>
+    <div style="font-size:28px; font-weight:800;">{{ command.breadth.advances }} / {{ command.breadth.declines }}</div>
+    <div class="muted">Advances / declines across {{ command.breadth.total }} fresh stocks</div>
+    <div class="muted">Average change {{ command.breadth.average_change_percent|default:"-" }}%</div>
+  </section>
+  <section class="panel">
+    <div class="muted">Manual execution boundary</div>
+    <h2>{{ command.operations.execution.mode|upper }}</h2>
+    <div>Automatic entries: {{ command.operations.execution.automatic_entries|yesno:"enabled,disabled" }}</div>
+    <div>Position management: {{ command.operations.execution.position_management|yesno:"enabled,disabled" }}</div>
+    <a class="btn secondary" href="{% url 'operations_health' %}">Open health dashboard</a>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Global, macro, flow, and sector evidence</h2>
+  <div class="grid">
+    {% for category, rows in command.market_context.groups.items %}
+    <article class="card">
+      <strong>{{ category }}</strong>
+      {% for row in rows %}
+      <p>
+        {{ row.key }}: {{ row.value }} {{ row.unit }}
+        {% if row.stale %}<span class="active-pill">STALE</span>{% endif %}<br>
+        <span class="muted">{{ row.provider }} · {{ row.source_at|date:"d M H:i" }} · {{ row.source_ref }}</span>
+      </p>
+      {% empty %}<p class="muted">No approved provider evidence.</p>{% endfor %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Seven-day economic and earnings calendar</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Event</th><th>Type</th><th>Importance</th><th>Provider</th></tr></thead>
+    <tbody>{% for event in command.market_context.events %}<tr><td>{{ event.starts_at|date:"d M H:i" }}</td><td>{{ event.title }}</td><td>{{ event.event_type }}</td><td>{{ event.importance }}</td><td>{{ event.provider }}</td></tr>{% empty %}<tr><td colspan="5">No approved upcoming calendar evidence.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Session scenarios</h2>
+  <div class="grid">
+    {% for scenario in command.scenarios %}
+    <article class="card" style="{% if scenario.active %}border-color:#d1a553;{% endif %}">
+      <div class="row"><strong>{{ scenario.name }}</strong>{% if scenario.active %}<span class="active-pill">Current</span>{% endif %}</div>
+      <p>{{ scenario.condition }}</p>
+      <p class="muted">{{ scenario.response }}</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="page-head">
+    <div>
+      <h2>Ranked opportunities</h2>
+      <p class="muted">Every row retains its source, action reason, score, next action, and timestamp.</p>
+    </div>
+    <a class="btn secondary" href="{% url 'action_list' %}">Open full Action List</a>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Symbol</th><th>Action</th><th>Score</th><th>Source</th><th>Evidence</th><th>Updated</th><th>Next</th></tr></thead>
+      <tbody>
+      {% for row in command.opportunities %}
+        <tr>
+          <td><strong>{{ row.symbol }}</strong><br><span class="muted">{{ row.type }}</span></td>
+          <td><span class="active-pill">{{ row.action }}</span></td>
+          <td>{{ row.score }}</td>
+          <td>{{ row.source }}<br><span class="muted">{{ row.source_type }}</span></td>
+          <td>{{ row.action_reason }}</td>
+          <td>{{ row.timestamp|date:"d M H:i" }}</td>
+          <td><a class="btn secondary" href="{{ row.detail_url }}">Review</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No evidence-backed action currently qualifies. Waiting is a valid outcome.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Personal trading desk</h2>
+  <div class="grid">
+    <div class="stat"><div class="label">Buy-ready</div><div class="value">{{ command.action_counts.buy_count }}</div></div>
+    <div class="stat"><div class="label">Manage</div><div class="value">{{ command.action_counts.manage_count }}</div></div>
+    <div class="stat"><div class="label">Triggered</div><div class="value">{{ command.action_counts.triggered_count }}</div></div>
+    <div class="stat"><div class="label">Watch / review</div><div class="value">{{ command.action_counts.watch_count }}</div></div>
+  </div>
+  {% if command.open_trades %}
+  <table>
+    <thead><tr><th>Position</th><th>Quantity</th><th>Entry</th><th>Stop</th><th>Target</th><th>Opened</th></tr></thead>
+    <tbody>
+    {% for trade in command.open_trades %}
+      <tr><td>{{ trade.signal.option_symbol }}</td><td>{{ trade.quantity }}</td><td>{{ trade.entry_price }}</td><td>{{ trade.stop_loss }}</td><td>{{ trade.target_1|default:"-" }}</td><td>{{ trade.opened_at|date:"d M H:i" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">No open trade records.</p>
+  {% endif %}
+</section>
+{% endblock %}

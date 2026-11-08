@@ -1,0 +1,48 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Performance | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Unified performance</h2>
+  <p class="muted">Broker-realized and paper-radar results stay separate so simulated evidence is never presented as live account performance.</p>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Broker statements</h2>
+    <div class="grid">
+      <div class="stat"><div class="label">Rows</div><div class="value">{{ broker.trades }}</div></div>
+      <div class="stat"><div class="label">Net realized</div><div class="value">{{ broker.net_pnl|floatformat:2 }}</div></div>
+      <div class="stat"><div class="label">Win rate</div><div class="value">{{ broker.win_rate|floatformat:1|default:"-" }}%</div></div>
+      <div class="stat"><div class="label">Expectancy</div><div class="value">{{ broker.expectancy|floatformat:2|default:"-" }}</div></div>
+      <div class="stat"><div class="label">Profit factor</div><div class="value">{{ broker.profit_factor|floatformat:2|default:"-" }}</div></div>
+      <div class="stat"><div class="label">Statement charges</div><div class="value">{{ broker_charges|floatformat:2 }}</div></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Paper radar</h2>
+    <div class="grid">
+      <div class="stat"><div class="label">Closed trades</div><div class="value">{{ paper.trades }}</div></div>
+      <div class="stat"><div class="label">Net P&amp;L</div><div class="value">{{ paper.net_pnl|floatformat:2 }}</div></div>
+      <div class="stat"><div class="label">Win rate</div><div class="value">{{ paper.win_rate|floatformat:1|default:"-" }}%</div></div>
+      <div class="stat"><div class="label">Expectancy</div><div class="value">{{ paper.expectancy|floatformat:2|default:"-" }}</div></div>
+      <div class="stat"><div class="label">Profit factor</div><div class="value">{{ paper.profit_factor|floatformat:2|default:"-" }}</div></div>
+      <div class="stat"><div class="label">Maximum drawdown</div><div class="value">{{ paper.maximum_drawdown|floatformat:2|default:"-" }}</div></div>
+    </div>
+  </section>
+</div>
+
+{% for title, rows in breakdowns %}
+<section class="panel">
+  <h2>{{ title }}</h2>
+  <table><thead><tr><th>Group</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L</th><th>Expectancy</th><th>Profit factor</th></tr></thead>
+  <tbody>{% for row in rows %}<tr><td>{{ row.label }}</td><td>{{ row.trades }}</td><td>{{ row.win_rate|floatformat:1|default:"-" }}%</td><td>{{ row.net_pnl|floatformat:2 }}</td><td>{{ row.expectancy|floatformat:2|default:"-" }}</td><td>{{ row.profit_factor|floatformat:2|default:"-" }}</td></tr>{% empty %}<tr><td colspan="6">No evidence available.</td></tr>{% endfor %}</tbody></table>
+</section>
+{% endfor %}
+
+<section class="panel">
+  <h2>Evidence limitations</h2>
+  {% for limitation in limitations %}<div class="msg warning">{{ limitation }}</div>{% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,151 @@
+import json
+from datetime import timedelta
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from .models import DhanOrderEvent, StockEquityCandle
+from .strategy_lab import create_definition, create_manifest, validate_strategy
+
+
+class StrategyLabTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="researcher",
+            password="test-password",
+            is_staff=True,
+        )
+        self.start = timezone.now().replace(second=0, microsecond=0)
+        StockEquityCandle.objects.create(
+            symbol="TEST",
+            interval_minutes=15,
+            timestamp=self.start,
+            open=Decimal("100"),
+            high=Decimal("102"),
+            low=Decimal("99"),
+            close=Decimal("101"),
+            volume=1000,
+        )
+        self.definition = create_definition(
+            owner=self.staff,
+            name="Momentum",
+            template="EQUITY_MOMENTUM",
+            symbol="test",
+            interval_minutes=15,
+            parameters={
+                "lookback": 20,
+                "minimum_move_pct": 5,
+                "minimum_volume_ratio": 1.5,
+            },
+            cost_model={
+                "brokerage_per_order": 20,
+                "tax_bps": 5,
+                "slippage_bps": 5,
+                "spread_bps": 5,
+            },
+        )
+
+    def test_strategy_validation_rejects_unknown_fields_and_templates(self):
+        with self.assertRaises(ValueError):
+            validate_strategy("EXEC_CODE", {}, {})
+        with self.assertRaises(ValueError):
+            validate_strategy(
+                "EQUITY_MOMENTUM",
+                {
+                    "lookback": 20,
+                    "minimum_move_pct": 5,
+                    "minimum_volume_ratio": 1,
+                    "__class__": 1,
+                },
+                {
+                    "brokerage_per_order": 20,
+                    "tax_bps": 5,
+                    "slippage_bps": 5,
+                    "spread_bps": 5,
+                },
+            )
+
+    def test_manifest_is_deduplicated_and_immutable(self):
+        end = self.start + timedelta(minutes=15)
+        first = create_manifest(self.definition, self.start, end)
+        second = create_manifest(self.definition, self.start, end)
+
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(first.data_rows, 1)
+        first.code_version = "changed"
+        with self.assertRaises(ValidationError):
+            first.save()
+        with self.assertRaises(ValidationError):
+            first.delete()
+        self.assertEqual(DhanOrderEvent.objects.count(), 0)
+
+    def test_manifest_hash_changes_when_source_data_changes(self):
+        first = create_manifest(
+            self.definition,
+            self.start,
+            self.start + timedelta(minutes=15),
+        )
+        StockEquityCandle.objects.filter(pk=1).update(close=Decimal("110"))
+        second = create_manifest(
+            self.definition,
+            self.start,
+            self.start + timedelta(minutes=15),
+        )
+
+        self.assertNotEqual(first.data_hash, second.data_hash)
+        self.assertNotEqual(first.manifest_hash, second.manifest_hash)
+
+    def test_strategy_lab_requires_staff_and_renders_library(self):
+        url = reverse("strategy_lab")
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.client.force_login(self.staff)
+        response = self.client.get(url)
+
+        self.assertContains(response, "Strategy Lab")
+        self.assertContains(response, "Momentum")
+
+    def test_strategy_lab_posts_are_csrf_protected_and_create_manifests(self):
+        url = reverse("strategy_lab")
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.staff)
+        self.assertEqual(
+            csrf_client.post(url, {"action": "create_manifest"}).status_code,
+            403,
+        )
+        self.client.force_login(self.staff)
+        response = self.client.post(url, {
+            "action": "create_definition",
+            "definition-name": "Opening range",
+            "definition-template": "OPENING_RANGE",
+            "definition-symbol": "test",
+            "definition-interval_minutes": "15",
+            "definition-parameters": json.dumps({
+                "opening_minutes": 15,
+                "breakout_pct": 1,
+                "stop_pct": 2,
+            }),
+            "definition-cost_model": json.dumps({
+                "brokerage_per_order": 20,
+                "tax_bps": 5,
+                "slippage_bps": 5,
+                "spread_bps": 5,
+            }),
+        })
+        manifest_response = self.client.post(url, {
+            "action": "create_manifest",
+            "manifest-definition": self.definition.pk,
+            "manifest-data_start": timezone.localtime(self.start).strftime(
+                "%Y-%m-%dT%H:%M",
+            ),
+            "manifest-data_end": (
+                timezone.localtime(self.start) + timedelta(minutes=15)
+            ).strftime("%Y-%m-%dT%H:%M"),
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(manifest_response.status_code, 302)
+        self.assertEqual(self.definition.manifests.count(), 1)

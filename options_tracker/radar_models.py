@@ -6,6 +6,13 @@ from django.utils import timezone
 
 
 class RadarInstrument(models.Model):
+    canonical_instrument = models.ForeignKey(
+        "options_tracker.CanonicalInstrument",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="radar_instruments",
+    )
     security_id = models.CharField(max_length=40)
     segment = models.CharField(max_length=12)
     symbol = models.CharField(max_length=40, db_index=True)
