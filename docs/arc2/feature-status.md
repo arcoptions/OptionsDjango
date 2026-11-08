@@ -69,7 +69,7 @@ checklist.
 * [x] Add sector, FII, and DII evidence with explicit freshness.
 * [x] Add an attributed seven-day economic and earnings calendar.
 * [ ] Add traceable AI daily briefing.
-* [ ] Add ranked long-term investment opportunities.
+* [x] Add ranked long-term investment research from current, sufficiently covered provider evidence.
 * [x] Define neutral canonical instrument identity.
 * [x] Build dry-run and explicit-apply identity reconciliation.
 * [ ] Define common provenance and freshness contract.

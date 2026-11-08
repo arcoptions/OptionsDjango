@@ -38,7 +38,7 @@ Last evidence refresh: 2026-11-08.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 538 passed |
+| Django application tests | 539 passed |
 | Test files | 28 |
 | Test classes | 68 |
 | Django system check | Passed with no issues |
@@ -61,7 +61,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally except legacy-auto decision | 538 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally except legacy-auto decision | 539 application tests passed; browser and deployment gates remain | Not deployed | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
@@ -108,7 +108,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R2-07 | Bullish, bearish, and sideways scenarios | Implemented locally | Passed | Not deployed | Deterministic NIFTY and breadth thresholds select one current scenario and response |
 | R2-08 | Market regime and approach | Implemented locally | Passed | Not deployed | Bullish, bearish, sideways, mixed, and insufficient-data states have explicit approaches |
 | R2-09 | Ranked trading opportunities | Implemented locally | Passed | Not deployed | Home reuses the evidence-gated Action List ranking and retains review destinations |
-| R2-10 | Ranked investment opportunities | Not started | None | Not deployed | Depends on fundamentals and investment scoring |
+| R2-10 | Ranked investment opportunities | Implemented locally | Passed | Not deployed | Home ranks current provider-attributed investment scores with confidence, evidence, and a research-only next action |
 | R2-11 | Personal trading desk | Implemented locally | Passed | Not deployed | Home combines action counts, open positions, manual mode, and operations readiness |
 | R2-12 | Source, age, confidence, and next action on every card | Partial | Passed for Home | Not deployed | Home index and opportunity cards expose evidence fields; a cross-workspace contract remains |
 
@@ -177,7 +177,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R6-06 | Liquidity and executable-quote rejection | Verified baseline | Passed | Production baseline | Radar readiness and live-engine gates exist |
 | R6-07 | Manual live execution confirmation | Implemented locally | Passed | Not deployed | Signed staff review and explicit live checkbox |
 | R6-08 | Paper and live execution separation | Partial | Passed | Production baseline | Radar is paper-only; legacy engine and generic execution records still need stronger boundaries |
-| R6-09 | Long-term investment workspace | Not started | None | Not deployed | Must remain separate from short-term signals |
+| R6-09 | Long-term investment workspace | Implemented locally | Passed | Not deployed | Dedicated theses, holdings, dividends, allocation, and review reminders remain separate from short-term signals |
 | R6-10 | Fundamental investment screener and fair value | Not started | None | Not deployed | Depends on Release 4 fundamentals |
 | R6-11 | Thesis, invalidation, and accumulation zones | Implemented locally | Passed | Not deployed | Staff-only Investment Desk validates thesis, invalidation, allocation target, accumulation range, and review date |
 | R6-12 | Holdings, dividends, allocation, and review reminders | Implemented locally | Passed | Not deployed | Dedicated investment records calculate allocation and unrealized value without reusing broker execution records |
@@ -238,7 +238,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 538 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 539 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
@@ -255,9 +255,9 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | Workflow | Current status | Main gap |
 |---|---|---|
-| Login to Home to market briefing | Not complete | Unified Command Centre and sourced briefing do not exist |
-| Discover stock to research to score to opportunity | Not complete | Fundamentals, common scores, and unified opportunities are missing |
-| Telegram tip to parse to validate to outcome | Partial | Intake exists; fail-closed security and unified lifecycle remain |
+| Login to Home to market briefing | Partial | Deterministic sourced briefing exists; approved production providers and traceable AI briefing remain |
+| Discover stock to research to score to opportunity | Implemented locally | Provider-neutral evidence, scores, opportunities, and ranked investment research await deployment and production feeds |
+| Telegram tip to parse to validate to outcome | Implemented locally | Secure intake and canonical lifecycle pass locally; production deployment and provider outcome analytics remain |
 | Scanner alert to research to trade plan | Partial | Existing scanners are not connected to one trade-plan workflow |
 | F&O recommendation to risk to manual approval to execution record | Implemented locally | Deployment and browser smoke are pending |
 | Investment idea to thesis to holding | Implemented locally | Deployment and browser smoke evidence remain |

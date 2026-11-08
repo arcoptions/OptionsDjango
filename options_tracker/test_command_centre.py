@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .command_centre import command_centre_context, derive_regime
-from .models import IndexOISnapshot
+from .models import IndexOISnapshot, StockFundamentalSnapshot, StockScoreSnapshot
 from .radar_models import RadarInstrument, RadarQuote
 
 
@@ -73,6 +73,38 @@ class CommandCentreTests(TestCase):
 
         self.assertEqual(command_centre_context(now)["breadth"]["total"], 0)
 
+    def test_context_ranks_only_current_evidence_backed_investments(self):
+        now = timezone.now()
+        for symbol, score, confidence, age_days in [
+            ("CURRENT", 82, 1, 10),
+            ("SECOND", 74, 0.8, 20),
+            ("LOWCOVERAGE", 95, 0.4, 5),
+            ("STALE", 99, 1, 121),
+        ]:
+            source_at = now - timedelta(days=age_days)
+            StockFundamentalSnapshot.objects.create(
+                symbol=symbol,
+                provider="APPROVED_TEST",
+                source_at=source_at,
+            )
+            StockScoreSnapshot.objects.create(
+                symbol=symbol,
+                score_type="INVESTMENT",
+                version="ARC-STOCK-1",
+                score=score,
+                confidence=confidence,
+                components={"return_on_equity": score},
+                missing_data=[],
+                source_at=source_at,
+            )
+
+        rows = command_centre_context(now)["investment_opportunities"]
+
+        self.assertEqual([row["symbol"] for row in rows], ["CURRENT", "SECOND"])
+        self.assertEqual(rows[0]["provider"], "APPROVED_TEST")
+        self.assertEqual(rows[0]["evidence"], ["Return On Equity 82.0"])
+        self.assertEqual(rows[0]["detail_url"], reverse("stock_option_detail", args=["CURRENT"]))
+
     def test_home_requires_login_and_renders_command_centre(self):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 302)
@@ -83,4 +115,5 @@ class CommandCentreTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "9 AM Command Centre")
         self.assertContains(response, "Ranked opportunities")
+        self.assertContains(response, "Ranked long-term investment research")
         self.assertContains(response, "Personal trading desk")

@@ -1,13 +1,25 @@
 """Unified, evidence-aware read model for the ARC home page."""
 
+from datetime import timedelta
+
+from django.urls import reverse
 from django.utils import timezone
 
 from .action_workspace import action_list_context
-from .models import IndexOISnapshot, TradeExecution, TradeState
-from .operations_health import operations_snapshot
 from .market_context import market_context_evidence
+from .models import (
+    IndexOISnapshot,
+    StockFundamentalSnapshot,
+    StockScoreSnapshot,
+    TradeExecution,
+    TradeState,
+)
+from .operations_health import operations_snapshot
 from .radar import Policy, fresh
 from .radar_models import RadarQuote
+
+
+INVESTMENT_EVIDENCE_MAX_AGE = timedelta(days=120)
 
 
 def _index_card(underlying, now):
@@ -130,6 +142,59 @@ def _scenarios(regime):
     ]
 
 
+def _ranked_investments(now):
+    scores = {}
+    for score in StockScoreSnapshot.objects.filter(
+        score_type="INVESTMENT",
+        score__isnull=False,
+        confidence__gte=0.6,
+        source_at__lte=now,
+    ).order_by("symbol", "-source_at", "-pk"):
+        scores.setdefault(score.symbol, score)
+
+    fundamentals = {}
+    for fundamental in StockFundamentalSnapshot.objects.filter(
+        symbol__in=scores,
+        source_at__lte=now,
+    ).order_by("symbol", "-source_at", "-pk"):
+        fundamentals.setdefault(fundamental.symbol, fundamental)
+
+    rows = []
+    for symbol, score in scores.items():
+        fundamental = fundamentals.get(symbol)
+        if fundamental is None or now - fundamental.source_at > INVESTMENT_EVIDENCE_MAX_AGE:
+            continue
+        strongest_components = sorted(
+            (
+                (name, float(value))
+                for name, value in score.components.items()
+                if isinstance(value, (int, float))
+            ),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:3]
+        rows.append({
+            "symbol": symbol,
+            "score": score.score,
+            "confidence": score.confidence,
+            "version": score.version,
+            "provider": fundamental.provider,
+            "source_at": fundamental.source_at,
+            "score_source_at": score.source_at,
+            "evidence": [
+                f"{name.replace('_', ' ').title()} {value:.1f}"
+                for name, value in strongest_components
+            ],
+            "missing_data": score.missing_data,
+            "detail_url": reverse("stock_option_detail", args=[symbol]),
+        })
+    return sorted(
+        rows,
+        key=lambda row: (row["score"], row["confidence"], row["symbol"]),
+        reverse=True,
+    )[:8]
+
+
 def command_centre_context(now=None):
     now = now or timezone.now()
     actions = action_list_context()
@@ -145,6 +210,7 @@ def command_centre_context(now=None):
         "regime": regime,
         "scenarios": _scenarios(regime),
         "opportunities": actions["rows"][:8],
+        "investment_opportunities": _ranked_investments(now),
         "action_counts": actions,
         "open_trades": TradeExecution.objects.select_related("signal").filter(
             state=TradeState.OPEN,

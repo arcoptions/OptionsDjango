@@ -114,6 +114,39 @@
 </section>
 
 <section class="panel">
+  <div class="page-head">
+    <div>
+      <h2>Ranked long-term investment research</h2>
+      <p class="muted">Current provider evidence only. Scores rank research review; they are not order instructions.</p>
+    </div>
+    <a class="btn secondary" href="{% url 'investment_desk' %}">Open Investment Desk</a>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Symbol</th><th>Score</th><th>Confidence</th><th>Evidence</th><th>Provider</th><th>As of</th><th>Next</th></tr></thead>
+      <tbody>
+      {% for row in command.investment_opportunities %}
+        <tr>
+          <td><strong>{{ row.symbol }}</strong><br><span class="muted">{{ row.version }}</span></td>
+          <td>{{ row.score|floatformat:1 }}</td>
+          <td>{{ row.confidence|floatformat:2 }}</td>
+          <td>
+            {{ row.evidence|join:", " }}
+            {% if row.missing_data %}<br><span class="muted">Missing: {{ row.missing_data|join:", " }}</span>{% endif %}
+          </td>
+          <td>{{ row.provider }}</td>
+          <td>{{ row.source_at|date:"d M Y" }}</td>
+          <td><a class="btn secondary" href="{{ row.detail_url }}">Review evidence</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No current, sufficiently covered fundamental score qualifies. No investment confidence is inferred.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
   <h2>Personal trading desk</h2>
   <div class="grid">
     <div class="stat"><div class="label">Buy-ready</div><div class="value">{{ command.action_counts.buy_count }}</div></div>
