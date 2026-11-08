@@ -210,6 +210,7 @@ The current local Release 1 execution slice has:
 * 567 passing `options_tracker` tests.
 * A clean Django system check.
 * ARC 2.0 migrations `0024`-`0037` applied to the test SQLite database.
+* Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication through `0037` passed system checks.
 * A passing compile check and secret-free local activation report.
 * Ten critical authenticated pages returning HTTP 200 without rendered server errors.
 * Local DOM readiness between 366 ms and 559 ms for those ten pages.
