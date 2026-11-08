@@ -23,6 +23,16 @@ ALLOWED_TRANSITIONS = {
     OpportunityStatus.CLOSED: set(),
     OpportunityStatus.REJECTED: set(),
 }
+DERIVATIVE_DIRECTIONS = {"CE", "PE"}
+DERIVATIVE_PLAN_FIELDS = {
+    "entry",
+    "stop_loss",
+    "targets",
+    "quantity",
+    "estimated_charges",
+    "risk_amount",
+    "invalidation",
+}
 
 
 def _digest(payload):
@@ -42,6 +52,44 @@ def opportunity_fingerprint(*, source_type, source_ref, strategy, direction="", 
         "direction": str(direction).strip().upper(),
         "timeframe": str(timeframe).strip().upper(),
     })
+
+
+def derivative_plan_issues(opportunity):
+    if opportunity.direction not in DERIVATIVE_DIRECTIONS:
+        return []
+    plan = opportunity.plan if isinstance(opportunity.plan, dict) else {}
+    issues = [
+        f"missing {field}"
+        for field in sorted(DERIVATIVE_PLAN_FIELDS - set(plan))
+    ]
+    targets = plan.get("targets")
+    if "targets" in plan and (
+        not isinstance(targets, list)
+        or not targets
+        or any(target in (None, "") for target in targets)
+    ):
+        issues.append("targets must contain at least one level")
+    numeric_positive = ("entry", "stop_loss", "quantity", "risk_amount")
+    for field in numeric_positive:
+        if field in plan:
+            try:
+                valid = float(plan[field]) > 0
+            except (TypeError, ValueError):
+                valid = False
+            if not valid:
+                issues.append(f"{field} must be positive")
+    if "estimated_charges" in plan:
+        try:
+            valid = float(plan["estimated_charges"]) >= 0
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            issues.append("estimated_charges must not be negative")
+    if not str(plan.get("invalidation") or "").strip():
+        issues.append("invalidation must explain the failure condition")
+    if not opportunity.rationale.strip():
+        issues.append("rationale is required")
+    return sorted(set(issues))
 
 
 @transaction.atomic
@@ -125,6 +173,13 @@ def transition_opportunity(opportunity, to_status, *, reason, actor=None, contex
         raise ValueError(f"Unknown opportunity status: {to_status!r}")
     if target not in ALLOWED_TRANSITIONS[opportunity.status]:
         raise ValueError(f"Invalid opportunity transition: {opportunity.status} -> {target}")
+    if target in {OpportunityStatus.PLANNED, OpportunityStatus.APPROVED}:
+        issues = derivative_plan_issues(opportunity)
+        if issues:
+            raise ValueError(
+                "Derivative recommendation contract is incomplete: "
+                + ", ".join(issues),
+            )
     if target in {OpportunityStatus.APPROVED, OpportunityStatus.REJECTED} and actor is None:
         raise ValueError(f"An authenticated actor is required for {target}")
     previous = opportunity.status

@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from .execution_policy import execution_policy
+from .fno_intelligence import iv_percentile_rows
 from .models import (
     IndexOISnapshot,
     InstrumentKind,
@@ -31,9 +32,13 @@ def fno_desk(request):
     ).exclude(
         status__in=[OpportunityStatus.CLOSED, OpportunityStatus.REJECTED],
     )[:30]
+    index_rows = list(indexes.values())
     return render(request, "options_tracker/fno_desk.html", {
         "title": "F&O Desk",
-        "indexes": list(indexes.values()),
+        "indexes": index_rows,
+        "iv_rows": iv_percentile_rows(
+            snapshot.underlying for snapshot in index_rows
+        ),
         "radar_opportunities": RadarOpportunity.objects.select_related(
             "contract",
         ).exclude(

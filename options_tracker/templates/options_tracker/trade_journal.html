@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>Trade Journal</h2>
-  <p class="muted">Every trade requires a reason. Close action preserves journal and marks signal closed.</p>
+  <p class="muted">Every trade requires a reason. Add emotion and an optional HTTPS screenshot reference before reviewing or closing the trade.</p>
   <form method="get" class="grid">
     <label>State</label>
     <select name="state">
@@ -20,14 +20,31 @@
     </div>
   </form>
   <table>
-    <thead><tr><th>Opened</th><th>Symbol</th><th>State</th><th>Journal</th><th>Close</th></tr></thead>
+    <thead><tr><th>Opened</th><th>Symbol</th><th>State</th><th>Execution</th><th>Reflection</th><th>Close</th></tr></thead>
     <tbody>
       {% for t in rows %}
       <tr>
         <td>{{ t.opened_at|date:"Y-m-d H:i" }}</td>
         <td>{{ t.signal.option_symbol }}</td>
         <td>{{ t.state }}</td>
-        <td>{{ t.journal_reason }}</td>
+        <td>{{ t.get_execution_mode_display }}</td>
+        <td>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="trade_id" value="{{ t.id }}" />
+            <input type="hidden" name="action" value="update_journal" />
+            <textarea name="journal_reason" minlength="15" required>{{ t.journal_reason }}</textarea>
+            <select name="emotion">
+              <option value="">Emotion not recorded</option>
+              {% for value, label in emotion_choices %}
+              <option value="{{ value }}" {% if t.emotion == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <input name="screenshot_url" type="url" pattern="https://.*" maxlength="500" value="{{ t.screenshot_url }}" placeholder="https://private-evidence.example/chart.png" />
+            {% if t.screenshot_url %}<a href="{{ t.screenshot_url }}" rel="noopener noreferrer" target="_blank">Open screenshot</a>{% endif %}
+            <button class="btn secondary" type="submit">Save reflection</button>
+          </form>
+        </td>
         <td>
           {% if t.state == 'OPEN' %}
           <form method="post">
@@ -40,7 +57,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5">No trade journal rows yet.</td></tr>
+      <tr><td colspan="6">No trade journal rows yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

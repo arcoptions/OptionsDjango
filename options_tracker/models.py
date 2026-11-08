@@ -282,6 +282,22 @@ class TradeState(models.TextChoices):
     CANCELLED = "CANCELLED", "Cancelled"
 
 
+class TradeEmotion(models.TextChoices):
+    CALM = "CALM", "Calm"
+    CONFIDENT = "CONFIDENT", "Confident"
+    HESITANT = "HESITANT", "Hesitant"
+    FOMO = "FOMO", "FOMO"
+    REVENGE = "REVENGE", "Revenge"
+    STRESSED = "STRESSED", "Stressed"
+
+
+class TradeExecutionMode(models.TextChoices):
+    MANUAL = "MANUAL", "Manual reviewed execution"
+    LEGACY_AUTO = "LEGACY_AUTO", "Legacy automatic execution"
+    IMPORTED = "IMPORTED", "Imported broker record"
+    UNKNOWN = "UNKNOWN", "Historical or unknown"
+
+
 class TradeExecution(models.Model):
     signal = models.ForeignKey(TipSignal, on_delete=models.PROTECT, related_name="executions")
     dhan_order_id = models.CharField(max_length=80, blank=True)
@@ -293,7 +309,18 @@ class TradeExecution(models.Model):
     target_2 = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     target_3 = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     state = models.CharField(max_length=20, choices=TradeState.choices, default=TradeState.OPEN)
+    execution_mode = models.CharField(
+        max_length=20,
+        choices=TradeExecutionMode.choices,
+        default=TradeExecutionMode.UNKNOWN,
+    )
     journal_reason = models.TextField()
+    emotion = models.CharField(
+        max_length=20,
+        choices=TradeEmotion.choices,
+        blank=True,
+    )
+    screenshot_url = models.URLField(max_length=500, blank=True)
     opened_at = models.DateTimeField(default=timezone.now)
     closed_at = models.DateTimeField(null=True, blank=True)
 
@@ -678,6 +705,35 @@ class AIBriefingSnapshot(models.Model):
         ]
 
 
+class AIResearchSnapshot(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ai_research_snapshots",
+    )
+    question = models.CharField(max_length=500)
+    symbol = models.CharField(max_length=40, blank=True)
+    provider = models.CharField(max_length=40)
+    model = models.CharField(max_length=100)
+    prompt_version = models.CharField(max_length=30)
+    prompt_hash = models.CharField(max_length=64)
+    evidence_hash = models.CharField(max_length=64)
+    prompt = models.TextField()
+    evidence = models.JSONField(default=dict)
+    response_text = models.TextField()
+    source_at = models.DateTimeField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-generated_at", "-pk"]
+        indexes = [
+            models.Index(
+                fields=["user", "-generated_at"],
+                name="idx_ai_research_user",
+            ),
+        ]
+
+
 class StockScoreSnapshot(models.Model):
     symbol = models.CharField(max_length=40, db_index=True)
     score_type = models.CharField(
@@ -900,6 +956,12 @@ class InvestmentDividend(models.Model):
         ]
 
 
+class StrategyStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    PAPER_APPROVED = "PAPER_APPROVED", "Approved for paper observation"
+    RETIRED = "RETIRED", "Retired"
+
+
 class StrategyDefinition(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -914,6 +976,27 @@ class StrategyDefinition(models.Model):
     cost_model = models.JSONField(default=dict)
     version = models.PositiveIntegerField(default=1)
     active = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=StrategyStatus.choices,
+        default=StrategyStatus.DRAFT,
+    )
+    promotion_manifest = models.ForeignKey(
+        "StrategyRunManifest",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="promoted_definitions",
+    )
+    promotion_reason = models.TextField(blank=True)
+    promoted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="promoted_strategy_definitions",
+    )
+    promoted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

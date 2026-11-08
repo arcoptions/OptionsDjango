@@ -13,6 +13,8 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Max, Min, Q
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
@@ -48,6 +50,7 @@ from .live_dashboard import (
     today_summary,
     trade_rows,
 )
+from .rate_limit import rate_limit_exceeded
 from .models import (
     AppSetting,
     ChartinkTrigger,
@@ -59,7 +62,9 @@ from .models import (
     OptionOutcome,
     SignalStatus,
     TipSignal,
+    TradeEmotion,
     TradeExecution,
+    TradeExecutionMode,
     TradeState,
     TradeStyle,
 )
@@ -287,6 +292,18 @@ def _ingest_single_telegram_message(
 @csrf_exempt
 @require_http_methods(["POST"])
 def telegram_ingest_api(request):
+    if rate_limit_exceeded(
+        scope="telegram-ingest",
+        identity=request.META.get("REMOTE_ADDR", "unknown"),
+        limit=int(os.environ.get("TELEGRAM_INGEST_RATE_LIMIT", "120")),
+        window_seconds=60,
+    ):
+        response = JsonResponse(
+            {"ok": False, "error": "Rate limit exceeded"},
+            status=429,
+        )
+        response["Retry-After"] = "60"
+        return response
     expected_token = str(AppSetting.objects.filter(key="telegram_ingest_token").values_list("value", flat=True).first() or "").strip()
     if not expected_token:
         expected_token = str(os.environ.get("TELEGRAM_INGEST_TOKEN", "") or "").strip()
@@ -1041,6 +1058,7 @@ def dhan_orders(request):
                     target_1=selected_signal.target_1,
                     target_2=selected_signal.target_2,
                     target_3=selected_signal.target_3,
+                    execution_mode=TradeExecutionMode.MANUAL,
                     journal_reason=form.cleaned_data["journal_reason"],
                 )
                 selected_signal.status = SignalStatus.ACTIVE
@@ -1082,6 +1100,28 @@ def trade_journal(request):
     if request.method == "POST":
         trade = get_object_or_404(TradeExecution, id=request.POST.get("trade_id"))
         action = request.POST.get("action")
+        if action == "update_journal":
+            journal_reason = request.POST.get("journal_reason", "").strip()
+            emotion = request.POST.get("emotion", "").strip()
+            screenshot_url = request.POST.get("screenshot_url", "").strip()
+            if len(journal_reason) < 15:
+                messages.error(request, "Journal reason must contain at least 15 characters.")
+                return redirect("trade_journal")
+            if emotion and emotion not in TradeEmotion.values:
+                messages.error(request, "Unsupported trade emotion.")
+                return redirect("trade_journal")
+            if screenshot_url:
+                try:
+                    URLValidator(schemes=["https"])(screenshot_url)
+                except ValidationError:
+                    messages.error(request, "Screenshot must use a valid HTTPS URL.")
+                    return redirect("trade_journal")
+            trade.journal_reason = journal_reason
+            trade.emotion = emotion
+            trade.screenshot_url = screenshot_url
+            trade.save(update_fields=["journal_reason", "emotion", "screenshot_url"])
+            messages.success(request, "Journal reflection updated.")
+            return redirect("trade_journal")
         if action == "close":
             if not trade.journal_reason or len(trade.journal_reason.strip()) < 15:
                 messages.error(request, "Journal is mandatory before close.")
@@ -1116,7 +1156,8 @@ def trade_journal(request):
             Q(signal__option_symbol__icontains=q)
             | Q(signal__source_name__icontains=q)
             | Q(signal__reason_tags__icontains=q)
-            | Q(journal_reason__icontains=q),
+            | Q(journal_reason__icontains=q)
+            | Q(emotion__icontains=q),
         )
     if opened_from:
         rows = rows.filter(opened_at__date__gte=opened_from)
@@ -1133,6 +1174,7 @@ def trade_journal(request):
             "symbol",
             "source",
             "state",
+            "execution_mode",
             "quantity",
             "entry_price",
             "stop_loss",
@@ -1140,6 +1182,8 @@ def trade_journal(request):
             "target_2",
             "target_3",
             "journal_reason",
+            "emotion",
+            "screenshot_url",
         ])
         for trade in rows[:5000]:
             reason = trade.journal_reason
@@ -1152,6 +1196,7 @@ def trade_journal(request):
                 trade.signal.option_symbol,
                 trade.signal.source_name,
                 trade.state,
+                trade.execution_mode,
                 trade.quantity,
                 trade.entry_price,
                 trade.stop_loss,
@@ -1159,6 +1204,8 @@ def trade_journal(request):
                 trade.target_2,
                 trade.target_3,
                 reason,
+                trade.emotion,
+                trade.screenshot_url,
             ])
         return response
     return render(request, "options_tracker/trade_journal.html", {
@@ -1168,6 +1215,7 @@ def trade_journal(request):
         "q": q,
         "opened_from": opened_from_raw,
         "opened_to": opened_to_raw,
+        "emotion_choices": TradeEmotion.choices,
     })
 
 

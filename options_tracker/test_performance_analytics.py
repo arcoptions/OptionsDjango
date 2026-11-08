@@ -5,7 +5,14 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import BrokerPnlEntry
+from .models import (
+    BrokerPnlEntry,
+    Direction,
+    MarketContextCategory,
+    MarketContextSnapshot,
+    OptionOutcome,
+    TipSignal,
+)
 from .performance_analytics import performance_context, performance_metrics
 from .radar_models import RadarOpportunity
 
@@ -64,3 +71,39 @@ class PerformanceAnalyticsTests(TestCase):
 
         self.assertContains(response, "Unified performance")
         self.assertContains(response, "do not contain trade timestamps")
+
+    def test_context_reports_provider_freshness_and_telegram_outcomes(self):
+        now = timezone.now()
+        MarketContextSnapshot.objects.create(
+            category=MarketContextCategory.SECTOR,
+            key="BANKS",
+            value=1,
+            unit="percent",
+            provider="APPROVED_MARKET",
+            source_ref="market://banks",
+            source_at=now,
+            received_at=now,
+        )
+        TipSignal.objects.create(
+            source_type="TELEGRAM",
+            source_name="Desk A",
+            option_symbol="NIFTY TEST CE",
+            direction=Direction.CE,
+            stop_loss=90,
+            outcome_status=OptionOutcome.TARGET_1,
+        )
+        TipSignal.objects.create(
+            source_type="TELEGRAM",
+            source_name="Desk A",
+            option_symbol="NIFTY TEST PE",
+            direction=Direction.PE,
+            stop_loss=90,
+            outcome_status=OptionOutcome.STOP_LOSS,
+        )
+
+        context = performance_context()
+
+        self.assertEqual(context["provider_quality"][0]["current_pct"], 100)
+        provider = context["telegram_providers"][0]
+        self.assertEqual(provider["hit_rate"], 50)
+        self.assertEqual(provider["coverage"], 100)

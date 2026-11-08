@@ -42,6 +42,22 @@
 {% endfor %}
 
 <section class="panel">
+  <h2>Market data provider quality</h2>
+  <table>
+    <thead><tr><th>Provider</th><th>Latest fields</th><th>Current</th><th>Stale</th><th>Invalid</th><th>Current coverage</th></tr></thead>
+    <tbody>{% for row in provider_quality %}<tr><td>{{ row.provider }}</td><td>{{ row.rows }}</td><td>{{ row.current }}</td><td>{{ row.stale }}</td><td>{{ row.invalid }}</td><td>{{ row.current_pct|floatformat:1 }}%</td></tr>{% empty %}<tr><td colspan="6">No provider-attributed market evidence.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Telegram provider outcomes</h2>
+  <table>
+    <thead><tr><th>Provider</th><th>Signals</th><th>Resolved</th><th>Targets</th><th>Stops</th><th>Hit rate</th><th>Resolved coverage</th></tr></thead>
+    <tbody>{% for row in telegram_providers %}<tr><td>{{ row.provider }}</td><td>{{ row.signals }}</td><td>{{ row.resolved }}</td><td>{{ row.targets }}</td><td>{{ row.stops }}</td><td>{{ row.hit_rate|floatformat:1|default:"-" }}%</td><td>{{ row.coverage|floatformat:1 }}%</td></tr>{% empty %}<tr><td colspan="7">No Telegram provider outcomes.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<section class="panel">
   <h2>Evidence limitations</h2>
   {% for limitation in limitations %}<div class="msg warning">{{ limitation }}</div>{% endfor %}
 </section>

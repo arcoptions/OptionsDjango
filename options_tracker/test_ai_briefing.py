@@ -42,7 +42,7 @@ class AIBriefingTests(TestCase):
                 stdout=StringIO(),
             )
 
-    @patch("options_tracker.ai_briefing.requests.post")
+    @patch("options_tracker.azure_openai.requests.post")
     def test_apply_stores_traceable_provider_response_without_broker_action(self, post):
         response = Mock()
         response.json.return_value = {

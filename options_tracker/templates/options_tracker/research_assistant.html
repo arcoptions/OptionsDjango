@@ -1,0 +1,42 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Research Assistant | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Evidence-grounded research assistant</h2>
+  <p class="muted">Ask about market evidence and risk. ARC records the exact question, evidence, prompt, provider, model, and response. It cannot access accounts or place orders.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="grid">
+      <label>Optional symbol<input name="symbol" maxlength="40" placeholder="NIFTY"></label>
+      <label>Research or risk question<textarea name="question" maxlength="500" required placeholder="What evidence supports today's regime, and what could invalidate it?"></textarea></label>
+    </div>
+    <button class="btn" type="submit">Generate evidence review</button>
+  </form>
+</section>
+
+{% for snapshot in snapshots %}
+<section class="panel">
+  <h2>{{ snapshot.symbol|default:"Market" }} research</h2>
+  <p><strong>Question:</strong> {{ snapshot.question }}</p>
+  <p class="muted">{{ snapshot.provider }} / {{ snapshot.model }} · {{ snapshot.generated_at }} · evidence {{ snapshot.evidence_hash|slice:":12" }}</p>
+  <div>{{ snapshot.response_text|linebreaksbr }}</div>
+  <details>
+    <summary>Evidence sources</summary>
+    <table>
+      <thead><tr><th>ID</th><th>Provider</th><th>Reference</th><th>Source time</th><th>State</th></tr></thead>
+      <tbody>
+      {% for source in snapshot.evidence.sources %}
+        <tr><td>{{ source.id }}</td><td>{{ source.provider }}</td><td>{{ source.source_ref }}</td><td>{{ source.source_at }}</td><td>{% if source.valid and not source.stale %}Current{% else %}Review{% endif %}</td></tr>
+      {% empty %}
+        <tr><td colspan="5">No provider-attributed sources were available.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+{% empty %}
+<section class="panel"><p>No saved research responses.</p></section>
+{% endfor %}
+{% endblock %}

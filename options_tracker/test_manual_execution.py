@@ -8,7 +8,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import DhanOrderEvent, Direction, SignalStatus, TipSignal, TradeExecution
+from .models import (
+    DhanOrderEvent,
+    Direction,
+    SignalStatus,
+    TipSignal,
+    TradeExecution,
+    TradeExecutionMode,
+)
 
 
 class ManualExecutionTests(TestCase):
@@ -91,6 +98,7 @@ class ManualExecutionTests(TestCase):
         place_order.assert_called_once_with(self.signal, 65)
         execution = TradeExecution.objects.get(dhan_order_id="ORDER-1")
         self.assertEqual(execution.quantity, 65)
+        self.assertEqual(execution.execution_mode, TradeExecutionMode.MANUAL)
         event = DhanOrderEvent.objects.get(status="MANUAL_CONFIRM")
         self.assertEqual(event.payload_json["actor"], "operator")
         self.assertEqual(event.payload_json["max_loss"], 780.0)

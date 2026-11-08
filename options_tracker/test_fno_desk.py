@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import IndexOISnapshot
+from .models import IndexOISnapshot, IndexOptionCandle
 
 
 class FnoDeskTests(TestCase):
@@ -30,3 +33,22 @@ class FnoDeskTests(TestCase):
         self.assertContains(response, "F&amp;O research desk", html=True)
         self.assertContains(response, "25000")
         self.assertContains(response, "manual execution boundary")
+
+    def test_desk_calculates_bounded_iv_percentile_from_stored_evidence(self):
+        IndexOISnapshot.objects.create(underlying="NIFTY")
+        now = timezone.now()
+        for index in range(20):
+            IndexOptionCandle.objects.create(
+                underlying="NIFTY",
+                relative_strike="ATM",
+                option_type="CALL",
+                timestamp=now - timedelta(minutes=index),
+                implied_volatility=20 - index,
+            )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("fno_desk"))
+
+        self.assertContains(response, "Stored implied-volatility context")
+        self.assertContains(response, "100.0%")
+        self.assertContains(response, "20")

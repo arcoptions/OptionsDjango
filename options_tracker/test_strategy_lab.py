@@ -8,8 +8,14 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import DhanOrderEvent, StockEquityCandle
-from .strategy_lab import create_definition, create_manifest, validate_strategy
+from .models import DhanOrderEvent, StockEquityCandle, StrategyStatus
+from .strategy_lab import (
+    create_definition,
+    create_manifest,
+    promote_manifest,
+    promotion_assessment,
+    validate_strategy,
+)
 
 
 class StrategyLabTests(TestCase):
@@ -194,3 +200,49 @@ class StrategyLabTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(manifest_response.status_code, 302)
         self.assertEqual(self.definition.manifests.count(), 1)
+
+    def test_promotion_requires_passing_immutable_validation_evidence(self):
+        manifest = create_manifest(
+            self.definition,
+            self.start,
+            self.start + timedelta(minutes=15),
+        )
+
+        self.assertFalse(promotion_assessment(manifest)["eligible"])
+        with self.assertRaises(ValueError):
+            promote_manifest(
+                manifest=manifest,
+                actor=self.staff,
+                reason="Evidence was reviewed and approved for paper observation.",
+            )
+        self.definition.refresh_from_db()
+        self.assertEqual(self.definition.status, StrategyStatus.DRAFT)
+
+    def test_eligible_manifest_can_only_promote_paper_observation(self):
+        manifest = create_manifest(
+            self.definition,
+            self.start,
+            self.start + timedelta(minutes=15),
+        )
+        manifest.result_snapshot = {
+            "trades": 30,
+            "max_drawdown_pct": 10,
+        }
+        manifest.validation_snapshot = {
+            "status": "COMPLETE",
+            "validation": {
+                "trades": 10,
+                "expectancy_pct": 1.5,
+                "max_drawdown_pct": 12,
+            },
+        }
+
+        definition = promote_manifest(
+            manifest=manifest,
+            actor=self.staff,
+            reason="Validation expectancy and drawdown support paper observation.",
+        )
+
+        self.assertEqual(definition.status, StrategyStatus.PAPER_APPROVED)
+        self.assertEqual(definition.promotion_manifest, manifest)
+        self.assertEqual(DhanOrderEvent.objects.count(), 0)

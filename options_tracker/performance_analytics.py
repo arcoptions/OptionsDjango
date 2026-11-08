@@ -1,7 +1,10 @@
 from collections import defaultdict
 from decimal import Decimal
 
-from .models import BrokerPeriodSummary, BrokerPnlEntry
+from django.utils import timezone
+
+from .market_context import market_context_evidence
+from .models import BrokerPeriodSummary, BrokerPnlEntry, OptionOutcome, TipSignal
 from .radar_models import RadarOpportunity
 
 
@@ -56,6 +59,8 @@ def performance_context():
         (summary.charges for summary in BrokerPeriodSummary.objects.all()),
         Decimal("0"),
     )
+    provider_quality = _provider_quality()
+    telegram_providers = _telegram_provider_quality()
     return {
         "broker": performance_metrics(
             [row.realised_pnl for row in broker_rows],
@@ -70,10 +75,13 @@ def performance_context():
         "broker_by_kind": _breakdown(broker_rows, "instrument_kind"),
         "paper_by_strategy": _paper_breakdown(paper_rows, "strategy"),
         "paper_by_symbol": _paper_breakdown(paper_rows, "symbol"),
+        "provider_quality": provider_quality,
+        "telegram_providers": telegram_providers,
         "limitations": [
             "Broker statement rows do not contain trade timestamps, so ARC does not calculate a broker equity curve or drawdown from them.",
             "Paper radar performance is reported separately from broker-realized performance.",
             "TradeExecution records do not contain realized P&L and are excluded from return metrics.",
+            "Telegram provider hit rates use recorded target and stop outcomes; they are not fill-price or execution-time P&L.",
         ],
     }
 
@@ -85,4 +93,72 @@ def _paper_breakdown(rows, field):
     return [
         {"label": label, **performance_metrics(values)}
         for label, values in sorted(buckets.items())
+    ]
+
+
+def _provider_quality():
+    buckets = defaultdict(lambda: {
+        "rows": 0,
+        "current": 0,
+        "stale": 0,
+        "invalid": 0,
+    })
+    evidence = market_context_evidence(timezone.now())
+    for rows in evidence["groups"].values():
+        for row in rows:
+            bucket = buckets[row["provider"] or "UNATTRIBUTED"]
+            bucket["rows"] += 1
+            bucket["stale"] += int(row["stale"])
+            bucket["invalid"] += int(not row["valid"])
+            bucket["current"] += int(row["valid"] and not row["stale"])
+    return [
+        {
+            "provider": provider,
+            **values,
+            "current_pct": values["current"] / values["rows"] * 100,
+        }
+        for provider, values in sorted(buckets.items())
+    ]
+
+
+def _telegram_provider_quality():
+    buckets = defaultdict(lambda: {
+        "signals": 0,
+        "resolved": 0,
+        "targets": 0,
+        "stops": 0,
+        "unresolved": 0,
+    })
+    rows = TipSignal.objects.filter(source_type="TELEGRAM").values(
+        "source_name",
+        "outcome_status",
+    )
+    for row in rows:
+        bucket = buckets[row["source_name"] or "UNATTRIBUTED"]
+        bucket["signals"] += 1
+        outcome = row["outcome_status"]
+        if outcome == OptionOutcome.TARGET_1:
+            bucket["targets"] += 1
+            bucket["resolved"] += 1
+        elif outcome == OptionOutcome.STOP_LOSS:
+            bucket["stops"] += 1
+            bucket["resolved"] += 1
+        elif outcome == OptionOutcome.UNRESOLVED:
+            bucket["unresolved"] += 1
+    return [
+        {
+            "provider": provider,
+            **values,
+            "hit_rate": (
+                values["targets"] / values["resolved"] * 100
+                if values["resolved"]
+                else None
+            ),
+            "coverage": (
+                values["resolved"] / values["signals"] * 100
+                if values["signals"]
+                else 0
+            ),
+        }
+        for provider, values in sorted(buckets.items())
     ]

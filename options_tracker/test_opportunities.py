@@ -96,6 +96,45 @@ class UnifiedOpportunityTests(TestCase):
         self.assertContains(response, opportunity.source_ref)
         self.assertContains(response, "Validate levels")
 
+    def test_derivative_plan_requires_complete_risk_and_cost_contract(self):
+        opportunity = upsert_opportunity(
+            source_type="manual",
+            source_ref="option-plan-1",
+            strategy="breakout",
+            direction="CE",
+            evidence={"price": 100},
+            rationale="Breakout supported by stored price and OI evidence.",
+        )
+        transition_opportunity(
+            opportunity,
+            OpportunityStatus.VALIDATED,
+            reason="Evidence checked",
+        )
+        with self.assertRaisesRegex(ValueError, "estimated_charges"):
+            transition_opportunity(
+                opportunity,
+                OpportunityStatus.PLANNED,
+                reason="Incomplete plan",
+            )
+        opportunity.plan = {
+            "entry": 100,
+            "stop_loss": 90,
+            "targets": [120, 130, 140],
+            "quantity": 50,
+            "estimated_charges": 75,
+            "risk_amount": 500,
+            "invalidation": "Close below the validated breakout level.",
+        }
+        opportunity.save(update_fields=["plan", "updated_at"])
+
+        transition_opportunity(
+            opportunity,
+            OpportunityStatus.PLANNED,
+            reason="Complete risk plan recorded",
+        )
+
+        self.assertEqual(opportunity.status, OpportunityStatus.PLANNED)
+
     def test_legacy_sync_is_dry_run_by_default_and_idempotent_when_applied(self):
         TipSignal.objects.create(
             option_symbol="NIFTY 25000 CE",

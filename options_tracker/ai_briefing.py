@@ -3,11 +3,10 @@
 import hashlib
 import json
 import os
-from urllib.parse import quote
 
-import requests
 from django.utils import timezone
 
+from .azure_openai import chat_completion
 from .command_centre import command_centre_context
 from .models import AIBriefingSnapshot
 
@@ -137,48 +136,15 @@ def generate_briefing(*, now=None, apply=False):
     if not apply:
         return result
 
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip().rstrip("/")
-    api_key = os.getenv("AZURE_OPENAI_API_KEY", "").strip()
     deployment = result["model"]
-    if not endpoint or not api_key or not deployment:
-        raise ValueError(
-            "Azure OpenAI briefing requires endpoint, API key, and deployment.",
-        )
-    api_version = os.getenv(
-        "AZURE_OPENAI_API_VERSION",
-        "2024-10-21",
-    ).strip()
-    url = (
-        f"{endpoint}/openai/deployments/{quote(deployment, safe='')}"
-        f"/chat/completions?api-version={quote(api_version, safe='')}"
+    provider_result = chat_completion(
+        system_prompt=(
+            "You are ARC's evidence-grounded research summarizer. "
+            "You cannot place or recommend automatic orders."
+        ),
+        user_prompt=prompt,
+        max_tokens=900,
     )
-    response = requests.post(
-        url,
-        headers={"api-key": api_key, "Content-Type": "application/json"},
-        json={
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are ARC's evidence-grounded research summarizer. "
-                        "You cannot place or recommend automatic orders."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 900,
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    try:
-        response_text = str(payload["choices"][0]["message"]["content"]).strip()
-    except (KeyError, IndexError, TypeError) as error:
-        raise ValueError("Azure OpenAI returned an invalid briefing response.") from error
-    if not response_text:
-        raise ValueError("Azure OpenAI returned an empty briefing response.")
     snapshot, _ = AIBriefingSnapshot.objects.get_or_create(
         briefing_date=timezone.localdate(now),
         provider=result["provider"],
@@ -189,7 +155,7 @@ def generate_briefing(*, now=None, apply=False):
             "prompt_version": PROMPT_VERSION,
             "prompt": prompt,
             "evidence": evidence,
-            "response_text": response_text,
+            "response_text": provider_result["response_text"],
             "source_at": now,
         },
     )

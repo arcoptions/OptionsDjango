@@ -58,3 +58,40 @@ class TradeJournalTests(TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["symbol"], "NIFTY TEST CE")
         self.assertTrue(rows[0]["journal_reason"].startswith("'="))
+
+    def test_staff_can_store_emotion_and_https_screenshot_evidence(self):
+        response = self.client.post(
+            reverse("trade_journal"),
+            {
+                "trade_id": self.trade.pk,
+                "action": "update_journal",
+                "journal_reason": "Waited for confirmation and respected the planned risk.",
+                "emotion": "CALM",
+                "screenshot_url": "https://evidence.example/chart.png",
+            },
+        )
+
+        self.assertRedirects(response, reverse("trade_journal"))
+        self.trade.refresh_from_db()
+        self.assertEqual(self.trade.emotion, "CALM")
+        self.assertEqual(
+            self.trade.screenshot_url,
+            "https://evidence.example/chart.png",
+        )
+
+    def test_journal_rejects_non_https_screenshot(self):
+        response = self.client.post(
+            reverse("trade_journal"),
+            {
+                "trade_id": self.trade.pk,
+                "action": "update_journal",
+                "journal_reason": "Waited for confirmation and respected the planned risk.",
+                "emotion": "CALM",
+                "screenshot_url": "http://evidence.example/chart.png",
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, "Screenshot must use a valid HTTPS URL.")
+        self.trade.refresh_from_db()
+        self.assertEqual(self.trade.screenshot_url, "")

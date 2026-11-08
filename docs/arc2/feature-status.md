@@ -70,6 +70,14 @@ checklist.
 * [x] Add an attributed seven-day economic and earnings calendar.
 * [x] Add a traceable evidence-only Azure OpenAI briefing workflow with prompt, model, source, and hash retention.
 * [x] Add an opt-in 8:45 AM briefing worker that remains disabled until provider configuration is approved.
+* [x] Add a staff-only research and risk assistant with evidence retention, citations, uncertainty, and broker isolation.
+* [x] Add provider freshness and Telegram outcome analytics with explicit data limitations.
+* [x] Complete journal reflection fields with emotion and HTTPS screenshot evidence.
+* [x] Gate strategy promotion to paper observation using immutable validation evidence.
+* [x] Add configurable rate limiting to the scoped Telegram ingestion endpoint.
+* [x] Add bounded stored-history IV percentile context to the F&O research desk.
+* [x] Persist manual versus legacy automatic provenance on live execution records.
+* [x] Enforce complete derivative risk and cost contracts before planning or approval.
 * [x] Add ranked long-term investment research from current, sufficiently covered provider evidence.
 * [x] Define neutral canonical instrument identity.
 * [x] Build dry-run and explicit-apply identity reconciliation.
@@ -123,5 +131,5 @@ checklist.
 |---|---|
 | Legacy NIFTY engine future | User decision to retain, convert, or retire |
 | Worker migration | Choose target only after ownership and singleton tests |
-| ARC 2.0 migrations | Rehearse `0024`-`0033` against a production-sized copy |
+| ARC 2.0 migrations | Rehearse `0024`-`0037` against a production-sized copy |
 | Production deployment | Explicit user approval |

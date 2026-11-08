@@ -38,16 +38,16 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 556 passed |
-| Test files | 32 |
-| Test classes | 73 |
+| Django application tests | 567 passed |
+| Test files | 34 |
+| Test classes | 75 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
-| Current ARC 2.0 schema changes | Migrations `0024`-`0033` applied to test SQLite; not deployed |
+| Current ARC 2.0 schema changes | Migrations `0024`-`0037` applied to test SQLite; not deployed |
 | Latest Release 1 deployment | Not performed |
-| Latest local browser smoke | Passed for 10 critical authenticated pages; 366-559 ms DOM readiness |
+| Latest local browser smoke | Passed for 10 measured critical pages at 366-559 ms DOM readiness plus 5 new authenticated assistant, journal, F&O, strategy, and performance checks with no horizontal overflow |
 | Latest Release 1 production smoke | Not performed |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
 | Production App Service | Running on Linux Basic in Central India; verified read-only through Azure MCP |
@@ -63,14 +63,14 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally | 556 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally | 567 application tests passed; browser and deployment gates remain | Not deployed | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 5 | Market Scanner and alerts | Safe configurable scanner slice implemented locally | Passed for implemented local scope | Not deployed | In progress |
 | 6 | Trading and Investment Desks | Investment Desk foundation implemented locally; F&O consolidation remains partial | Passed for implemented local scope | Not deployed | In progress |
 | 7 | Strategy Lab | Safe library and immutable manifest foundation implemented locally | Passed for implemented local scope | Not deployed | In progress |
-| 8 | Performance and AI | Unified performance foundation implemented locally; AI scope remains open | Passed for implemented local scope | Not deployed | In progress |
+| 8 | Performance and AI | Unified performance, traceable briefing, and evidence-grounded research assistant implemented locally | Passed for implemented local scope | Not deployed | In progress |
 | 9 | Integration and production readiness | Existing CI and production baseline only | Partial | Blocked by Releases 1-8 | Not started |
 
 ## Release 1 foundation and safety
@@ -171,16 +171,16 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Feature | Implementation | Testing | Deployment | Evidence or next gate |
 |---|---|---|---|---|---|
-| R6-01 | F&O research workspace | Implemented locally | Passed | Not deployed | Dedicated desk combines index OI, canonical derivatives opportunities, radar setups, readiness scores, and open records |
-| R6-02 | Option chain, quotes, OI, IV, and Greeks | Partial | Partial | Production baseline | Core chain and selected Greeks exist; IV percentile and full futures context are incomplete |
+| R6-01 | F&O research workspace | Implemented locally | Passed | Not deployed | Dedicated desk combines index OI, stored IV percentile context, canonical derivatives opportunities, radar setups, readiness scores, and open records |
+| R6-02 | Option chain, quotes, OI, IV, and Greeks | Partial | Passed for implemented scope | Not deployed | Core chain, selected Greeks, and bounded stored-history IV percentile exist; full futures context remains incomplete |
 | R6-03 | Underlying charts and indicator context | Partial | Partial | Production baseline | Radar and index pages provide subsets |
-| R6-04 | Complete trade recommendation contract | Partial | Partial | Production baseline | Existing signals include many fields; three targets, charges, and common rationale are inconsistent |
+| R6-04 | Complete trade recommendation contract | Implemented locally | Passed | Not deployed | Derivative opportunities cannot enter planned or approved state without entry, stop, targets, quantity, estimated charges, risk amount, invalidation, and rationale |
 | R6-05 | Risk-based option position sizing | Verified baseline | Passed | Production baseline | Existing engine and radar sizing include lot and risk constraints |
 | R6-06 | Liquidity and executable-quote rejection | Verified baseline | Passed | Production baseline | Radar readiness and live-engine gates exist |
 | R6-07 | Manual live execution confirmation | Implemented locally | Passed | Not deployed | Signed staff review and explicit live checkbox |
-| R6-08 | Paper and live execution separation | Partial | Passed | Production baseline | Radar is paper-only; legacy engine and generic execution records still need stronger boundaries |
+| R6-08 | Paper and live execution separation | Implemented locally | Passed | Not deployed | Paper radar remains in a separate ledger; live records now identify reviewed manual, legacy automatic, imported, or historical execution provenance |
 | R6-09 | Long-term investment workspace | Implemented locally | Passed | Not deployed | Dedicated theses, holdings, dividends, allocation, and review reminders remain separate from short-term signals |
-| R6-10 | Fundamental investment screener and fair value | Not started | None | Not deployed | Depends on Release 4 fundamentals |
+| R6-10 | Fundamental investment screener and fair value | Partial | Passed for implemented scope | Not deployed | Provider-attributed investment scores and confidence are ranked and scannable; an approved valuation methodology and production fundamentals remain |
 | R6-11 | Thesis, invalidation, and accumulation zones | Implemented locally | Passed | Not deployed | Staff-only Investment Desk validates thesis, invalidation, allocation target, accumulation range, and review date |
 | R6-12 | Holdings, dividends, allocation, and review reminders | Implemented locally | Passed | Not deployed | Dedicated investment records calculate allocation and unrealized value without reusing broker execution records |
 
@@ -197,7 +197,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R7-07 | Paper trading | Verified baseline | Passed | Production baseline | Radar and swing paper books exist |
 | R7-08 | Strategy comparison and performance dashboard | Implemented locally | Passed | Not deployed | Strategy Lab compares immutable runs by trades, net return, drawdown, validation state, data hash, and code version |
 | R7-09 | Immutable research manifests and hashes | Implemented locally | Passed | Not deployed | Identical inputs deduplicate; stored manifests reject update and deletion |
-| R7-10 | Evidence-based promotion gate | Partial | Partial | Production baseline | Manual publication exists; CI approval checks are pending |
+| R7-10 | Evidence-based promotion gate | Implemented locally | Passed | Not deployed | Immutable manifests must pass trade-count, chronological validation, expectancy, and drawdown gates before staff can approve paper observation; no broker mode is enabled |
 
 ## Release 8 Performance and AI
 
@@ -206,13 +206,13 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R8-01 | Unified performance dashboard | Implemented locally | Passed | Not deployed | One staff dashboard presents broker-realized and paper-radar evidence without combining them |
 | R8-02 | Daily through annual P&L and equity curve | Partial | Partial | Production baseline | Several periods and curves exist, not one complete dashboard |
 | R8-03 | Win rate, expectancy, profit factor, and drawdown | Implemented locally | Passed | Not deployed | Drawdown is calculated only for timestamped paper rows; unsupported broker drawdown remains explicitly unavailable |
-| R8-04 | Strategy, stock, instrument, broker, and provider cuts | Partial | Passed for implemented scope | Not deployed | Broker, underlying, instrument kind, paper strategy, and paper symbol cuts are unified; provider scoring remains open |
-| R8-05 | Complete journal fields, search, filters, and export | Partial | Passed for implemented scope | Not deployed | Evidence search, state and date filters, and formula-safe filtered CSV export are implemented; screenshots and emotion fields remain |
-| R8-06 | Telegram provider analytics | Partial | Partial | Production baseline | Signal tracking exists; full execution-time-fair metrics are incomplete |
-| R8-07 | General ARC AI assistant | Not started | None | Not deployed | Requires structured retrieval, citations, uncertainty, and reproducibility |
+| R8-04 | Strategy, stock, instrument, broker, and provider cuts | Implemented locally | Passed | Not deployed | Broker, underlying, instrument kind, paper strategy, paper symbol, market-provider freshness, and Telegram-provider outcomes are unified |
+| R8-05 | Complete journal fields, search, filters, and export | Implemented locally | Passed | Not deployed | Evidence search, state and date filters, formula-safe CSV export, emotion, and HTTPS screenshot references are implemented |
+| R8-06 | Telegram provider analytics | Implemented locally | Passed | Not deployed | Provider-level resolved coverage, target count, stop count, and hit rate are shown; the dashboard explicitly does not present these as execution-time P&L |
+| R8-07 | General ARC AI assistant | Implemented locally | Passed | Not deployed | Staff-only assistant stores the question, evidence, prompt, hashes, provider, model, and response; it remains unavailable without approved provider configuration |
 | R8-08 | Radar assistant | Partial | Partial | Production baseline | Persisted assistant snapshots exist with limited scope |
 | R8-09 | AI market briefing | Implemented locally | Passed | Not deployed | Evidence-only Azure OpenAI workflow is traceable and fails unavailable when provider configuration is absent; production provider coverage remains |
-| R8-10 | AI research and risk explanations | Not started | None | Not deployed | Must never bypass deterministic controls or initiate orders |
+| R8-10 | AI research and risk explanations | Implemented locally | Passed | Not deployed | Evidence-only responses separate facts, interpretation, risks, and manual verification; tests prove no broker activity |
 
 ## Cross-cutting data, operations, security, and experience
 
@@ -222,7 +222,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | X-02 | Source timestamp and freshness envelope | Partial | Partial | Production baseline | Strongest in radar and ticker; not universal |
 | X-03 | LIVE, DELAYED, STALE, HISTORICAL, MISSING states | Partial | Partial | Production baseline | Several labels exist without one shared enum and contract |
 | X-04 | Bounded retries, rate limits, and explicit failures | Partial | Partial | Production baseline | Provider-specific behavior exists |
-| X-05 | Central operations dashboard | Not started | None | Not deployed | Health is fragmented across radar, NIFTY, CAS, and deployment views |
+| X-05 | Central operations dashboard | Implemented locally | Passed | Not deployed | Staff-only Operations Health consolidates execution policy, deployment, provider, worker, engine, token, and data-health evidence |
 | X-06 | Worker heartbeats and singleton ownership | Partial | Partial | Production baseline | Radar leases and selected heartbeats exist |
 | X-07 | Job locks and duplicate protection | Partial | Partial | Production baseline | Implemented in selected workers, not standardized |
 | X-08 | Canonical instrument and aliases | Blocked | None | Not deployed | Requires D-008 decision and reconciliation evidence |
@@ -230,7 +230,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | X-10 | Audit trail for material actions | Partial | Partial | Production baseline | Order, radar, and settings events exist; actor coverage is incomplete |
 | X-11 | Secret management | Verified baseline | Partial | Production baseline | Azure settings and root-only VM environment are established |
 | X-12 | Input validation and secure errors | Partial | Partial | Production baseline | Django forms and service checks exist; route audit remains |
-| X-13 | Rate limiting | Not started | None | Not deployed | Apply selectively after endpoint threat assessment |
+| X-13 | Rate limiting | Partial | Passed for implemented scope | Not deployed | Scoped Telegram ingestion now has configurable per-process remote-address throttling; distributed throttling requires shared cache infrastructure |
 | X-14 | Responsive terminal UX | Partial | Partial | Production baseline | Shared responsive shell exists; target nine-area UX is pending |
 | X-15 | Fast search, filters, and pagination | Partial | Partial | Production baseline | Implemented in selected tracker and radar pages |
 | X-16 | No raw JSON or developer logs in normal flows | Partial | Partial | Production baseline | Most pages comply; operations and legacy views need review |
@@ -240,12 +240,12 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 556 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 567 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
 | G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL database name, and code-forced preview mode; cloud staging resources and isolated workers remain |
-| G-06 | Migration rehearsal | Partial | `0024`-`0033` pass an empty test database; existing-data PostgreSQL rehearsal and rollback evidence remain |
+| G-06 | Migration rehearsal | Partial | `0024`-`0037` pass an empty test database; existing-data PostgreSQL rehearsal and rollback evidence remain |
 | G-07 | Production-sized data validation | Open | Query, lock, duration, and backfill-resume evidence |
 | G-08 | Performance budgets | Partial | Query ceilings pass; local browser DOM readiness was 366-559 ms across 10 critical pages, while production load and polling measurements remain |
 | G-09 | Backup and restore rehearsal | Partial | Azure confirms seven-day automated retention; geo-redundant backup is disabled and no isolated restore has been rehearsed |
@@ -257,14 +257,14 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | Workflow | Current status | Main gap |
 |---|---|---|
-| Login to Home to market briefing | Partial | Deterministic sourced briefing exists; approved production providers and traceable AI briefing remain |
+| Login to Home to market briefing | Partial | Deterministic and traceable AI briefing workflows exist; approved production provider configuration remains |
 | Discover stock to research to score to opportunity | Implemented locally | Provider-neutral evidence, scores, opportunities, and ranked investment research await deployment and production feeds |
 | Telegram tip to parse to validate to outcome | Implemented locally | Secure intake and canonical lifecycle pass locally; production deployment and provider outcome analytics remain |
 | Scanner alert to research to trade plan | Partial | Existing scanners are not connected to one trade-plan workflow |
 | F&O recommendation to risk to manual approval to execution record | Implemented locally | Deployment and browser smoke are pending |
 | Investment idea to thesis to holding | Implemented locally | Deployment and browser smoke evidence remain |
 | Strategy to backtest to paper trade to review | Partial | Several strategy-specific paths exist without one reproducible workflow |
-| Close trade to journal to performance | Partial | Core records exist; unified analytics and complete journal fields remain |
+| Close trade to journal to performance | Implemented locally | Journal reflection, emotion, screenshot evidence, filtered export, and unified analytics pass locally; production deployment remains |
 
 ## Current blockers and decisions
 

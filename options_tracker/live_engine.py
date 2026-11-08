@@ -56,6 +56,7 @@ from .models import (
     SignalStatus,
     TipSignal,
     TradeExecution,
+    TradeExecutionMode,
     TradeState,
     TradeStyle,
 )
@@ -614,6 +615,7 @@ def open_position(candidate, state, now=None, dry_run=False, entry_override=None
         stop_loss=stop,
         target_1=signal.target_1,
         state=TradeState.OPEN,
+        execution_mode=TradeExecutionMode.LEGACY_AUTO,
         journal_reason=json.dumps(order_payload, default=str),
         opened_at=now,
     )

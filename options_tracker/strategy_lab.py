@@ -6,7 +6,12 @@ from collections import deque
 from django.db import transaction
 from django.utils import timezone
 
-from .models import StockEquityCandle, StrategyDefinition, StrategyRunManifest
+from .models import (
+    StockEquityCandle,
+    StrategyDefinition,
+    StrategyRunManifest,
+    StrategyStatus,
+)
 
 
 TEMPLATES = {
@@ -29,6 +34,9 @@ COST_FIELDS = {
 }
 MAX_BACKTEST_ROWS = 250000
 BACKTEST_NOTIONAL = 100000
+PROMOTION_MINIMUM_TRADES = 20
+PROMOTION_MINIMUM_VALIDATION_TRADES = 5
+PROMOTION_MAXIMUM_DRAWDOWN_PCT = 25
 
 
 def _validate_numeric_map(values, schema, label):
@@ -61,6 +69,75 @@ def validate_strategy(template, parameters, cost_model):
         _validate_numeric_map(parameters, TEMPLATES[template], "parameter"),
         _validate_numeric_map(cost_model, COST_FIELDS, "cost"),
     )
+
+
+def promotion_assessment(manifest):
+    result = manifest.result_snapshot
+    validation = manifest.validation_snapshot.get("validation", {})
+    checks = [
+        {
+            "label": f"At least {PROMOTION_MINIMUM_TRADES} total trades",
+            "passed": result.get("trades", 0) >= PROMOTION_MINIMUM_TRADES,
+        },
+        {
+            "label": (
+                f"At least {PROMOTION_MINIMUM_VALIDATION_TRADES} validation trades"
+            ),
+            "passed": (
+                validation.get("trades", 0)
+                >= PROMOTION_MINIMUM_VALIDATION_TRADES
+            ),
+        },
+        {
+            "label": "Positive validation expectancy",
+            "passed": (validation.get("expectancy_pct") or 0) > 0,
+        },
+        {
+            "label": (
+                "Validation drawdown does not exceed "
+                f"{PROMOTION_MAXIMUM_DRAWDOWN_PCT}%"
+            ),
+            "passed": (
+                validation.get("max_drawdown_pct", 100)
+                <= PROMOTION_MAXIMUM_DRAWDOWN_PCT
+            ),
+        },
+        {
+            "label": "Chronological validation is complete",
+            "passed": manifest.validation_snapshot.get("status") == "COMPLETE",
+        },
+    ]
+    return {
+        "eligible": all(check["passed"] for check in checks),
+        "checks": checks,
+    }
+
+
+@transaction.atomic
+def promote_manifest(*, manifest, actor, reason):
+    if manifest.definition.owner_id != actor.pk:
+        raise ValueError("Only the strategy owner can promote this manifest.")
+    reason = reason.strip()
+    if len(reason) < 20:
+        raise ValueError("Promotion reason must contain at least 20 characters.")
+    assessment = promotion_assessment(manifest)
+    if not assessment["eligible"]:
+        raise ValueError("Manifest does not meet the paper-promotion evidence gates.")
+    definition = manifest.definition
+    definition.status = StrategyStatus.PAPER_APPROVED
+    definition.promotion_manifest = manifest
+    definition.promotion_reason = reason
+    definition.promoted_by = actor
+    definition.promoted_at = timezone.now()
+    definition.save(update_fields=[
+        "status",
+        "promotion_manifest",
+        "promotion_reason",
+        "promoted_by",
+        "promoted_at",
+        "updated_at",
+    ])
+    return definition
 
 
 @transaction.atomic

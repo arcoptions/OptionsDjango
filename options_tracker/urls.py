@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import path
 
 from . import (
+    ai_views,
     cas_views,
     fno_views,
     investment_views,
@@ -72,4 +73,5 @@ urlpatterns = [
     path("fno-desk/", authenticated(fno_views.fno_desk), name="fno_desk"),
     path("strategy-lab/", authenticated(strategy_views.strategy_lab), name="strategy_lab"),
     path("performance/", authenticated(performance_views.performance_dashboard), name="performance_dashboard"),
+    path("assistant/", ai_views.research_assistant, name="research_assistant"),
 ]
