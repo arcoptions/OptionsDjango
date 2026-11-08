@@ -15,6 +15,21 @@
   </div>
 </section>
 
+<section class="panel">
+  <h2>Traceable AI daily briefing</h2>
+  {% if command.briefing %}
+    <p style="white-space:pre-wrap;">{{ command.briefing.response_text }}</p>
+    <p class="muted">
+      {{ command.briefing.provider }} · {{ command.briefing.model }} ·
+      {{ command.briefing.prompt_version }} ·
+      evidence <code>{{ command.briefing.evidence_hash|slice:":12" }}</code> ·
+      {{ command.briefing.generated_at|date:"d M H:i" }}
+    </p>
+  {% else %}
+    <p class="muted">No generated briefing for today. ARC will not fabricate one when an approved AI provider is unconfigured or evidence is unavailable.</p>
+  {% endif %}
+</section>
+
 <div class="grid">
   {% for index in command.indexes %}
   <section class="panel">
@@ -55,6 +70,7 @@
         {{ row.key }}: {{ row.value }} {{ row.unit }}
         {% if row.stale %}<span class="active-pill">STALE</span>{% endif %}<br>
         <span class="muted">{{ row.provider }} · {{ row.source_at|date:"d M H:i" }} · {{ row.source_ref }}</span>
+        {% if not row.valid %}<br><span class="error">{{ row.issues|join:", " }}</span>{% endif %}
       </p>
       {% empty %}<p class="muted">No approved provider evidence.</p>{% endfor %}
     </article>

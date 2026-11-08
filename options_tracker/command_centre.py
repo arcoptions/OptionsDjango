@@ -8,6 +8,7 @@ from django.utils import timezone
 from .action_workspace import action_list_context
 from .market_context import market_context_evidence
 from .models import (
+    AIBriefingSnapshot,
     IndexOISnapshot,
     StockFundamentalSnapshot,
     StockScoreSnapshot,
@@ -203,6 +204,9 @@ def command_centre_context(now=None):
     regime = derive_regime(indexes[0]["change_percent"], breadth["average_change_percent"])
     operations = operations_snapshot(now)
     market_context = market_context_evidence(now)
+    briefing = AIBriefingSnapshot.objects.filter(
+        briefing_date=timezone.localdate(now),
+    ).first()
     return {
         "generated_at": now,
         "indexes": indexes,
@@ -217,4 +221,5 @@ def command_centre_context(now=None):
         )[:8],
         "operations": operations,
         "market_context": market_context,
+        "briefing": briefing,
     }

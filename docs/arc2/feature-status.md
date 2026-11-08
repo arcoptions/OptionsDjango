@@ -68,13 +68,14 @@ checklist.
 * [x] Add provider-attributed global markets and macro evidence ingestion.
 * [x] Add sector, FII, and DII evidence with explicit freshness.
 * [x] Add an attributed seven-day economic and earnings calendar.
-* [ ] Add traceable AI daily briefing.
+* [x] Add a traceable evidence-only Azure OpenAI briefing workflow with prompt, model, source, and hash retention.
+* [x] Add an opt-in 8:45 AM briefing worker that remains disabled until provider configuration is approved.
 * [x] Add ranked long-term investment research from current, sufficiently covered provider evidence.
 * [x] Define neutral canonical instrument identity.
 * [x] Build dry-run and explicit-apply identity reconciliation.
-* [ ] Define common provenance and freshness contract.
-* [ ] Version polling JSON payloads.
-* [ ] Add provider contract tests.
+* [x] Define common provider, source, receipt, validity, freshness, and issue metadata.
+* [x] Version browser polling JSON payloads in body and response headers.
+* [x] Add provider contract tests for attribution, future timestamps, freshness, and idempotency.
 
 ## Later releases
 
@@ -122,5 +123,5 @@ checklist.
 |---|---|
 | Legacy NIFTY engine future | User decision to retain, convert, or retire |
 | Worker migration | Choose target only after ownership and singleton tests |
-| ARC 2.0 migrations | Rehearse `0024`-`0032` against a production-sized copy |
+| ARC 2.0 migrations | Rehearse `0024`-`0033` against a production-sized copy |
 | Production deployment | Explicit user approval |

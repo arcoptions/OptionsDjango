@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import EconomicEvent, MarketContextCategory, MarketContextSnapshot
+from .provider_evidence import evidence_metadata
 
 
 STALE_AFTER = {
@@ -24,16 +25,19 @@ def market_context_evidence(now=None):
         latest.setdefault((snapshot.category, snapshot.key), snapshot)
     groups = {category: [] for category in MarketContextCategory.values}
     for snapshot in latest.values():
-        age_seconds = max(0, int((now - snapshot.source_at).total_seconds()))
+        metadata = evidence_metadata(
+            provider=snapshot.provider,
+            source_ref=snapshot.source_ref,
+            source_at=snapshot.source_at,
+            received_at=snapshot.received_at,
+            now=now,
+            stale_after_seconds=STALE_AFTER[snapshot.category],
+        )
         groups[snapshot.category].append({
             "key": snapshot.key,
             "value": snapshot.value,
             "unit": snapshot.unit,
-            "provider": snapshot.provider,
-            "source_ref": snapshot.source_ref,
-            "source_at": snapshot.source_at,
-            "age_seconds": age_seconds,
-            "stale": age_seconds > STALE_AFTER[snapshot.category],
+            **metadata,
         })
     events = EconomicEvent.objects.filter(
         starts_at__gte=now,

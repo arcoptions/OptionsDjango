@@ -10,6 +10,7 @@ from options_tracker.models import (
     MarketContextCategory,
     MarketContextSnapshot,
 )
+from options_tracker.provider_evidence import FUTURE_TOLERANCE
 
 
 def _timestamp(value, label):
@@ -37,13 +38,16 @@ def validate_payload(payload):
         source_ref = str(row.get("source_ref") or "").strip()
         if not key or not source_ref:
             raise CommandError("Market context key and source_ref are required")
+        source_at = _timestamp(row.get("source_at"), "source_at")
+        if source_at > timezone.now() + FUTURE_TOLERANCE:
+            raise CommandError("source_at cannot be more than five minutes in the future")
         context_rows.append({
             "category": category,
             "key": key,
             "value": value,
             "unit": str(row.get("unit") or ""),
             "source_ref": source_ref,
-            "source_at": _timestamp(row.get("source_at"), "source_at"),
+            "source_at": source_at,
             "payload": row.get("payload") or {},
         })
     events = []
@@ -82,34 +86,37 @@ class Command(BaseCommand):
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as error:
             raise CommandError(f"Market context file is invalid JSON: {error}") from error
+        provider = str(options["provider"] or "").strip()
+        if not provider:
+            raise CommandError("Provider name is required")
         context_rows, events = validate_payload(payload)
         if options["apply"]:
             for row in context_rows:
                 MarketContextSnapshot.objects.update_or_create(
                     category=row["category"],
                     key=row["key"],
-                    provider=options["provider"],
+                    provider=provider,
                     source_at=row["source_at"],
                     defaults={
                         **row,
-                        "provider": options["provider"],
+                        "provider": provider,
                         "received_at": timezone.now(),
                     },
                 )
             for row in events:
                 EconomicEvent.objects.update_or_create(
-                    provider=options["provider"],
+                    provider=provider,
                     source_ref=row["source_ref"],
                     starts_at=row["starts_at"],
                     defaults={
                         **row,
-                        "provider": options["provider"],
+                        "provider": provider,
                         "received_at": timezone.now(),
                     },
                 )
         self.stdout.write(json.dumps({
             "mode": "apply" if options["apply"] else "dry-run",
-            "provider": options["provider"],
+            "provider": provider,
             "context_rows": len(context_rows),
             "events": len(events),
         }))

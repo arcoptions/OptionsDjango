@@ -24,6 +24,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from .access import staff_required_for_unsafe_methods
+from .api_contract import versioned_json
 from .deployment import sync_status
 from .execution_policy import execution_policy
 from .forms import DhanCredentialsForm, SignalFilterForm, TelegramBulkForm, TipSignalForm, TrackedOptionEditForm, TradeExecutionForm, TriggerPromoteForm
@@ -153,11 +154,14 @@ def market_ticker_api(request):
         source = "stored_index_oi"
         stale = (timezone.now() - snapshot.created_at).total_seconds() > 300
     else:
-        return JsonResponse({"ok": False, "error": "No live or stored NIFTY quote is available."}, status=503)
+        return versioned_json(
+            {"ok": False, "error": "No live or stored NIFTY quote is available."},
+            status=503,
+        )
 
     change = float(snapshot.underlying_change or 0) if snapshot else 0
     previous = price - change
-    return JsonResponse({
+    return versioned_json({
         "ok": True,
         "symbol": "NIFTY50",
         "price": price,
@@ -498,7 +502,7 @@ def option_live_prices(request):
         "id", "live_price", "entry_price", "outcome_status", "quote_updated_at", "security_id", "exchange_segment",
         "dhan_display_name", "expiry_date",
     ))
-    return JsonResponse({
+    return versioned_json({
         "ok": not bool(refresh_result["error"]),
         "error": refresh_result["error"],
         "market_closed": bool(refresh_result.get("market_closed")),
@@ -1310,7 +1314,7 @@ def nifty_live_status_api(request):
     """Just the engine's heartbeat, for the Live tab to poll without a reload."""
     engine = engine_snapshot()
     today = today_summary(trade_rows())
-    return JsonResponse({
+    return versioned_json({
         "ok": True,
         "state": engine["state"],
         "dry_run": engine["dry_run"],

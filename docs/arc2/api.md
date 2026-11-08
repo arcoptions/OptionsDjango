@@ -5,7 +5,9 @@ description: Maintained inventory of current HTTP endpoints, payload roles, auth
 
 ## API status
 
-ARC does not currently expose a versioned public REST API. It has server-rendered pages plus JSON helper endpoints used by polling, ingestion, and radar interactions.
+ARC does not expose a public REST API. It has server-rendered pages plus JSON
+helper endpoints used by polling, ingestion, and radar interactions. Browser
+polling responses carry `api_version` and `X-ARC-API-Version`.
 
 ## JSON endpoints
 
@@ -101,7 +103,7 @@ The radar workspace is a large read model containing:
 * Market context.
 * Portfolio and worker health.
 
-Release 2 should version this payload before material client-side changes.
+The workspace payload uses the shared browser polling contract version.
 
 ## ARC 2.0 API policy
 
@@ -135,4 +137,5 @@ Read requests no longer archive expired signals as a side effect. Active views
 filter expired contracts, Archive includes them without mutation, and actual
 status updates remain on protected POST or quote-refresh paths.
 
-Payload versioning and canonical instrument references belong in Release 2.
+Browser polling payload versioning and canonical instrument references are
+implemented locally. External ingestion retains its scoped integration contract.

@@ -7,12 +7,12 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from .api_contract import versioned_json
 from .models import AppSetting, CasAuctionEvent, DhanOrderEvent
 
 ENABLED_KEY = "nifty_cas_enabled"
@@ -106,4 +106,4 @@ def cas_dashboard(request):
 @staff_member_required(login_url="admin:login")
 @require_http_methods(["GET"])
 def cas_status_api(request):
-    return JsonResponse({"ok": True, **cas_dashboard_state()})
+    return versioned_json({"ok": True, **cas_dashboard_state()})

@@ -64,6 +64,28 @@ class MarketContextTests(TestCase):
         with self.assertRaises(CommandError):
             self.run_import(payload)
 
+    def test_import_and_read_contract_reject_future_provider_evidence(self):
+        now = timezone.now()
+        payload = self.payload(now + timedelta(minutes=6))
+        with self.assertRaises(CommandError):
+            self.run_import(payload)
+
+        row = MarketContextSnapshot.objects.create(
+            category="GLOBAL_INDEX",
+            key="Future record",
+            value=1,
+            provider="APPROVED_TEST",
+            source_ref="future-record",
+            source_at=now + timedelta(minutes=6),
+            received_at=now,
+        )
+        evidence = market_context_evidence(now)["groups"]["GLOBAL_INDEX"][0]
+
+        self.assertEqual(evidence["source_ref"], row.source_ref)
+        self.assertFalse(evidence["valid"])
+        self.assertTrue(evidence["stale"])
+        self.assertIn("source timestamp is in the future", evidence["issues"])
+
     def test_context_retains_provider_freshness_and_calendar_evidence(self):
         now = timezone.now()
         self.run_import(self.payload(now), "--apply")

@@ -649,6 +649,35 @@ class EconomicEvent(models.Model):
         ]
 
 
+class AIBriefingSnapshot(models.Model):
+    briefing_date = models.DateField(db_index=True)
+    provider = models.CharField(max_length=40)
+    model = models.CharField(max_length=100)
+    prompt_version = models.CharField(max_length=30)
+    prompt_hash = models.CharField(max_length=64)
+    evidence_hash = models.CharField(max_length=64)
+    prompt = models.TextField()
+    evidence = models.JSONField(default=dict)
+    response_text = models.TextField()
+    source_at = models.DateTimeField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-briefing_date", "-generated_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "briefing_date",
+                    "provider",
+                    "model",
+                    "prompt_hash",
+                    "evidence_hash",
+                ],
+                name="ai_briefing_identity",
+            ),
+        ]
+
+
 class StockScoreSnapshot(models.Model):
     symbol = models.CharField(max_length=40, db_index=True)
     score_type = models.CharField(

@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
+from .api_contract import versioned_json
 from .models import RadarInstrument, RadarOpportunity, RadarWatch, RadarWorkspace, RadarPriceAlert, RadarNotificationRoute, RadarQuote
 from .radar import S, STRATEGIES, Policy, fresh, acknowledge
 from .radar_price_alerts import alert_payload
@@ -41,8 +42,8 @@ def workspace_data(request):
     try:
         payload = live_workspace_payload(request.user, request.GET.dict())
     except ValueError as error:
-        return JsonResponse({"error": str(error)}, status=400)
-    response = JsonResponse(payload)
+        return versioned_json({"error": str(error)}, status=400)
+    response = versioned_json(payload)
     response["Cache-Control"] = "no-store"
     return response
 

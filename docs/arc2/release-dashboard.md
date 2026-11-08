@@ -38,14 +38,14 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 549 passed |
-| Test files | 31 |
-| Test classes | 71 |
+| Django application tests | 556 passed |
+| Test files | 32 |
+| Test classes | 73 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
-| Current ARC 2.0 schema changes | Migrations `0024`-`0032` applied to test SQLite; not deployed |
+| Current ARC 2.0 schema changes | Migrations `0024`-`0033` applied to test SQLite; not deployed |
 | Latest Release 1 deployment | Not performed |
 | Latest local browser smoke | Passed for 10 critical authenticated pages; 366-559 ms DOM readiness |
 | Latest Release 1 production smoke | Not performed |
@@ -63,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally except legacy-auto decision | 549 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally | 556 application tests passed; browser and deployment gates remain | Not deployed | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
@@ -83,7 +83,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R1-04 | Manual execution mode by default | Implemented locally | Passed | Not deployed | Central `manual`, `preview`, and `legacy_auto` policy |
 | R1-05 | Existing-position protection while entries are disarmed | Implemented locally | Passed | Not deployed | Engine manages an open position even when new entries are disabled |
 | R1-06 | Emergency execution kill switch | Implemented locally | Passed | Not deployed | Preview mode blocks worker and manually confirmed broker mutations at both view and service boundaries |
-| R1-07 | No unattended live orders | Blocked | Partial | Not deployed | Default is safe, but explicit `legacy_auto` remains capable of automatic entry pending final legacy-engine decision |
+| R1-07 | No unattended live orders by default | Implemented locally | Passed | Not deployed | Manual is the default; automatic entry requires the explicit operator-controlled `legacy_auto` compatibility mode retained by product decision |
 | R1-08 | Telegram ingestion fails closed | Implemented locally | Passed | Not deployed | Missing secret returns 503; invalid secret returns 401; valid Telegram secret is tested |
 | R1-09 | GET mutations converted to POST | Implemented locally | Passed | Not deployed | Legacy sync and archive controls are POST-only; read views filter expired contracts without changing records |
 | R1-10 | Route authorization matrix | Implemented locally | Passed | Not deployed | Anonymous, authenticated reader, staff, method, and enforced-CSRF behavior are covered |
@@ -106,13 +106,13 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R2-03 | Global index and macro board | Implemented locally | Passed | Not deployed | Provider-attributed ingestion and stale-state UI are ready; approved production feeds remain unconfigured |
 | R2-04 | Breadth, sector, and FII/DII context | Implemented locally | Passed | Not deployed | Fresh Dhan breadth and provider-neutral sector and flow evidence retain provenance and freshness |
 | R2-05 | Economic and earnings calendar | Implemented locally | Passed | Not deployed | Seven-day attributed events import idempotently; approved production feed remains unconfigured |
-| R2-06 | Traceable AI daily briefing | Not started | None | Not deployed | Must retrieve evidence and retain source, timestamp, prompt, and model metadata |
+| R2-06 | Traceable AI daily briefing | Implemented locally | Passed | Not deployed | Provider-gated workflow stores evidence, sources, exact prompt, prompt and evidence hashes, model, response, and timestamp; production Azure OpenAI remains unconfigured |
 | R2-07 | Bullish, bearish, and sideways scenarios | Implemented locally | Passed | Not deployed | Deterministic NIFTY and breadth thresholds select one current scenario and response |
 | R2-08 | Market regime and approach | Implemented locally | Passed | Not deployed | Bullish, bearish, sideways, mixed, and insufficient-data states have explicit approaches |
 | R2-09 | Ranked trading opportunities | Implemented locally | Passed | Not deployed | Home reuses the evidence-gated Action List ranking and retains review destinations |
 | R2-10 | Ranked investment opportunities | Implemented locally | Passed | Not deployed | Home ranks current provider-attributed investment scores with confidence, evidence, and a research-only next action |
 | R2-11 | Personal trading desk | Implemented locally | Passed | Not deployed | Home combines action counts, open positions, manual mode, and operations readiness |
-| R2-12 | Source, age, confidence, and next action on every card | Partial | Passed for Home | Not deployed | Home index and opportunity cards expose evidence fields; a cross-workspace contract remains |
+| R2-12 | Source, age, confidence, and next action on every card | Partial | Passed for Home and provider context | Not deployed | Home uses a shared provider, source, receipt, validity, freshness, and issue envelope; remaining legacy workspaces still need adoption |
 
 ## Release 3 Opportunity Inbox
 
@@ -211,7 +211,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R8-06 | Telegram provider analytics | Partial | Partial | Production baseline | Signal tracking exists; full execution-time-fair metrics are incomplete |
 | R8-07 | General ARC AI assistant | Not started | None | Not deployed | Requires structured retrieval, citations, uncertainty, and reproducibility |
 | R8-08 | Radar assistant | Partial | Partial | Production baseline | Persisted assistant snapshots exist with limited scope |
-| R8-09 | AI market briefing | Not started | None | Not deployed | Depends on Command Centre provider coverage |
+| R8-09 | AI market briefing | Implemented locally | Passed | Not deployed | Evidence-only Azure OpenAI workflow is traceable and fails unavailable when provider configuration is absent; production provider coverage remains |
 | R8-10 | AI research and risk explanations | Not started | None | Not deployed | Must never bypass deterministic controls or initiate orders |
 
 ## Cross-cutting data, operations, security, and experience
@@ -240,12 +240,12 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 549 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 556 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
 | G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL database name, and code-forced preview mode; cloud staging resources and isolated workers remain |
-| G-06 | Migration rehearsal | Partial | `0024`-`0032` pass an empty test database; existing-data PostgreSQL rehearsal and rollback evidence remain |
+| G-06 | Migration rehearsal | Partial | `0024`-`0033` pass an empty test database; existing-data PostgreSQL rehearsal and rollback evidence remain |
 | G-07 | Production-sized data validation | Open | Query, lock, duration, and backfill-resume evidence |
 | G-08 | Performance budgets | Partial | Query ceilings pass; local browser DOM readiness was 366-559 ms across 10 critical pages, while production load and polling measurements remain |
 | G-09 | Backup and restore rehearsal | Partial | Azure confirms seven-day automated retention; geo-redundant backup is disabled and no isolated restore has been rehearsed |
@@ -271,8 +271,8 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Decision | Status | Effect |
 |---|---|---|
 | Canonical instrument implementation | Resolved locally | Neutral identity selected; migration `0024` remains undeployed pending rehearsal |
-| Legacy NIFTY automatic engine | Open | Prevents full compliance with the no-unattended-order acceptance criterion |
-| Public route policy | Open | Blocks the final authentication matrix |
+| Legacy NIFTY automatic engine | Resolved locally | Retained behind explicit `legacy_auto`; manual remains default and preview blocks all broker mutations |
+| Public route policy | Resolved locally | Browser application routes require sessions; unsafe controls require staff; scoped integration endpoints retain secret authentication |
 | Worker hosting changes | Deferred | Operations must first prove ownership, idempotency, and recovery |
 | Production deployment | Approval required | Local Release 1 work remains intentionally undeployed |
 
