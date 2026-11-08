@@ -9,7 +9,7 @@ The application currently has:
 
 * 28 `test*.py` files.
 * 68 discovered test classes.
-* 539 discovered `test_` methods.
+* 544 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -206,9 +206,9 @@ Release 0 requires no application test run because it changes documentation only
 
 The current local Release 1 execution slice has:
 
-* 539 passing `options_tracker` tests.
+* 544 passing `options_tracker` tests.
 * A clean Django system check.
-* ARC 2.0 migrations `0024`-`0030` applied to local SQLite.
+* ARC 2.0 migrations `0024`-`0032` applied to the test SQLite database.
 * A passing compile check and secret-free local activation report.
 * Ten critical authenticated pages returning HTTP 200 without rendered server errors.
 * Local DOM readiness between 366 ms and 559 ms for those ten pages.

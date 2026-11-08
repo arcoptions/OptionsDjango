@@ -88,15 +88,20 @@ checklist.
 * [x] Add multi-timeframe stock candlesticks and deterministic pattern labels.
 * [x] Consolidate index, radar, score, opportunity, and position evidence in the F&O Desk.
 * [x] Add safe configurable scanner definitions over fresh stored quotes.
+* [x] Add provider-attributed fundamental score and confidence scanner fields with stale-evidence rejection.
+* [x] Add an opening-gap scanner field from fresh day-open and previous-close evidence.
 * [x] Add approaching and confirmed scanner labels with cooldown and deduplication.
 * [x] Add browser alert permission, local suppression, and POST-only acknowledgement.
+* [x] Add private Telegram scanner delivery with alert-version deduplication and bounded retries.
 * [x] Add a separate Investment Desk for theses, invalidation, and accumulation zones.
 * [x] Add dedicated holdings, allocation, dividends, and review reminders.
 * [x] Keep investment records separate from paper positions and broker execution records.
 * [x] Add safe supported-template strategy definitions and bounded cost models.
 * [x] Add immutable reproducible research manifests with data and input hashes.
+* [x] Add deterministic template execution, explicit-cost metrics, chronological validation, and manifest comparison.
 * [x] Add unified broker and paper performance without mixing evidence classes.
 * [x] Add win rate, expectancy, profit factor, paper drawdown, and grouped cuts.
+* [x] Add Trade Journal evidence search, date and state filters, and formula-safe CSV export.
 * [ ] Automate approved research publication checks.
 * [ ] Move workers only after ownership and idempotency proof.
 * [ ] Retire duplicate identity fields only after verified backfill.
@@ -114,5 +119,5 @@ checklist.
 |---|---|
 | Legacy NIFTY engine future | User decision to retain, convert, or retire |
 | Worker migration | Choose target only after ownership and singleton tests |
-| ARC 2.0 migrations | Rehearse `0024`-`0030` against a production-sized copy |
+| ARC 2.0 migrations | Rehearse `0024`-`0032` against a production-sized copy |
 | Production deployment | Explicit user approval |

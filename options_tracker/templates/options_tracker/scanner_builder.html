@@ -5,7 +5,7 @@
 {% block content %}
 <section class="panel">
   <h2>Safe scanner builder</h2>
-  <p class="muted">Definitions evaluate fresh stored quotes only. Matches are advisory and cannot place broker orders.</p>
+  <p class="muted">Definitions evaluate fresh stored quotes and, when selected, current provider-attributed investment scores. Matches are advisory and cannot place broker orders.</p>
   <form method="post">
     {% csrf_token %}
     <div class="grid">

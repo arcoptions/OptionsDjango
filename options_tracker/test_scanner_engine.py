@@ -1,11 +1,20 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import DhanOrderEvent, ScannerDefinition, ScannerMatch
+from .models import (
+    DhanOrderEvent,
+    ScannerDefinition,
+    ScannerMatch,
+    RadarNotificationRoute,
+    StockFundamentalSnapshot,
+    StockScoreSnapshot,
+)
+from .scanner_alerts import deliver_scanner_alerts
 from .radar_models import RadarInstrument, RadarQuote
 from .scanner_engine import evaluate_scanner, validate_conditions
 
@@ -42,6 +51,11 @@ class ScannerEngineTests(TestCase):
             "operator": "gte",
             "value": 2,
         }])[0]["value"], 2)
+        self.assertEqual(validate_conditions([{
+            "field": "gap_pct",
+            "operator": "lte",
+            "value": -1,
+        }])[0]["field"], "gap_pct")
         with self.assertRaises(ValueError):
             validate_conditions([{"field": "__class__", "operator": "gte", "value": 1}])
         with self.assertRaises(ValueError):
@@ -101,6 +115,49 @@ class ScannerEngineTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(ScannerDefinition.objects.filter(name="Price scanner").exists())
 
+    def test_fundamental_scanner_requires_current_provider_evidence(self):
+        definition = ScannerDefinition.objects.create(
+            name="Fundamental quality",
+            conditions=[
+                {"field": "investment_score", "operator": "gte", "value": 70},
+                {"field": "investment_confidence", "operator": "gte", "value": 0.8},
+            ],
+        )
+        self.quote(101)
+        now = timezone.now()
+        StockFundamentalSnapshot.objects.create(
+            symbol="TEST",
+            provider="APPROVED_TEST",
+            source_at=now - timedelta(days=10),
+        )
+        StockScoreSnapshot.objects.create(
+            symbol="TEST",
+            score_type="INVESTMENT",
+            version="ARC-STOCK-1",
+            score=82,
+            confidence=1,
+            components={"return_on_equity": 82},
+            missing_data=[],
+            source_at=now - timedelta(days=10),
+        )
+
+        evaluate_scanner(definition, now=now)
+
+        match = ScannerMatch.objects.get()
+        self.assertEqual(match.state, "CONFIRMED")
+        self.assertEqual(
+            match.evidence["investment_score"]["provider"],
+            "APPROVED_TEST",
+        )
+        self.assertEqual(DhanOrderEvent.objects.count(), 0)
+
+        StockFundamentalSnapshot.objects.update(
+            source_at=now - timedelta(days=121),
+        )
+        evaluate_scanner(definition, now=now + timedelta(seconds=1))
+        match.refresh_from_db()
+        self.assertFalse(match.is_active)
+
     def test_match_acknowledgement_is_post_only_and_staff_protected(self):
         definition = ScannerDefinition.objects.create(
             name="Acknowledgement scanner",
@@ -116,3 +173,30 @@ class ScannerEngineTests(TestCase):
         self.assertEqual(self.client.post(url).status_code, 302)
         match.refresh_from_db()
         self.assertIsNotNone(match.acknowledged_at)
+
+    @patch("options_tracker.scanner_alerts.telegram_bot.send")
+    def test_scanner_telegram_delivery_is_private_advisory_and_deduplicated(
+        self,
+        send,
+    ):
+        send.return_value = (True, "")
+        RadarNotificationRoute.objects.create(
+            user=self.staff,
+            telegram_chat_id="private-chat",
+        )
+        definition = ScannerDefinition.objects.create(
+            name="Private scanner",
+            owner=self.staff,
+            conditions=[{"field": "last", "operator": "gte", "value": 100}],
+            cooldown_minutes=30,
+        )
+        self.quote(101)
+        now = timezone.now()
+        evaluate_scanner(definition, now=now)
+
+        self.assertEqual(deliver_scanner_alerts(now=now), {"sent": 1, "failed": 0})
+        self.assertEqual(deliver_scanner_alerts(now=now), {"sent": 0, "failed": 0})
+        send.assert_called_once()
+        self.assertEqual(send.call_args.kwargs["chat_id"], "private-chat")
+        self.assertIn("cannot place a broker order", send.call_args.args[0])
+        self.assertEqual(DhanOrderEvent.objects.count(), 0)

@@ -1,4 +1,4 @@
-{% extends "options_tracker/base.html" %}
+{% extends "options_tracker/dashboard_base.html" %}
 {% block content %}
 <div class="card">
   <h2>Trade Journal</h2>
@@ -11,8 +11,13 @@
       <option value="CLOSED" {% if state == 'CLOSED' %}selected{% endif %}>CLOSED</option>
       <option value="CANCELLED" {% if state == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
     </select>
-    <label>Symbol</label><input name="q" value="{{ q }}" />
-    <div><button class="btn" type="submit">Apply Filters</button></div>
+    <label>Search symbol, source, tags, or journal</label><input name="q" value="{{ q }}" />
+    <label>Opened from</label><input name="opened_from" type="date" value="{{ opened_from }}" />
+    <label>Opened to</label><input name="opened_to" type="date" value="{{ opened_to }}" />
+    <div>
+      <button class="btn" type="submit">Apply filters</button>
+      <button class="btn secondary" type="submit" name="export" value="csv">Export filtered CSV</button>
+    </div>
   </form>
   <table>
     <thead><tr><th>Opened</th><th>Symbol</th><th>State</th><th>Journal</th><th>Close</th></tr></thead>

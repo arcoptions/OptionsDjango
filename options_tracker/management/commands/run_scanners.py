@@ -3,6 +3,7 @@ import json
 from django.core.management.base import BaseCommand
 
 from options_tracker.models import ScannerDefinition
+from options_tracker.scanner_alerts import deliver_scanner_alerts
 from options_tracker.scanner_engine import evaluate_scanner
 
 
@@ -19,4 +20,9 @@ class Command(BaseCommand):
                 "approaching": run.approaching,
                 "confirmed": run.confirmed,
             })
-        self.stdout.write(json.dumps({"scanners": len(results), "results": results}))
+        delivery = deliver_scanner_alerts()
+        self.stdout.write(json.dumps({
+            "scanners": len(results),
+            "results": results,
+            "delivery": delivery,
+        }))

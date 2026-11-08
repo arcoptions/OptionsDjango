@@ -1,3 +1,4 @@
+import csv
 import re
 import json
 import os
@@ -14,10 +15,11 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Max, Min, Q
-from django.http import JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
@@ -1082,13 +1084,79 @@ def trade_journal(request):
 
     state = request.GET.get("state", "").strip()
     q = request.GET.get("q", "").strip()
+    opened_from_raw = request.GET.get("opened_from", "").strip()
+    opened_to_raw = request.GET.get("opened_to", "").strip()
+    if state and state not in TradeState.values:
+        return HttpResponseBadRequest("Unsupported trade state filter.")
+    opened_from = parse_date(opened_from_raw) if opened_from_raw else None
+    opened_to = parse_date(opened_to_raw) if opened_to_raw else None
+    if opened_from_raw and opened_from is None:
+        return HttpResponseBadRequest("Invalid opened-from date.")
+    if opened_to_raw and opened_to is None:
+        return HttpResponseBadRequest("Invalid opened-to date.")
+    if opened_from and opened_to and opened_from > opened_to:
+        return HttpResponseBadRequest("Opened-from date cannot follow opened-to date.")
     rows = TradeExecution.objects.select_related("signal").all()
     if state:
         rows = rows.filter(state=state)
     if q:
-        rows = rows.filter(signal__option_symbol__icontains=q)
-    rows = rows[:200]
-    return render(request, "options_tracker/trade_journal.html", {"title": "Trade Journal", "rows": rows, "state": state, "q": q})
+        rows = rows.filter(
+            Q(signal__option_symbol__icontains=q)
+            | Q(signal__source_name__icontains=q)
+            | Q(signal__reason_tags__icontains=q)
+            | Q(journal_reason__icontains=q),
+        )
+    if opened_from:
+        rows = rows.filter(opened_at__date__gte=opened_from)
+    if opened_to:
+        rows = rows.filter(opened_at__date__lte=opened_to)
+    if request.GET.get("export") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="arc-trade-journal.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            "trade_id",
+            "opened_at",
+            "closed_at",
+            "symbol",
+            "source",
+            "state",
+            "quantity",
+            "entry_price",
+            "stop_loss",
+            "target_1",
+            "target_2",
+            "target_3",
+            "journal_reason",
+        ])
+        for trade in rows[:5000]:
+            reason = trade.journal_reason
+            if reason.startswith(("=", "+", "-", "@")):
+                reason = f"'{reason}"
+            writer.writerow([
+                trade.pk,
+                trade.opened_at.isoformat(),
+                trade.closed_at.isoformat() if trade.closed_at else "",
+                trade.signal.option_symbol,
+                trade.signal.source_name,
+                trade.state,
+                trade.quantity,
+                trade.entry_price,
+                trade.stop_loss,
+                trade.target_1,
+                trade.target_2,
+                trade.target_3,
+                reason,
+            ])
+        return response
+    return render(request, "options_tracker/trade_journal.html", {
+        "title": "Trade Journal",
+        "rows": rows[:200],
+        "state": state,
+        "q": q,
+        "opened_from": opened_from_raw,
+        "opened_to": opened_to_raw,
+    })
 
 
 @staff_required_for_unsafe_methods

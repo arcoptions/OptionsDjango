@@ -99,6 +99,51 @@ class StrategyLabTests(TestCase):
         self.assertNotEqual(first.data_hash, second.data_hash)
         self.assertNotEqual(first.manifest_hash, second.manifest_hash)
 
+    def test_manifest_stores_backtest_and_chronological_validation_results(self):
+        for index in range(1, 61):
+            price = Decimal(100 + index)
+            StockEquityCandle.objects.create(
+                symbol="TEST",
+                interval_minutes=15,
+                timestamp=self.start + timedelta(minutes=15 * index),
+                open=price,
+                high=price + 1,
+                low=price - 1,
+                close=price + 1,
+                volume=1000,
+            )
+        definition = create_definition(
+            owner=self.staff,
+            name="Fast momentum",
+            template="EQUITY_MOMENTUM",
+            symbol="TEST",
+            interval_minutes=15,
+            parameters={
+                "lookback": 2,
+                "minimum_move_pct": 0,
+                "minimum_volume_ratio": 0,
+            },
+            cost_model={
+                "brokerage_per_order": 20,
+                "tax_bps": 5,
+                "slippage_bps": 5,
+                "spread_bps": 5,
+            },
+        )
+
+        manifest = create_manifest(
+            definition,
+            self.start,
+            self.start + timedelta(minutes=15 * 61),
+        )
+
+        self.assertGreater(manifest.result_snapshot["trades"], 0)
+        self.assertEqual(
+            manifest.validation_snapshot["split"],
+            "70/30 chronological",
+        )
+        self.assertEqual(manifest.validation_snapshot["status"], "COMPLETE")
+
     def test_strategy_lab_requires_staff_and_renders_library(self):
         url = reverse("strategy_lab")
         self.assertEqual(self.client.get(url).status_code, 302)

@@ -726,6 +726,10 @@ class ScannerMatch(models.Model):
     last_seen_at = models.DateTimeField(default=timezone.now)
     last_alerted_at = models.DateTimeField(null=True, blank=True)
     acknowledged_at = models.DateTimeField(null=True, blank=True)
+    telegram_sent_at = models.DateTimeField(null=True, blank=True)
+    delivery_attempts = models.PositiveIntegerField(default=0)
+    next_delivery_at = models.DateTimeField(default=timezone.now)
+    last_delivery_error = models.CharField(max_length=300, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -908,6 +912,8 @@ class StrategyRunManifest(models.Model):
     data_rows = models.PositiveIntegerField()
     data_hash = models.CharField(max_length=64)
     code_version = models.CharField(max_length=80)
+    result_snapshot = models.JSONField(default=dict)
+    validation_snapshot = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
