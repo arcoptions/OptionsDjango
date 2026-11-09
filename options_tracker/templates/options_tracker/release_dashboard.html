@@ -27,9 +27,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="msg warning">
-  Local implementation and passing tests do not mean production is updated.
-  ARC 2.0 remains undeployed until the release gates below are complete.
+<div class="msg success">
+  ARC 2.0 is deployed with manual execution as the fail-safe default.
+  Residual product and provider gaps remain visible below and fail unavailable.
 </div>
 
 <section class="grid release-summary" aria-label="Release summary">
@@ -94,7 +94,7 @@
 
 <div class="grid">
   <section class="panel">
-    <h2>Implemented and verified locally</h2>
+    <h2>Implemented and production deployed</h2>
     <ul class="release-list">
     {% for item in release_dashboard.implemented_highlights %}
       <li>{{ item }}</li>
@@ -114,7 +114,7 @@
 <section class="panel">
   <h2>Production release gates</h2>
   <p class="muted">
-    {{ release_dashboard.gate_counts.passed }} gates passed locally;
+    {{ release_dashboard.gate_counts.passed }} gates passed;
     {{ release_dashboard.gate_counts.remaining }} gates still require evidence.
   </p>
   <div class="release-table">

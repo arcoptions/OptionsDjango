@@ -9,7 +9,7 @@ The application currently has:
 
 * 35 `test*.py` files.
 * 73 test classes ending in `Tests`.
-* 572 discovered `test_` methods.
+* 573 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -207,9 +207,9 @@ Release 0 requires no application test run because it changes documentation only
 
 ## Latest Release 1 validation
 
-The current local Release 1 execution slice has:
+The deployed Release 1 execution slice has:
 
-* 572 passing `options_tracker` tests.
+* 573 tests across the full suite and 559 non-browser tests passing in production CI.
 * A clean Django system check and migration drift check.
 * ARC 2.0 migrations `0024`-`0039` applied to test SQLite and a restored production PostgreSQL backup.
 * Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication passed system checks.
@@ -220,9 +220,10 @@ The current local Release 1 execution slice has:
 * Django 5.2.17 installed after the dependency audit identified advisories in 5.2.15.
 * An isolated `pip-audit` run reporting no known vulnerabilities.
 * No high-confidence exploitable findings in the focused ARC security review.
-* An expected unhealthy local activation result because deployment markers,
-  live worker heartbeats, fresh feeds, and verified Dhan credentials are absent.
-* Isolated staging deployment and smoke evidence are complete; production deployment evidence remains open.
+* Guarded Kudu deployment `af3fa61e-7267-430f-b5da-387955ab8c75` completed successfully after the workflow was hardened against stale deployment IDs.
+* App Service and the static-IP VM synchronized at `0fa63f5`; manual execution, Dhan token validity, NIFTY service, collector, delivery, and evaluator progress heartbeats were verified.
+* The live evaluator produced a new assistant snapshot under immutable research protocol `stock-trap-forward-v21` while retaining its lease through a production-sized scan.
+* Approved global, macro, flow, sector, and Azure OpenAI providers remain unavailable rather than fabricating evidence.
 
-The [release dashboard](./release-dashboard.md) tracks the remaining security,
-browser, staging, and production gates.
+The [release dashboard](./release-dashboard.md) tracks the remaining provider,
+security, and requirements-to-tests gates.

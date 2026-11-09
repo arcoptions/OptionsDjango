@@ -29,8 +29,8 @@ class ReleaseDashboardTests(TestCase):
 
         response = self.client.get(reverse("release_dashboard"))
 
-        self.assertContains(response, "Implemented and verified locally")
-        self.assertContains(response, "Not deployed")
+        self.assertContains(response, "Implemented and production deployed")
+        self.assertContains(response, "Production deployed")
         self.assertContains(response, "Production release gates")
         self.assertContains(response, "Manual")
         self.assertContains(response, "Release Dashboard")
@@ -38,5 +38,5 @@ class ReleaseDashboardTests(TestCase):
     def test_snapshot_counts_release_and_gate_states(self):
         snapshot = release_dashboard_snapshot()
 
-        self.assertEqual(snapshot["release_counts"], {"complete": 1, "in_progress": 8, "blocked": 1})
-        self.assertEqual(snapshot["gate_counts"], {"passed": 8, "remaining": 4, "blocked": 0})
+        self.assertEqual(snapshot["release_counts"], {"complete": 2, "in_progress": 8, "blocked": 0})
+        self.assertEqual(snapshot["gate_counts"], {"passed": 10, "remaining": 2, "blocked": 0})
