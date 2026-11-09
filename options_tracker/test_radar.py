@@ -15,6 +15,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from .models import (
@@ -747,6 +748,20 @@ class WebAndCommandTests(RadarTestCase):
             path.write_text(content)
             with self.assertRaises(CommandError):
                 call_command("radar_import_bars", input=path, stdout=StringIO())
+
+    @patch("options_tracker.radar.detect_setups", return_value=[])
+    def test_scan_loads_all_instrument_bars_with_one_bounded_query(self, _detect):
+        for index in range(5):
+            RadarInstrument.objects.create(
+                security_id=f"extra-{index}", segment="NSE_EQ", symbol=f"EXTRA{index}",
+                kind="EQUITY", refreshed_at=NOW,
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            scan(NOW)
+
+        bar_queries = [query for query in queries if 'FROM "options_tracker_radarbar"' in query["sql"]]
+        self.assertEqual(len(bar_queries), 2)
 
     @patch("options_tracker.radar.detect_setups")
     def test_scan_persists_unique_strategy_event_and_replay_does_not_duplicate(self, detect):

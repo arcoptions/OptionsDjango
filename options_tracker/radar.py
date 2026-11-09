@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, time, timedelta
 from hashlib import sha256
 from html import escape
+from itertools import groupby
 import json
 import logging
 from math import floor, isfinite
@@ -536,11 +537,17 @@ def scan(now: datetime, policy: Policy | None = None, *, assistant: bool = False
     previous_day = timezone.localdate(latest_day) if latest_day else None
     history_start = timezone.make_aware(datetime.combine(previous_day, time.min)) if previous_day else today_start
     found = 0
-    for instrument in RadarInstrument.objects.filter(kind="EQUITY", active=True):
-        rows = list(RadarBar.objects.filter(
-            instrument=instrument, complete=True, timestamp__gte=history_start,
-            timestamp__lte=now-timedelta(minutes=1),
-        ).order_by("timestamp"))
+    instruments = {
+        instrument.pk: instrument
+        for instrument in RadarInstrument.objects.filter(kind="EQUITY", active=True)
+    }
+    bar_rows = RadarBar.objects.filter(
+        instrument_id__in=instruments, complete=True, timestamp__gte=history_start,
+        timestamp__lte=now-timedelta(minutes=1),
+    ).order_by("instrument_id", "timestamp").iterator(chunk_size=2000)
+    for instrument_id, instrument_rows in groupby(bar_rows, key=lambda row: row.instrument_id):
+        instrument = instruments[instrument_id]
+        rows = list(instrument_rows)
         current = [Candle(r.timestamp, r.open, r.high, r.low, r.close, r.volume) for r in rows if timezone.localdate(r.timestamp) == today]
         previous = [Candle(r.timestamp, r.open, r.high, r.low, r.close, r.volume) for r in rows if timezone.localdate(r.timestamp) != today]
         current_bars, previous_bars = five_minute_bars(current), five_minute_bars(previous)
