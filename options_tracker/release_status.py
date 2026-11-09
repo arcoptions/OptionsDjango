@@ -119,9 +119,9 @@ RELEASE_GATES = (
     {
         "id": "G-02",
         "name": "Requirements-to-tests matrix",
-        "state": "Partial",
-        "status_key": "progress",
-        "next_step": "Link completed feature rows to named tests and browser journeys.",
+        "state": "Passed for implemented scope",
+        "status_key": "complete",
+        "next_step": "Named automated and non-unit evidence is mapped; partial provider workflows remain open.",
     },
     {
         "id": "G-03",
@@ -209,7 +209,7 @@ CURRENT_BLOCKERS = (
     "A credential-free history capture and import path is implemented; approved execution and scanner activation remain.",
     "Strategy, broker P&L, market context, economic event, and AI evidence require activation.",
     "The activation release restore rehearsal remains pending and geo-redundant PostgreSQL backup is disabled.",
-    "The requirements-to-tests matrix and full production route penetration evidence remain partial.",
+    "Full production route penetration evidence remains partial.",
 )
 
 

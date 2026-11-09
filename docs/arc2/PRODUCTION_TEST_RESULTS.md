@@ -60,6 +60,11 @@ Route regression coverage verifies:
 * Scanner synchronization and archiving reject GET mutations
 * NIFTY engine status remains staff-only
 
+Named requirements coverage is recorded in
+[Requirements-to-Tests Matrix](./REQUIREMENTS_TEST_MATRIX.md). The mapping
+keeps unavailable provider, browser, market-session, restore, and production
+evidence separate from automated implementation coverage.
+
 ## Staging safety
 
 The isolated App Service reported:
