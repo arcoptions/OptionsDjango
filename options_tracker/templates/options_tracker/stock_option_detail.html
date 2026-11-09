@@ -70,6 +70,23 @@
     <div class="msg {{ pattern.tone }}"><strong>{{ pattern.label }}</strong><br>{{ pattern.evidence }}</div>
     {% endfor %}
   </div>
+  <div class="grid">
+    <div class="msg {{ intelligence.timeframe_agreement.tone }}">
+      <strong>{{ intelligence.timeframe_agreement.label }}</strong><br>
+      {{ intelligence.timeframe_agreement.evidence }}
+    </div>
+    <div class="msg {% if intelligence.trade_levels.available %}success{% else %}warning{% endif %}">
+      <strong>Automatic analytical levels</strong><br>
+      {% if intelligence.trade_levels.available %}
+      {{ intelligence.trade_levels.direction }} · entry {{ intelligence.trade_levels.entry }} ·
+      stop {{ intelligence.trade_levels.stop }} · target {{ intelligence.trade_levels.target }} ·
+      {{ intelligence.trade_levels.reward_risk }}R<br>
+      {{ intelligence.trade_levels.basis }}
+      {% else %}
+      Unavailable: {{ intelligence.trade_levels.reason }}
+      {% endif %}
+    </div>
+  </div>
   <h3>Multi-timeframe candlesticks</h3>
   <div class="grid" id="timeframe-charts"></div>
 </section>

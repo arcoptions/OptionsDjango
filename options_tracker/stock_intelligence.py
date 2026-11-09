@@ -93,6 +93,27 @@ def technical_snapshot(symbol):
     volume_ratio = volumes[-1] / average_volume if average_volume and volumes else None
     recent_lows = [float(row["low"]) for row in rows[-20:] if row["low"] is not None]
     recent_highs = [float(row["high"]) for row in rows[-20:] if row["high"] is not None]
+    prior_rows = rows[-21:-1] if len(rows) >= 21 else []
+    prior_lows = [float(row["low"]) for row in prior_rows if row["low"] is not None]
+    prior_highs = [float(row["high"]) for row in prior_rows if row["high"] is not None]
+    true_ranges = []
+    for index in range(max(1, len(rows) - 20), len(rows)):
+        current = rows[index]
+        previous_close = rows[index - 1]["close"]
+        if None in (
+            current["high"],
+            current["low"],
+            previous_close,
+        ):
+            continue
+        high = float(current["high"])
+        low = float(current["low"])
+        previous_close = float(previous_close)
+        true_ranges.append(max(
+            high - low,
+            abs(high - previous_close),
+            abs(low - previous_close),
+        ))
     return {
         "latest": latest,
         "updated_at": rows[-1]["timestamp"] if rows else None,
@@ -101,8 +122,11 @@ def technical_snapshot(symbol):
         "momentum20": momentum20,
         "volatility20": volatility20,
         "volume_ratio": volume_ratio,
-        "support": min(recent_lows) if recent_lows else None,
-        "resistance": max(recent_highs) if recent_highs else None,
+        "support": min(prior_lows) if prior_lows else None,
+        "resistance": max(prior_highs) if prior_highs else None,
+        "current_range_low": min(recent_lows) if recent_lows else None,
+        "current_range_high": max(recent_highs) if recent_highs else None,
+        "atr20": mean(true_ranges) if len(true_ranges) >= 14 else None,
         "bar_count": len(rows),
     }
 
@@ -180,13 +204,125 @@ def multi_timeframe_evidence(symbol):
             .values("timestamp", "open", "high", "low", "close", "volume")[:80]
         )
         rows.reverse()
+        closes = [
+            float(row["close"])
+            for row in rows
+            if row["close"] is not None
+        ]
+        average = mean(closes[-20:]) if len(closes) >= 20 else None
+        latest = closes[-1] if closes else None
+        state = (
+            "BULLISH"
+            if latest is not None and average is not None and latest > average
+            else "BEARISH"
+            if latest is not None and average is not None and latest < average
+            else "NEUTRAL"
+            if latest is not None and average is not None
+            else "INSUFFICIENT"
+        )
         evidence.append({
             "interval_minutes": interval,
             "label": label,
             "rows": rows,
             "updated_at": rows[-1]["timestamp"] if rows else None,
+            "latest": latest,
+            "sma20": average,
+            "state": state,
         })
     return evidence
+
+
+def timeframe_agreement(timeframes):
+    qualified = [
+        row["state"]
+        for row in timeframes
+        if row["state"] != "INSUFFICIENT"
+    ]
+    if len(qualified) != len(TIMEFRAMES):
+        return {
+            "label": "INSUFFICIENT TIMEFRAME HISTORY",
+            "tone": "warning",
+            "evidence": (
+                f"{len(qualified)} of {len(TIMEFRAMES)} timeframes have "
+                "at least 20 stored closes."
+            ),
+        }
+    if len(set(qualified)) == 1:
+        return {
+            "label": f"{qualified[0]} AGREEMENT",
+            "tone": (
+                "success"
+                if qualified[0] == "BULLISH"
+                else "error"
+                if qualified[0] == "BEARISH"
+                else "warning"
+            ),
+            "evidence": "All tracked timeframes agree relative to their 20-period averages.",
+        }
+    return {
+        "label": "MIXED TIMEFRAMES",
+        "tone": "warning",
+        "evidence": ", ".join(
+            f"{row['label']}: {row['state']}"
+            for row in timeframes
+        ),
+    }
+
+
+def automatic_trade_levels(technical):
+    required = (
+        technical["latest"],
+        technical["sma20"],
+        technical["sma50"],
+        technical["support"],
+        technical["resistance"],
+        technical["atr20"],
+    )
+    if any(value is None for value in required):
+        return {
+            "available": False,
+            "reason": (
+                "At least 50 closes, 20 prior highs/lows, and 14 true ranges "
+                "are required."
+            ),
+        }
+    latest = technical["latest"]
+    if latest > technical["sma20"] > technical["sma50"]:
+        direction = "LONG"
+        stop = max(
+            technical["support"],
+            latest - 1.5 * technical["atr20"],
+        )
+        risk = latest - stop
+        target = latest + 2 * risk
+    elif latest < technical["sma20"] < technical["sma50"]:
+        direction = "SHORT"
+        stop = min(
+            technical["resistance"],
+            latest + 1.5 * technical["atr20"],
+        )
+        risk = stop - latest
+        target = latest - 2 * risk
+    else:
+        return {
+            "available": False,
+            "reason": "Latest close, SMA20, and SMA50 do not form a directional stack.",
+        }
+    if risk <= 0:
+        return {
+            "available": False,
+            "reason": "Stored support or resistance does not create positive risk.",
+        }
+    return {
+        "available": True,
+        "direction": direction,
+        "entry": round(latest, 2),
+        "stop": round(stop, 2),
+        "target": round(target, 2),
+        "risk": round(risk, 2),
+        "reward_risk": 2.0,
+        "basis": "Prior 20-bar structure and 1.5x ATR, with a 2R analytical target.",
+    }
 
 
 def pattern_labels(symbol):
@@ -282,6 +418,7 @@ def stock_intelligence_context(symbol, now=None):
     persisted = {}
     for row in StockScoreSnapshot.objects.filter(symbol=symbol).order_by("score_type", "-source_at"):
         persisted.setdefault(row.score_type, row)
+    timeframes = multi_timeframe_evidence(symbol)
     return {
         "fundamental": fundamental,
         "results": StockFinancialResult.objects.filter(symbol=symbol)[:12],
@@ -289,7 +426,9 @@ def stock_intelligence_context(symbol, now=None):
         "corporate_actions": StockCorporateAction.objects.filter(symbol=symbol)[:20],
         "technical": technical,
         "personality": stock_personality(technical),
-        "timeframes": multi_timeframe_evidence(symbol),
+        "timeframes": timeframes,
+        "timeframe_agreement": timeframe_agreement(timeframes),
+        "trade_levels": automatic_trade_levels(technical),
         "patterns": pattern_labels(symbol),
         "active_opportunities": UnifiedOpportunity.objects.select_related("instrument").filter(
             instrument__canonical_symbol=symbol,

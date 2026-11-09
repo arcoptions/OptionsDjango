@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 606 non-browser and 621 total passing tests. A rendered page
+baseline to 609 non-browser and 624 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 606 passing non-browser tests
-* 621 passing tests including browser-tagged journeys
+* 609 passing non-browser tests
+* 624 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -33,7 +33,7 @@ The current baseline has:
 | Market breadth | Partially functional | Fresh-quote metrics plus idempotent offline EMA, RSI, volume-surge, and 52-week snapshots with 80% coverage gates | Authoritative named-universe membership and enough complete history to qualify each metric |
 | Market session awareness | Backend implemented only as a coarse weekday clock | Existing collectors use weekday and time windows | Exchange-calendar evidence, holidays, and five user-facing session states |
 | Breakout intelligence | Partially functional | Classified S1/S2/S3 setups, transparent ranking, manual review, filters, and measured 30-day persisted lifecycle outcomes | Broader breakout families and verified-history acceptance |
-| Technical charting | Partially functional | Multi-timeframe candlesticks, RSI, overlays, and deterministic labels | Verified pattern geometry, support/resistance engine, automatic levels, and timeframe agreement |
+| Technical charting | Functional for stored-bar scope | Multi-timeframe candlesticks, deterministic patterns, prior-structure support/resistance, ATR-based analytical levels, and timeframe agreement | Broader live-provider acceptance and additional pattern families |
 | Event intelligence | Backend implemented but disconnected | Normalized results, actions, news, and economic-event models | Approved announcement source, timeline, waiting list, and price-reaction engine |
 | Unified opportunities | Fully functional for current sources | Canonical persistence, immutable revisions, state guards, audit, and synchronization | General trade-setup entity and full user-executed lifecycle across all sources |
 | ARC Intelligence | Backend implemented but provider-blocked | Evidence hashes, citations, prompt/model retention, and fail-closed behavior | Approved Azure OpenAI endpoint, key, deployment, and production snapshots |
@@ -217,5 +217,11 @@ expired, or invalidated after a recorded trigger. Rates remain labelled
 insufficient until 30 triggered observations exist, so a small sample is never
 presented as strategy validation.
 
-The current branch passed 606 non-browser tests in 51.661 seconds and 621
-total tests in 147.334 seconds.
+R13 corrects support and resistance to use prior structure rather than the
+current bar, calculates 20-period true-range evidence, produces fail-closed
+long or short analytical entry/stop/2R target levels, and labels agreement only
+when all 15-minute, hourly, and daily timeframes have 20 stored closes.
+
+The current branch passed 609 non-browser tests in 47.660 seconds. All 15
+browser-tagged tests passed separately in 93.385 seconds, covering 624 tests
+without treating a stalled combined-run teardown as success evidence.

@@ -18,10 +18,12 @@ from .models import (
     TrackedStock,
 )
 from .stock_intelligence import (
+    automatic_trade_levels,
     investment_score,
     pattern_labels,
     stock_intelligence_context,
     stock_personality,
+    timeframe_agreement,
 )
 
 
@@ -75,6 +77,13 @@ class StockIntelligenceTests(TestCase):
         self.assertEqual(context["personality"]["label"], "TRENDING")
         self.assertEqual(len(context["timeframes"]), 3)
         self.assertEqual(context["patterns"][0]["label"], "CONFIRMED BREAKOUT")
+        self.assertEqual(
+            context["timeframe_agreement"]["label"],
+            "INSUFFICIENT TIMEFRAME HISTORY",
+        )
+        self.assertTrue(context["trade_levels"]["available"])
+        self.assertEqual(context["trade_levels"]["direction"], "LONG")
+        self.assertEqual(context["trade_levels"]["reward_risk"], 2.0)
 
     def test_personality_fails_closed_without_sufficient_history(self):
         personality = stock_personality({
@@ -134,6 +143,51 @@ class StockIntelligenceTests(TestCase):
             pattern_labels("MISSING")[0]["label"],
             "INSUFFICIENT PATTERN HISTORY",
         )
+
+    def test_timeframe_agreement_requires_all_tracked_timeframes(self):
+        rows = [
+            {"label": "15 minute", "state": "BULLISH"},
+            {"label": "1 hour", "state": "BULLISH"},
+            {"label": "Daily", "state": "BULLISH"},
+        ]
+        self.assertEqual(
+            timeframe_agreement(rows)["label"],
+            "BULLISH AGREEMENT",
+        )
+        rows[-1]["state"] = "INSUFFICIENT"
+        self.assertEqual(
+            timeframe_agreement(rows)["label"],
+            "INSUFFICIENT TIMEFRAME HISTORY",
+        )
+
+    def test_automatic_trade_levels_fail_closed_without_structure(self):
+        levels = automatic_trade_levels({
+            "latest": 100,
+            "sma20": None,
+            "sma50": None,
+            "support": None,
+            "resistance": None,
+            "atr20": None,
+        })
+
+        self.assertFalse(levels["available"])
+        self.assertIn("At least 50 closes", levels["reason"])
+
+    def test_automatic_trade_levels_support_bearish_structure(self):
+        levels = automatic_trade_levels({
+            "latest": 90,
+            "sma20": 95,
+            "sma50": 100,
+            "support": 85,
+            "resistance": 98,
+            "atr20": 2,
+        })
+
+        self.assertTrue(levels["available"])
+        self.assertEqual(levels["direction"], "SHORT")
+        self.assertEqual(levels["entry"], 90)
+        self.assertEqual(levels["stop"], 93)
+        self.assertEqual(levels["target"], 84)
 
     def test_score_refresh_is_dry_run_by_default_and_idempotent_when_applied(self):
         output = StringIO()

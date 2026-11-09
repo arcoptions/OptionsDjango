@@ -144,8 +144,9 @@ requirements with existing ARC capabilities.
 * [x] Add classification and active-state filters plus measured 30-day
   lifecycle outcome cards with an explicit 30-trigger sample threshold.
 * [ ] Add broader breakout families and verified-history acceptance.
-* [ ] Add persisted technical patterns, support/resistance, automatic levels,
-  and multi-timeframe agreement.
+* [x] Add deterministic stored-bar patterns, prior-structure
+  support/resistance, ATR-based analytical levels, and fail-closed
+  multi-timeframe agreement.
 * [ ] Activate verified event ingestion, timelines, and price reactions.
 * [ ] Extend unified opportunities into the remaining trade-setup lifecycle.
 * [ ] Activate governed ARC Intelligence after Azure OpenAI configuration.

@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 621 discovered `test_` methods.
+* 624 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -233,6 +233,18 @@ The new tests verify deterministic taxonomy, transparent strategy and state
 rank components, CE and PE 2R target direction, expiry filtering, manual-only
 trigger actions, classification and state filtering, measured failure counts,
 small-sample labelling, and Action List query-budget preservation.
+
+The R13 technical-intelligence slice passed:
+
+* 9 focused Stock Intelligence tests
+* 609 non-browser tests in 47.660 seconds
+* 15 browser-tagged tests in 93.385 seconds
+
+The combined runner stalled during browser teardown after completing the
+non-browser phase, so the browser tests were rerun as an isolated tag. Both
+disjoint test sets passed and cover all 624 discovered tests. The new
+assertions verify fail-closed history requirements, bullish and bearish
+analytical levels, fixed 2R geometry, and complete-timeframe agreement.
 
 ## Latest Release 1 validation
 
