@@ -1,3 +1,20 @@
+from django.db.models import Count, Max
+
+from .models import (
+    AIBriefingSnapshot,
+    BrokerPnlEntry,
+    CanonicalInstrument,
+    EconomicEvent,
+    MarketContextSnapshot,
+    ScannerRun,
+    StockEquityCandle,
+    StockOptionCandle,
+    StrategyRunManifest,
+    TrackedStock,
+    UnifiedOpportunity,
+)
+
+
 RELEASES = (
     {
         "number": 0,
@@ -182,16 +199,48 @@ IMPLEMENTED_HIGHLIGHTS = (
     "Manual execution is the production default; preview blocks broker mutations.",
     "Command Centre ranks traceable trading and investment evidence.",
     "Opportunity Inbox preserves lifecycle, provenance, decisions, and revisions.",
-    "Stock Intelligence, scanners, F&O research, and Investment Desk are production deployed.",
+    "Stock Intelligence, scanners, F&O research, and Investment Desk interfaces are deployed.",
     "Strategy Lab stores deterministic immutable backtest and validation evidence.",
     "Trade Journal, performance analytics, AI briefing, and research assistant are production deployed.",
 )
 
 CURRENT_BLOCKERS = (
     "Approved global, macro, flow, sector, and Azure OpenAI providers remain incomplete and fail unavailable.",
+    "Stock history, scanner, strategy, broker P&L, market context, economic event, and AI evidence require activation.",
     "Geo-redundant PostgreSQL backup remains disabled despite the successful point-in-time restore rehearsal.",
     "The requirements-to-tests matrix and full production route penetration evidence remain partial.",
 )
+
+
+def _activation_row(name, model, latest_field=None):
+    aggregates = {"count": Count("pk")}
+    if latest_field:
+        aggregates["latest"] = Max(latest_field)
+    evidence = model.objects.aggregate(**aggregates)
+    count = evidence["count"]
+    return {
+        "name": name,
+        "count": count,
+        "latest": evidence.get("latest"),
+        "state": "Activated" if count else "Pending activation",
+        "status_key": "complete" if count else "progress",
+    }
+
+
+def activation_evidence():
+    return (
+        _activation_row("Canonical instruments", CanonicalInstrument, "updated_at"),
+        _activation_row("Unified opportunities", UnifiedOpportunity, "updated_at"),
+        _activation_row("Tracked stock universe", TrackedStock, "updated_at"),
+        _activation_row("Stock equity candles", StockEquityCandle, "timestamp"),
+        _activation_row("Stock option candles", StockOptionCandle, "timestamp"),
+        _activation_row("Scanner runs", ScannerRun, "started_at"),
+        _activation_row("Strategy run manifests", StrategyRunManifest, "created_at"),
+        _activation_row("Broker P&L entries", BrokerPnlEntry),
+        _activation_row("Market context observations", MarketContextSnapshot, "source_at"),
+        _activation_row("Economic events", EconomicEvent, "starts_at"),
+        _activation_row("AI briefing snapshots", AIBriefingSnapshot, "generated_at"),
+    )
 
 
 def release_dashboard_snapshot() -> dict[str, object]:
@@ -216,4 +265,5 @@ def release_dashboard_snapshot() -> dict[str, object]:
         "gate_counts": gate_counts,
         "implemented_highlights": IMPLEMENTED_HIGHLIGHTS,
         "blockers": CURRENT_BLOCKERS,
+        "activation_evidence": activation_evidence(),
     }

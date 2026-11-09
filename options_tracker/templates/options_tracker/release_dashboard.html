@@ -92,6 +92,41 @@
   </div>
 </section>
 
+<section class="panel">
+  <div class="row">
+    <h2 style="margin:0;">Database activation evidence</h2>
+    <span class="muted">Live counts from this environment</span>
+  </div>
+  <p class="muted">
+    A deployed interface is not treated as operational evidence until its
+    required production workflow has persisted real records.
+  </p>
+  <div class="release-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Workflow</th>
+          <th>Rows</th>
+          <th>Latest evidence</th>
+          <th>Activation state</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for evidence in release_dashboard.activation_evidence %}
+        <tr>
+          <td>{{ evidence.name }}</td>
+          <td>{{ evidence.count }}</td>
+          <td>{{ evidence.latest|default:"No persisted evidence" }}</td>
+          <td>
+            <span class="status-pill status-{{ evidence.status_key }}">{{ evidence.state }}</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <div class="grid">
   <section class="panel">
     <h2>Implemented and production deployed</h2>

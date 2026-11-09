@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from .models import CanonicalInstrument, InstrumentKind, TrackedStock
 from .release_status import release_dashboard_snapshot
 
 
@@ -32,6 +33,7 @@ class ReleaseDashboardTests(TestCase):
         self.assertContains(response, "Implemented and production deployed")
         self.assertContains(response, "Production deployed")
         self.assertContains(response, "Production release gates")
+        self.assertContains(response, "Database activation evidence")
         self.assertContains(response, "Manual")
         self.assertContains(response, "Release Dashboard")
 
@@ -40,3 +42,21 @@ class ReleaseDashboardTests(TestCase):
 
         self.assertEqual(snapshot["release_counts"], {"complete": 2, "in_progress": 8, "blocked": 0})
         self.assertEqual(snapshot["gate_counts"], {"passed": 10, "remaining": 2, "blocked": 0})
+
+    def test_snapshot_reports_persisted_activation_evidence(self):
+        CanonicalInstrument.objects.create(
+            canonical_symbol="TEST",
+            kind=InstrumentKind.EQUITY,
+            exchange_segment="NSE_EQ",
+            security_id="1",
+        )
+        TrackedStock.objects.create(symbol="TEST")
+
+        evidence = {
+            row["name"]: row for row in release_dashboard_snapshot()["activation_evidence"]
+        }
+
+        self.assertEqual(evidence["Canonical instruments"]["count"], 1)
+        self.assertEqual(evidence["Canonical instruments"]["state"], "Activated")
+        self.assertEqual(evidence["Tracked stock universe"]["count"], 1)
+        self.assertEqual(evidence["Stock equity candles"]["state"], "Pending activation")
