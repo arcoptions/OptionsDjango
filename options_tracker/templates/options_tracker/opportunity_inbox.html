@@ -6,11 +6,10 @@
 <section class="panel">
   <div class="page-head">
     <div>
-      <h2>Opportunity Inbox</h2>
       <p class="muted">Canonical source provenance, independent setup identity, evidence revisions, lifecycle, and next action.</p>
     </div>
     <form method="get">
-      <select name="status" onchange="this.form.submit()">
+      <select name="status" data-auto-submit>
         <option value="">All statuses</option>
         {% for value, label in status_choices %}
           <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>

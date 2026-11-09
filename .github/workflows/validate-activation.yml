@@ -1,0 +1,52 @@
+name: Validate ARC 2.0 Activation
+
+on:
+  push:
+    branches:
+      - "arc2/**"
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: activation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Audit production dependencies
+        run: pip-audit --requirement requirements.txt
+
+      - name: Scan application source
+        run: >-
+          bandit --quiet --recursive options_tracker trading_terminal
+          --exclude "options_tracker/test_*.py,options_tracker/tests.py"
+          --severity-level medium
+
+      - name: Validate Django application
+        run: |
+          python manage.py check
+          python manage.py collectstatic --noinput
+          python manage.py test --exclude-tag=browser

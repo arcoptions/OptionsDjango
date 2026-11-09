@@ -92,3 +92,104 @@ class InstrumentIdentityTests(TestCase):
         self.assertEqual(report["applied"], 2)
         self.assertEqual(report["remaining"], 1)
         self.assertEqual(CanonicalInstrument.objects.count(), 2)
+
+    def test_reconciliation_processes_bounded_batches_with_resume_cursor(self):
+        rows = [
+            RadarInstrument.objects.create(
+                security_id=str(index),
+                segment="NSE_EQ",
+                symbol=f"TEST{index}",
+                kind="EQUITY",
+            )
+            for index in range(5)
+        ]
+
+        first_output = StringIO()
+        call_command(
+            "reconcile_instruments",
+            "--apply",
+            "--limit=2",
+            "--batches=2",
+            stdout=first_output,
+        )
+        first_report = json.loads(first_output.getvalue())
+
+        self.assertEqual(first_report["completed_batches"], 2)
+        self.assertEqual(first_report["applied"], 4)
+        self.assertEqual(first_report["remaining"], 1)
+        self.assertEqual(first_report["next_after_pk"], rows[3].pk)
+
+        second_output = StringIO()
+        call_command(
+            "reconcile_instruments",
+            "--apply",
+            "--limit=2",
+            f"--after-pk={first_report['next_after_pk']}",
+            stdout=second_output,
+        )
+        second_report = json.loads(second_output.getvalue())
+
+        self.assertEqual(second_report["applied"], 1)
+        self.assertEqual(second_report["remaining"], 0)
+        self.assertIsNone(second_report["next_after_pk"])
+
+    def test_option_reconciliation_uses_contract_specific_radar_aliases(self):
+        for security_id, strike, side in [
+            ("101", 100, "CE"),
+            ("102", 100, "PE"),
+            ("103", 110, "CE"),
+        ]:
+            RadarInstrument.objects.create(
+                security_id=security_id,
+                segment="NSE_FNO",
+                symbol="TEST",
+                kind="OPTION",
+                expiry="2026-11-26",
+                strike=strike,
+                side=side,
+                lot_size=50,
+            )
+
+        output = StringIO()
+        call_command(
+            "reconcile_instruments",
+            "--apply",
+            "--kind=OPTION",
+            stdout=output,
+        )
+        report = json.loads(output.getvalue())
+
+        self.assertEqual(report["applied"], 3)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(CanonicalInstrument.objects.count(), 3)
+        self.assertEqual(
+            InstrumentAlias.objects.filter(provider="RADAR").count(),
+            3,
+        )
+
+    def test_bulk_reconciliation_reports_alias_conflicts_without_partial_mapping(self):
+        first = RadarInstrument.objects.create(
+            security_id="101",
+            segment="NSE_EQ",
+            symbol="DUPLICATE",
+            kind="EQUITY",
+        )
+        second = RadarInstrument.objects.create(
+            security_id="102",
+            segment="NSE_EQ",
+            symbol="DUPLICATE",
+            kind="EQUITY",
+        )
+
+        output = StringIO()
+        call_command("reconcile_instruments", "--apply", stdout=output)
+        report = json.loads(output.getvalue())
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        self.assertEqual(report["applied"], 1)
+        self.assertEqual(len(report["errors"]), 1)
+        self.assertIsNotNone(first.canonical_instrument_id)
+        self.assertIsNone(second.canonical_instrument_id)
+        self.assertEqual(CanonicalInstrument.objects.count(), 1)
+        self.assertEqual(InstrumentAlias.objects.count(), 2)

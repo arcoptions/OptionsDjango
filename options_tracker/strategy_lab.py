@@ -6,6 +6,7 @@ from collections import deque
 from django.db import transaction
 from django.utils import timezone
 
+from .deployment import running_commit
 from .models import (
     StockEquityCandle,
     StrategyDefinition,
@@ -358,7 +359,11 @@ def create_manifest(definition, data_start, data_end):
         "version": definition.version,
     }
     data_hash = digest.hexdigest()
-    code_version = os.getenv("ARC_DEPLOYED_COMMIT", "local-uncommitted")
+    code_version = (
+        running_commit()
+        or os.getenv("ARC_DEPLOYED_COMMIT", "").strip()
+        or "local-uncommitted"
+    )
     result_snapshot = backtest_snapshot(
         definition.template,
         definition.parameters,

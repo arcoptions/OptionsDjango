@@ -1,0 +1,52 @@
+name: Scan ARC 2.0 Staging
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: activation-dast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'arc2/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Run passive OWASP ZAP baseline
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: "https://arc-options-staging-2fa45de1.azurewebsites.net"
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-staging-baseline
+
+      - name: Enforce high and medium findings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          allowed = {
+              ("10055", "CSP: style-src unsafe-inline"),
+          }
+          report = json.loads(Path("report_json.json").read_text(encoding="utf-8"))
+          blocked = []
+          for site in report.get("site", []):
+              for alert in site.get("alerts", []):
+                  key = (str(alert.get("pluginid")), alert.get("name"))
+                  if int(alert.get("riskcode", 0)) >= 2 and key not in allowed:
+                      blocked.append(
+                          f"{alert.get('riskdesc')}: {alert.get('name')} "
+                          f"({len(alert.get('instances', []))} instances)"
+                      )
+          if blocked:
+              raise SystemExit("Disallowed ZAP findings:\n" + "\n".join(blocked))
+          print("No disallowed high or medium ZAP findings.")
+          PY

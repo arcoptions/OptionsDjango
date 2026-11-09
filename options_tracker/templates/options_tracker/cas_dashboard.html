@@ -1,7 +1,7 @@
 {% extends "options_tracker/dashboard_base.html" %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.csp_nonce }}">
   .cas-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   .cas-badge { padding:5px 10px; border-radius:999px; font-size:12px; font-weight:800; }
   .cas-live { background:#dcfce7; color:#15803d; }
@@ -117,7 +117,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
   (() => {
     const text = (id, value) => {
       document.getElementById(id).textContent = value ?? "-";

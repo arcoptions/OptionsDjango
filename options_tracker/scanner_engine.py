@@ -1,14 +1,18 @@
-"""Safe configurable scanner evaluation over fresh stored radar quotes."""
+"""Safe scanner evaluation over fresh radar quotes or persisted stock bars."""
 
 import operator
-from datetime import timedelta
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from django.db import DatabaseError
+from django.db.models import Max
 from django.utils import timezone
 
 from .models import (
     ScannerMatch,
     ScannerRun,
+    StockEquityCandle,
     StockFundamentalSnapshot,
     StockScoreSnapshot,
 )
@@ -44,6 +48,25 @@ OPERATORS = {
     "gt": operator.gt,
     "lt": operator.lt,
 }
+HISTORICAL_ALERT_DELAY = timedelta(days=3650)
+
+
+@dataclass(frozen=True)
+class HistoricalInstrument:
+    symbol: str
+
+
+@dataclass(frozen=True)
+class HistoricalQuote:
+    instrument: HistoricalInstrument
+    source_at: datetime
+    last: float | None
+    previous_close: float | None
+    day_open: float | None
+    volume: int
+    previous_volume: int
+    oi: None = None
+    provider: str = "DHAN_HISTORY"
 
 
 def validate_conditions(conditions):
@@ -98,8 +121,59 @@ def _investment_evidence(now):
     }
 
 
-def evaluate_scanner(definition, now=None):
+def _historical_quotes(interval_minutes=15) -> list[HistoricalQuote]:
+    latest_at = StockEquityCandle.objects.filter(
+        interval_minutes=interval_minutes,
+    ).aggregate(latest=Max("timestamp"))["latest"]
+    if latest_at is None:
+        return []
+    rows_by_symbol = defaultdict(list)
+    for candle in StockEquityCandle.objects.filter(
+        interval_minutes=interval_minutes,
+        timestamp__gte=latest_at - timedelta(days=7),
+    ).order_by("symbol", "timestamp"):
+        rows_by_symbol[candle.symbol].append(candle)
+
+    quotes = []
+    for symbol, rows in rows_by_symbol.items():
+        latest = rows[-1]
+        latest_day = timezone.localdate(latest.timestamp)
+        session_rows = [
+            row for row in rows
+            if timezone.localdate(row.timestamp) == latest_day
+        ]
+        previous_session_rows = [
+            row for row in rows
+            if timezone.localdate(row.timestamp) < latest_day
+        ]
+        previous = rows[-2] if len(rows) > 1 else None
+        previous_close = (
+            previous_session_rows[-1].close
+            if previous_session_rows
+            else previous.close if previous else None
+        )
+        quotes.append(HistoricalQuote(
+            instrument=HistoricalInstrument(symbol=symbol),
+            source_at=latest.timestamp,
+            last=float(latest.close) if latest.close is not None else None,
+            previous_close=(
+                float(previous_close) if previous_close is not None else None
+            ),
+            day_open=(
+                float(session_rows[0].open)
+                if session_rows[0].open is not None
+                else None
+            ),
+            volume=latest.volume,
+            previous_volume=previous.volume if previous else 0,
+        ))
+    return quotes
+
+
+def evaluate_scanner(definition, now=None, *, source="RADAR"):
     now = now or timezone.now()
+    if source not in {"RADAR", "STOCK_HISTORY"}:
+        raise ValueError(f"Unsupported scanner source: {source!r}")
     conditions = validate_conditions(definition.conditions)
     needs_investment = any(
         condition["field"].startswith("investment_")
@@ -110,11 +184,16 @@ def evaluate_scanner(definition, now=None):
     scanned = approaching = confirmed = 0
     try:
         definition.matches.update(is_active=False)
-        for quote in RadarQuote.objects.select_related("instrument").filter(
-            instrument__kind="EQUITY",
-            instrument__active=True,
-        ):
-            if not fresh(quote, now, Policy()):
+        quotes = (
+            _historical_quotes()
+            if source == "STOCK_HISTORY"
+            else RadarQuote.objects.select_related("instrument").filter(
+                instrument__kind="EQUITY",
+                instrument__active=True,
+            )
+        )
+        for quote in quotes:
+            if source == "RADAR" and not fresh(quote, now, Policy()):
                 continue
             scanned += 1
             evidence = {}
@@ -130,7 +209,7 @@ def evaluate_scanner(definition, now=None):
                 )
                 states.append(state)
                 source_at = quote.source_at
-                provider = "DHAN"
+                provider = getattr(quote, "provider", "DHAN")
                 if field.startswith("investment_") and investment:
                     source_at = investment["fundamental"].source_at
                     provider = investment["fundamental"].provider
@@ -157,7 +236,9 @@ def evaluate_scanner(definition, now=None):
                     "evidence": evidence,
                     "last_seen_at": now,
                     "last_alerted_at": now,
-                    "next_delivery_at": now,
+                    "next_delivery_at": (
+                        now if source == "RADAR" else now + HISTORICAL_ALERT_DELAY
+                    ),
                 },
             )
             if not created:
@@ -176,7 +257,9 @@ def evaluate_scanner(definition, now=None):
                 if state_changed or cooldown_elapsed:
                     match.last_alerted_at = now
                     match.acknowledged_at = None
-                    match.next_delivery_at = now
+                    match.next_delivery_at = (
+                        now if source == "RADAR" else now + HISTORICAL_ALERT_DELAY
+                    )
                     match.last_delivery_error = ""
                     update_fields.extend([
                         "last_alerted_at",

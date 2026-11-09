@@ -18,21 +18,29 @@ from .models import RadarInstrument, RadarOpportunity, RadarWatch, RadarWorkspac
 from .radar import S, STRATEGIES, Policy, fresh, acknowledge
 from .radar_price_alerts import alert_payload
 from .radar_workspace import preferences, live_workspace_payload
-from .action_workspace import operating_workspace_context
+from .action_workspace import action_list_context, operating_workspace_context
+from .cas_views import cas_dashboard_state
 
 
 @staff_member_required
 @require_GET
 def dashboard(request):
+    action_queue = action_list_context()
+    cas_state = cas_dashboard_state()
     try:
-        payload = live_workspace_payload(request.user, request.GET.dict())
+        payload = live_workspace_payload(
+            request.user,
+            request.GET.dict(),
+            action_queue=action_queue,
+            cas_state=cas_state,
+        )
     except ValueError as error:
         return HttpResponseBadRequest(str(error))
     return render(request, "options_tracker/radar.html", {
         "workspace": payload,
         "strategies": STRATEGIES,
         "states": S.choices,
-        **operating_workspace_context(),
+        **operating_workspace_context(action_queue, cas_state),
     })
 
 

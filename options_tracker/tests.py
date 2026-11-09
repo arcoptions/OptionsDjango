@@ -166,6 +166,11 @@ class ActionListTests(TestCase):
 			for row in response.context["rows"]
 		}
 
+	def test_page_renders_one_action_list_heading(self):
+		response = self.client.get(reverse("action_list"))
+
+		self.assertEqual(response.content.count(b"<h1"), 1)
+
 	def test_closed_rejected_archived_and_expired_signals_are_not_action_rows(self):
 		current = self.make_signal(option_symbol="CURRENT 24000 CE")
 		closed = self.make_signal(option_symbol="CLOSED 24000 CE", status=SignalStatus.CLOSED)
@@ -2567,6 +2572,26 @@ class ReferenceDataSeedTests(TestCase):
 		self.assertEqual(stock.turnover, Decimal("1234567.89"))
 		self.assertEqual(stock.realised_pnl, Decimal("-4321.05"))
 		self.assertEqual(stock.strike_step, Decimal("12.50"))
+
+	def test_create_missing_preserves_existing_broker_derived_values(self):
+		existing = TrackedStock.objects.create(
+			symbol="RELIANCE",
+			security_id="verified-local-id",
+			contracts_traded=999,
+			realised_pnl=Decimal("1234.56"),
+		)
+
+		call_command(
+			"seed_reference_data",
+			"--create-missing",
+			stdout=StringIO(),
+		)
+		existing.refresh_from_db()
+
+		self.assertEqual(existing.security_id, "verified-local-id")
+		self.assertEqual(existing.contracts_traded, 999)
+		self.assertEqual(existing.realised_pnl, Decimal("1234.56"))
+		self.assertGreater(TrackedStock.objects.count(), 100)
 
 
 class SwingAlertTests(TestCase):

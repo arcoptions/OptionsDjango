@@ -6,8 +6,22 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Direction, OpportunityRevision, OpportunityStatus, OpportunityStatusEvent, TipSignal, UnifiedOpportunity
+from django.utils import timezone
+
+from .instrument_identity import register_instrument
+from .models import (
+    ChatMessage,
+    Direction,
+    OpportunityRevision,
+    OpportunityStatus,
+    OpportunityStatusEvent,
+    ScannerDefinition,
+    ScannerMatch,
+    TipSignal,
+    UnifiedOpportunity,
+)
 from .opportunities import transition_opportunity, upsert_opportunity
+from .radar_models import RadarInstrument, RadarOpportunity
 
 
 class UnifiedOpportunityTests(TestCase):
@@ -151,3 +165,106 @@ class UnifiedOpportunityTests(TestCase):
         call_command("sync_opportunities", "--apply", stdout=StringIO())
 
         self.assertEqual(UnifiedOpportunity.objects.count(), 1)
+
+    def test_sync_includes_active_radar_opportunity_with_canonical_contract(self):
+        now = timezone.now()
+        canonical = register_instrument(
+            canonical_symbol="TEST",
+            kind="OPTION",
+            exchange_segment="NSE_FNO",
+            security_id="500",
+            underlying_symbol="TEST",
+            expiry_date=now.date(),
+            strike=100,
+            option_type="CE",
+            lot_size=50,
+        )
+        contract = RadarInstrument.objects.create(
+            canonical_instrument=canonical,
+            security_id="500",
+            segment="NSE_FNO",
+            symbol="TEST",
+            kind="OPTION",
+            expiry=now.date(),
+            strike=100,
+            side="CE",
+            lot_size=50,
+        )
+        radar = RadarOpportunity.objects.create(
+            key="TEST:S2:v1:CE",
+            symbol="TEST",
+            strategy="S2",
+            version="v1",
+            side="CE",
+            state=RadarOpportunity.State.ELIGIBLE,
+            setup_at=now,
+            trigger_at=now,
+            valid_until=now + timezone.timedelta(minutes=5),
+            trigger=100,
+            stop=95,
+            atr=5,
+            reason="Stored breakout evidence.",
+            contract=contract,
+            entry_limit=101,
+            quantity=50,
+        )
+
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+        opportunity = UnifiedOpportunity.objects.get(source_ref=f"RADAR:{radar.pk}")
+
+        self.assertEqual(opportunity.instrument, canonical)
+        self.assertEqual(opportunity.plan["entry"], 101)
+        self.assertEqual(opportunity.plan["stop_loss"], 95)
+        self.assertEqual(opportunity.plan["quantity"], 50)
+
+    def test_sync_includes_confirmed_configurable_scanner_match(self):
+        canonical = register_instrument(
+            canonical_symbol="TEST",
+            kind="EQUITY",
+            exchange_segment="NSE_EQ",
+            security_id="123",
+            aliases=(("RADAR", "TEST"),),
+        )
+        definition = ScannerDefinition.objects.create(
+            name="Persisted close scanner",
+            conditions=[{"field": "last", "operator": "gte", "value": 100}],
+        )
+        match = ScannerMatch.objects.create(
+            definition=definition,
+            symbol="TEST",
+            state="CONFIRMED",
+            evidence={"last": {"actual": 102, "provider": "DHAN_HISTORY"}},
+        )
+
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+
+        opportunity = UnifiedOpportunity.objects.get(
+            source_ref=f"CONFIGURABLE:{match.pk}",
+        )
+        self.assertEqual(opportunity.instrument, canonical)
+        self.assertEqual(opportunity.source_type, "SCANNER")
+        self.assertEqual(opportunity.revisions.get().evidence["state"], "CONFIRMED")
+        self.assertEqual(UnifiedOpportunity.objects.count(), 1)
+
+    def test_sync_excludes_unparsed_messages_unless_explicitly_requested(self):
+        chat = ChatMessage.objects.create(
+            source_name="Review feed",
+            source_category="TIPS",
+            raw_text="Unparsed market claim",
+        )
+
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+        self.assertFalse(
+            UnifiedOpportunity.objects.filter(source_ref=f"CHAT:{chat.pk}").exists()
+        )
+
+        call_command(
+            "sync_opportunities",
+            "--apply",
+            "--include-unparsed",
+            stdout=StringIO(),
+        )
+        self.assertTrue(
+            UnifiedOpportunity.objects.filter(source_ref=f"CHAT:{chat.pk}").exists()
+        )

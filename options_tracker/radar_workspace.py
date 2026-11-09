@@ -567,7 +567,13 @@ def portfolio(now: datetime) -> dict:
     }
 
 
-def live_workspace_payload(user, query: dict) -> dict:
+def live_workspace_payload(
+    user,
+    query: dict,
+    *,
+    action_queue: dict | None = None,
+    cas_state: dict | None = None,
+) -> dict:
     from .action_workspace import action_list_context
     from .cas_views import cas_dashboard_state
     from .live_dashboard import engine_snapshot, today_summary, trade_rows
@@ -579,7 +585,7 @@ def live_workspace_payload(user, query: dict) -> dict:
     result["assistant"]["health"] = health
     result["health"]["feed"] = health["workers"]["paper-radar"]["state"]
     result["health"]["delivery"] = health["workers"]["paper-alerts"]["state"]
-    result["action_queue"] = action_list_context()
+    result["action_queue"] = action_queue or action_list_context()
     engine = engine_snapshot()
     today = cache.get_or_set("radar:nifty-today", lambda: today_summary(trade_rows()), 10)
     result["nifty_engine"] = {
@@ -600,7 +606,7 @@ def live_workspace_payload(user, query: dict) -> dict:
         "position": engine["position"],
         "error": engine["error"],
     }
-    cas = cas_dashboard_state()
+    cas = cas_state or cas_dashboard_state()
     result["cas"] = {
         "enabled": cas["enabled"],
         "stale": cas["stale"],

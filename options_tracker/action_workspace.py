@@ -286,9 +286,12 @@ def strategy_lanes() -> list[dict[str, object]]:
     ]
 
 
-def operating_workspace_context() -> dict[str, object]:
-    action = action_list_context()
-    cas = cas_dashboard_state()
+def operating_workspace_context(
+    action: dict[str, object] | None = None,
+    cas: dict[str, object] | None = None,
+) -> dict[str, object]:
+    action = action or action_list_context()
+    cas = cas or cas_dashboard_state()
     cas_healthy = bool(
         cas["enabled"]
         and not cas["stale"]

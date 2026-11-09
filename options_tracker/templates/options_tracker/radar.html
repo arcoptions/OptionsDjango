@@ -4,7 +4,7 @@
 {% block body_class %}arc-workspace-page{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'options_tracker/radar_workspace.css' %}">
-  <script defer src="{% static 'options_tracker/radar_workspace.js' %}"></script>
+  <script nonce="{{ request.csp_nonce }}" defer src="{% static 'options_tracker/radar_workspace.js' %}"></script>
 {% endblock %}
 {% block page_header %}{% endblock %}
 {% block content %}

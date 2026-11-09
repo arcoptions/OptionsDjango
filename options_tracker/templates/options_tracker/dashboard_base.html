@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ title|default:shell_brand }} | {{ shell_brand }}{% endblock %}</title>
-  <style>
+  <style nonce="{{ request.csp_nonce }}">
     :root {
       --bg: #f3f5f9;
       --panel: #ffffff;
@@ -270,8 +270,17 @@
       {% block content %}{% endblock %}
     </main>
   </div>
-  <script>
+  <script nonce="{{ request.csp_nonce }}">
     (() => {
+      document.querySelectorAll("[data-auto-submit]").forEach((control) => {
+        control.addEventListener("change", () => control.form.requestSubmit());
+      });
+      document.querySelectorAll("[data-confirm]").forEach((control) => {
+        control.addEventListener("click", (event) => {
+          if (!window.confirm(control.dataset.confirm)) event.preventDefault();
+        });
+      });
+
       const ticker = document.getElementById("market-ticker");
       if (!ticker) return;
       const refreshTicker = async () => {

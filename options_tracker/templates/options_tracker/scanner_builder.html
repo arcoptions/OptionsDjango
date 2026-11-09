@@ -2,6 +2,13 @@
 
 {% block title %}Scanner Builder | ARC Trading Journal{% endblock %}
 
+{% block extra_head %}
+<style nonce="{{ request.csp_nonce }}">
+  .scanner-table-wrap { max-width: 100%; overflow-x: auto; }
+  .scanner-evidence { min-width: 260px; max-width: 520px; white-space: normal; overflow-wrap: anywhere; }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="panel">
   <h2>Safe scanner builder</h2>
@@ -28,10 +35,12 @@
 
 <section class="panel">
   <div class="page-head"><h2>Latest matches</h2><button class="btn secondary" id="browser-alerts" type="button">Enable browser alerts</button></div>
-  <table><thead><tr><th>Scanner</th><th>Symbol</th><th>State</th><th>Evidence</th><th>Updated</th><th>Action</th></tr></thead>
-  <tbody>{% for match in matches %}<tr data-match-id="{{ match.pk }}" data-alert-version="{{ match.last_alerted_at|date:'U' }}" data-state="{{ match.state }}" data-symbol="{{ match.symbol }}" data-acknowledged="{{ match.acknowledged_at|yesno:'yes,no' }}"><td>{{ match.definition.name }}</td><td>{{ match.symbol }}</td><td><span class="active-pill">{{ match.state }}</span></td><td>{{ match.evidence }}</td><td>{{ match.last_seen_at|date:"d M H:i:s" }}</td><td>{% if match.acknowledged_at %}Acknowledged{% else %}<form method="post" action="{% url 'scanner_match_acknowledge' match.pk %}">{% csrf_token %}<button class="btn secondary" type="submit">Acknowledge</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="6">No approaching or confirmed matches.</td></tr>{% endfor %}</tbody></table>
+  <div class="scanner-table-wrap">
+    <table><thead><tr><th>Scanner</th><th>Symbol</th><th>State</th><th>Evidence</th><th>Updated</th><th>Action</th></tr></thead>
+    <tbody>{% for match in matches %}<tr data-match-id="{{ match.pk }}" data-alert-version="{{ match.last_alerted_at|date:'U' }}" data-state="{{ match.state }}" data-symbol="{{ match.symbol }}" data-acknowledged="{{ match.acknowledged_at|yesno:'yes,no' }}"><td>{{ match.definition.name }}</td><td>{{ match.symbol }}</td><td><span class="active-pill">{{ match.state }}</span></td><td class="scanner-evidence">{{ match.evidence }}</td><td>{{ match.last_seen_at|date:"d M H:i:s" }}</td><td>{% if match.acknowledged_at %}Acknowledged{% else %}<form method="post" action="{% url 'scanner_match_acknowledge' match.pk %}">{% csrf_token %}<button class="btn secondary" type="submit">Acknowledge</button></form>{% endif %}</td></tr>{% empty %}<tr><td colspan="6">No approaching or confirmed matches.</td></tr>{% endfor %}</tbody></table>
+  </div>
 </section>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   document.getElementById("browser-alerts")?.addEventListener("click", async () => {
     if (!("Notification" in window)) return;
     const permission = await Notification.requestPermission();
