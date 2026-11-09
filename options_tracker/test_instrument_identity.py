@@ -166,3 +166,30 @@ class InstrumentIdentityTests(TestCase):
             InstrumentAlias.objects.filter(provider="RADAR").count(),
             3,
         )
+
+    def test_bulk_reconciliation_reports_alias_conflicts_without_partial_mapping(self):
+        first = RadarInstrument.objects.create(
+            security_id="101",
+            segment="NSE_EQ",
+            symbol="DUPLICATE",
+            kind="EQUITY",
+        )
+        second = RadarInstrument.objects.create(
+            security_id="102",
+            segment="NSE_EQ",
+            symbol="DUPLICATE",
+            kind="EQUITY",
+        )
+
+        output = StringIO()
+        call_command("reconcile_instruments", "--apply", stdout=output)
+        report = json.loads(output.getvalue())
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        self.assertEqual(report["applied"], 1)
+        self.assertEqual(len(report["errors"]), 1)
+        self.assertIsNotNone(first.canonical_instrument_id)
+        self.assertIsNone(second.canonical_instrument_id)
+        self.assertEqual(CanonicalInstrument.objects.count(), 1)
+        self.assertEqual(InstrumentAlias.objects.count(), 2)
