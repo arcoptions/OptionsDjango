@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import F, OuterRef, Q, Subquery
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
@@ -18,21 +18,28 @@ from .radar_models import RadarOpportunity
 
 @require_GET
 def fno_desk(request):
-    indexes = {}
-    for snapshot in IndexOISnapshot.objects.order_by("underlying", "-created_at"):
-        indexes.setdefault(snapshot.underlying, snapshot)
-    scores = {}
-    for score in StockScoreSnapshot.objects.filter(
+    latest_index_pk = IndexOISnapshot.objects.filter(
+        underlying=OuterRef("underlying"),
+    ).order_by("-created_at", "-pk").values("pk")[:1]
+    index_rows = list(
+        IndexOISnapshot.objects.filter(pk=Subquery(latest_index_pk)).order_by(
+            "underlying",
+        )
+    )
+    latest_score_pk = StockScoreSnapshot.objects.filter(
         score_type="FNO",
-    ).order_by("symbol", "-source_at"):
-        scores.setdefault(score.symbol, score)
+        symbol=OuterRef("symbol"),
+    ).order_by("-source_at", "-pk").values("pk")[:1]
+    score_rows = StockScoreSnapshot.objects.filter(
+        score_type="FNO",
+        pk=Subquery(latest_score_pk),
+    )
     opportunities = UnifiedOpportunity.objects.select_related("instrument").filter(
         Q(instrument__kind__in=[InstrumentKind.OPTION, InstrumentKind.FUTURE])
         | Q(direction__in=["CE", "PE"]),
     ).exclude(
         status__in=[OpportunityStatus.CLOSED, OpportunityStatus.REJECTED],
     )[:30]
-    index_rows = list(indexes.values())
     return render(request, "options_tracker/fno_desk.html", {
         "title": "F&O Desk",
         "indexes": index_rows,
@@ -51,10 +58,8 @@ def fno_desk(request):
             ],
         )[:30],
         "opportunities": opportunities,
-        "scores": sorted(
-            scores.values(),
-            key=lambda score: score.score if score.score is not None else -1,
-            reverse=True,
+        "scores": score_rows.order_by(
+            F("score").desc(nulls_last=True),
         )[:30],
         "open_trades": TradeExecution.objects.select_related("signal").filter(
             state=TradeState.OPEN,

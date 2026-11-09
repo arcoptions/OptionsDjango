@@ -756,6 +756,12 @@ class StockScoreSnapshot(models.Model):
                 name="stock_score_identity",
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["score_type", "symbol", "-source_at"],
+                name="idx_score_type_sym_time",
+            ),
+        ]
 
 
 class ScannerDefinition(models.Model):
