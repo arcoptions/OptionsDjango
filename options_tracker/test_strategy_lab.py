@@ -1,6 +1,8 @@
 import json
+import os
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -104,6 +106,20 @@ class StrategyLabTests(TestCase):
 
         self.assertNotEqual(first.data_hash, second.data_hash)
         self.assertNotEqual(first.manifest_hash, second.manifest_hash)
+
+    @patch("options_tracker.strategy_lab.running_commit", return_value="packaged-sha")
+    def test_manifest_records_packaged_commit_when_environment_is_unset(
+        self,
+        _running_commit,
+    ):
+        with patch.dict(os.environ, {"ARC_DEPLOYED_COMMIT": ""}):
+            manifest = create_manifest(
+                self.definition,
+                self.start,
+                self.start + timedelta(minutes=15),
+            )
+
+        self.assertEqual(manifest.code_version, "packaged-sha")
 
     def test_manifest_stores_backtest_and_chronological_validation_results(self):
         for index in range(1, 61):
