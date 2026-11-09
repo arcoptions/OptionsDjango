@@ -9,7 +9,7 @@ The application currently has:
 
 * 35 `test*.py` files.
 * 73 test classes ending in `Tests`.
-* 570 discovered `test_` methods.
+* 572 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -209,19 +209,20 @@ Release 0 requires no application test run because it changes documentation only
 
 The current local Release 1 execution slice has:
 
-* 570 passing `options_tracker` tests.
-* A clean Django system check.
-* ARC 2.0 migrations `0024`-`0037` applied to the test SQLite database.
-* Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication through `0037` passed system checks.
-* A passing compile check and secret-free local activation report.
-* Ten critical authenticated pages returning HTTP 200 without rendered server errors.
-* Local DOM readiness between 366 ms and 559 ms for those ten pages.
+* 572 passing `options_tracker` tests.
+* A clean Django system check and migration drift check.
+* ARC 2.0 migrations `0024`-`0039` applied to test SQLite and a restored production PostgreSQL backup.
+* Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication passed system checks.
+* An Azure PostgreSQL point-in-time restore completed on an isolated server; production backup retention is now 14 days.
+* A separate staging App Service plan forced preview mode and disabled broker credentials and background workers.
+* Fifteen authenticated critical pages returned HTTP 200 without horizontal overflow.
+* Steady staging DOM readiness was 220-1,532 ms; indexed series filtering reduced F&O cold-worker requests from 8.2 seconds to 0.9-1.5 seconds.
 * Django 5.2.17 installed after the dependency audit identified advisories in 5.2.15.
 * An isolated `pip-audit` run reporting no known vulnerabilities.
 * No high-confidence exploitable findings in the focused ARC security review.
 * An expected unhealthy local activation result because deployment markers,
   live worker heartbeats, fresh feeds, and verified Dhan credentials are absent.
-* No deployment or production smoke evidence.
+* Isolated staging deployment and smoke evidence are complete; production deployment evidence remains open.
 
 The [release dashboard](./release-dashboard.md) tracks the remaining security,
 browser, staging, and production gates.

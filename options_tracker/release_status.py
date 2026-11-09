@@ -123,16 +123,16 @@ RELEASE_GATES = (
     {
         "id": "G-05",
         "name": "Staging isolation",
-        "state": "Open",
-        "status_key": "open",
-        "next_step": "Create isolated PostgreSQL, preview-only App Service, and worker ownership.",
+        "state": "Passed in Azure",
+        "status_key": "complete",
+        "next_step": "Retain the isolated plan, restored database, preview mode, and disabled workers through release smoke.",
     },
     {
         "id": "G-06",
         "name": "Migration rehearsal",
-        "state": "Partial",
-        "status_key": "progress",
-        "next_step": "Run migrations against representative existing PostgreSQL data.",
+        "state": "Passed on restored PostgreSQL",
+        "status_key": "complete",
+        "next_step": "Migrations 0024 through 0039 applied to a restored production backup.",
     },
     {
         "id": "G-07",
@@ -144,30 +144,30 @@ RELEASE_GATES = (
     {
         "id": "G-08",
         "name": "Performance budgets",
-        "state": "Partial",
-        "status_key": "progress",
-        "next_step": "Run production-like load and browser polling measurements.",
+        "state": "Passed in staging",
+        "status_key": "complete",
+        "next_step": "Retain production monitoring after activation.",
     },
     {
         "id": "G-09",
         "name": "Backup and restore rehearsal",
-        "state": "Partial",
-        "status_key": "progress",
-        "next_step": "Restore an isolated Azure PostgreSQL copy and verify integrity.",
+        "state": "Passed with residual regional risk",
+        "status_key": "complete",
+        "next_step": "Production retention is 14 days; geo-redundant backup remains disabled.",
     },
     {
         "id": "G-10",
         "name": "Staging workflow smoke",
-        "state": "Open",
-        "status_key": "open",
-        "next_step": "Run every critical journey in isolated staging.",
+        "state": "Passed",
+        "status_key": "complete",
+        "next_step": "Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow.",
     },
     {
         "id": "G-11",
         "name": "Production approval",
-        "state": "Blocked",
-        "status_key": "blocked",
-        "next_step": "Obtain explicit approval after the staging report.",
+        "state": "Approved by operator",
+        "status_key": "complete",
+        "next_step": "Proceed through the protected production workflow.",
     },
     {
         "id": "G-12",
@@ -188,11 +188,9 @@ IMPLEMENTED_HIGHLIGHTS = (
 )
 
 CURRENT_BLOCKERS = (
-    "No isolated Azure staging environment has been authorized or created.",
-    "Existing-data PostgreSQL migration and rollback rehearsal is pending.",
-    "Production backup restore has not been rehearsed; geo-redundant backup is disabled.",
-    "Approved production data providers and Azure OpenAI configuration remain incomplete.",
-    "Production-sized load validation, final CI, deployment, and activation smoke remain open.",
+    "Production deployment, activation smoke, and runtime ownership verification remain open.",
+    "Approved production data providers and Azure OpenAI configuration remain incomplete and fail unavailable.",
+    "Geo-redundant PostgreSQL backup remains disabled despite the successful point-in-time restore rehearsal.",
 )
 
 
@@ -209,9 +207,9 @@ def release_dashboard_snapshot() -> dict[str, object]:
     }
     return {
         "evidence_date": "9 November 2026",
-        "automated_tests": 570,
+        "automated_tests": 572,
         "execution_default": "Manual",
-        "deployment_state": "Not deployed",
+        "deployment_state": "Staging verified; production pending",
         "releases": RELEASES,
         "release_counts": release_counts,
         "gates": RELEASE_GATES,

@@ -38,20 +38,20 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 570 passed |
+| Django application tests | 572 passed |
 | Test files | 35 |
 | Test classes ending in `Tests` | 73 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
-| Current ARC 2.0 schema changes | Migrations `0024`-`0037` applied to test SQLite; not deployed |
-| Latest Release 1 deployment | Not performed |
-| Latest local browser smoke | Passed for 10 measured critical pages at 366-559 ms DOM readiness plus 5 new authenticated assistant, journal, F&O, strategy, and performance checks with no horizontal overflow |
+| Current ARC 2.0 schema changes | Migrations `0024`-`0039` applied to test SQLite and restored production PostgreSQL |
+| Latest Release 1 deployment | Isolated Azure staging deployed and verified; production not yet deployed |
+| Latest staging browser smoke | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow; steady DOM readiness was 220-1,532 ms after F&O optimization |
 | Latest Release 1 production smoke | Not performed |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
-| Production App Service | Running on Linux Basic in Central India; verified read-only through Azure MCP |
-| Production PostgreSQL | Version 16, Standard B1ms, 32 GB, seven-day backup retention, geo-redundant backup disabled |
+| Production App Service | Running on Linux Basic in Central India; staging uses a separate Linux Basic plan |
+| Production PostgreSQL | Version 16, Standard B1ms, 32 GB, 14-day backup retention, geo-redundant backup disabled |
 | Execution default in local Release 1 work | Manual |
 | Explicit automatic compatibility mode | `ARC_EXECUTION_MODE=legacy_auto` |
 
@@ -63,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally | 570 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally | 572 application tests and isolated staging smoke passed | Staging verified; production pending | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
@@ -241,18 +241,18 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 570 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 572 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
-| G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL target, code-forced preview mode, and an `ARC_BACKGROUND_WORKERS=0` worker boundary; cloud smoke evidence remains |
-| G-06 | Migration rehearsal | Partial | `0024`-`0037` pass empty test databases; populated SQLite rollback to `0033` and forward reapplication preserve core data; existing-data PostgreSQL rehearsal remains |
-| G-07 | Production-sized data validation | Open | Query, lock, duration, and backfill-resume evidence |
-| G-08 | Performance budgets | Partial | Query ceilings pass; local browser DOM readiness was 366-559 ms across 10 critical pages, while production load and polling measurements remain |
-| G-09 | Backup and restore rehearsal | Partial | Azure confirms seven-day automated retention; geo-redundant backup is disabled and no isolated restore has been rehearsed |
-| G-10 | Staging workflow smoke | Open | All critical journeys pass with deterministic evidence |
-| G-11 | Production approval | Blocked | Explicit user approval after staging report |
-| G-12 | Production deployment report | Open | Workflow now warms the login and critical static asset after deployment; commit, migrations, feeds, workers, auth, execution mode, and rollback evidence remain required |
+| G-05 | Staging isolation | Passed | Separate App Service plan, restored PostgreSQL server, code-forced preview mode, no broker credentials, and `ARC_BACKGROUND_WORKERS=0` verified |
+| G-06 | Migration rehearsal | Passed | `0024`-`0039` applied to a restored production PostgreSQL backup; SQLite rollback to `0033` and forward reapplication preserve core data |
+| G-07 | Production-sized data validation | Partial | Restored-data browser and migration evidence passed; sustained concurrent load evidence remains |
+| G-08 | Performance budgets | Passed in staging | Fifteen authenticated pages passed; F&O cold-worker requests fell from 8.2 seconds to 0.9-1.5 seconds and steady route readiness was 220-1,532 ms |
+| G-09 | Backup and restore rehearsal | Passed with residual risk | Point-in-time restore succeeded and retention is 14 days; geo-redundant backup remains disabled |
+| G-10 | Staging workflow smoke | Passed | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow |
+| G-11 | Production approval | Approved | Operator explicitly authorized the production release on 9 November 2026 |
+| G-12 | Production deployment report | Open | Record commit, migrations, feeds, workers, auth, execution mode, smoke, and rollback evidence |
 
 ## Critical workflow acceptance
 

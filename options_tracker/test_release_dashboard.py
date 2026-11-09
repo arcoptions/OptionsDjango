@@ -39,4 +39,4 @@ class ReleaseDashboardTests(TestCase):
         snapshot = release_dashboard_snapshot()
 
         self.assertEqual(snapshot["release_counts"], {"complete": 1, "in_progress": 8, "blocked": 1})
-        self.assertEqual(snapshot["gate_counts"], {"passed": 2, "remaining": 10, "blocked": 1})
+        self.assertEqual(snapshot["gate_counts"], {"passed": 8, "remaining": 4, "blocked": 0})
