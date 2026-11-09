@@ -7,7 +7,7 @@ CONTENT_SECURITY_POLICY = "; ".join(
         "form-action 'self'",
         "frame-ancestors 'none'",
         "frame-src 'none'",
-        "img-src 'self' data: https:",
+        "img-src 'self' data:",
         "media-src 'none'",
         "object-src 'none'",
         "script-src 'self' 'unsafe-inline'",
@@ -28,5 +28,7 @@ class BrowserSecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         response.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.setdefault("Cross-Origin-Embedder-Policy", "require-corp")
+        response.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         response.setdefault("Permissions-Policy", PERMISSIONS_POLICY)
         return response

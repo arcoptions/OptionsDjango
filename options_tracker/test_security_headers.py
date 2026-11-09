@@ -18,6 +18,14 @@ class BrowserSecurityHeaderTests(TestCase):
             response.headers["Permissions-Policy"],
             PERMISSIONS_POLICY,
         )
+        self.assertEqual(
+            response.headers["Cross-Origin-Embedder-Policy"],
+            "require-corp",
+        )
+        self.assertEqual(
+            response.headers["Cross-Origin-Resource-Policy"],
+            "same-origin",
+        )
 
     def test_authentication_redirect_sets_browser_security_headers(self):
         response = self.client.get("/")
@@ -31,3 +39,6 @@ class BrowserSecurityHeaderTests(TestCase):
             response.headers["Permissions-Policy"],
             PERMISSIONS_POLICY,
         )
+
+        login_response = self.client.get(response.headers["Location"])
+        self.assertTrue(login_response.cookies["csrftoken"]["httponly"])

@@ -26,3 +26,28 @@ jobs:
           fail_action: false
           allow_issue_writing: false
           artifact_name: zap-staging-baseline
+
+      - name: Enforce high and medium findings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          allowed = {
+              ("10055", "CSP: script-src unsafe-inline"),
+              ("10055", "CSP: style-src unsafe-inline"),
+          }
+          report = json.loads(Path("report_json.json").read_text(encoding="utf-8"))
+          blocked = []
+          for site in report.get("site", []):
+              for alert in site.get("alerts", []):
+                  key = (str(alert.get("pluginid")), alert.get("name"))
+                  if int(alert.get("riskcode", 0)) >= 2 and key not in allowed:
+                      blocked.append(
+                          f"{alert.get('riskdesc')}: {alert.get('name')} "
+                          f"({len(alert.get('instances', []))} instances)"
+                      )
+          if blocked:
+              raise SystemExit("Disallowed ZAP findings:\n" + "\n".join(blocked))
+          print("No disallowed high or medium ZAP findings.")
+          PY
