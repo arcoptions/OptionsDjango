@@ -6,6 +6,25 @@ from urllib.parse import quote
 import requests
 
 
+def provider_readiness():
+    required = {
+        "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT", "").strip(),
+        "API key": os.getenv("AZURE_OPENAI_API_KEY", "").strip(),
+        "deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip(),
+    }
+    missing = [name for name, value in required.items() if not value]
+    return {
+        "provider": "Azure OpenAI",
+        "state": "UNAVAILABLE" if missing else "READY",
+        "ready": not missing,
+        "detail": (
+            "Configuration required: " + ", ".join(missing) + "."
+            if missing
+            else "Configured for evidence-grounded research."
+        ),
+    }
+
+
 def chat_completion(*, system_prompt, user_prompt, max_tokens):
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip().rstrip("/")
     api_key = os.getenv("AZURE_OPENAI_API_KEY", "").strip()

@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 627 discovered `test_` methods.
+* 628 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -266,6 +266,16 @@ The lifecycle journey validates evidence, records a complete derivative risk
 plan, and approves a manual setup with actor and reason audit. Direct execution
 requests from the inbox remain blocked, and no `TradeExecution` is created.
 Django system checks and migration drift checks also passed.
+
+The R16 governed intelligence slice passed:
+
+* 4 focused AI research tests in 0.574 seconds
+* 613 non-browser tests in 47.115 seconds
+* 15 browser-tagged tests in 93.685 seconds
+
+The tests verify provider-neutral suggested questions, credential-safe readiness,
+traceable provider-backed responses, staff access, and fail-closed behavior.
+Missing provider configuration produces no substitute snapshot.
 
 ## Latest Release 1 validation
 

@@ -155,7 +155,10 @@ requirements with existing ARC capabilities.
   planning, approval, and rejection with actor and reason audit.
 * [x] Keep execution outside the Opportunity Inbox and reject direct execution
   requests without creating trade-execution records.
-* [ ] Activate governed ARC Intelligence after Azure OpenAI configuration.
+* [x] Add provider-neutral suggested questions, credential-safe readiness,
+  traceable evidence generation, and fail-closed unavailable behavior.
+* [ ] Activate governed ARC Intelligence after approved Azure OpenAI
+  configuration.
 * [ ] Complete personal-desk broker reconciliation with approved statements.
 * [ ] Complete R18 integration, restore, independent security, and approved
   production gates.

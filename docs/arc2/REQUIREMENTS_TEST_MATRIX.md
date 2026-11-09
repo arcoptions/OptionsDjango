@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 612 non-browser tests. The matrix records
+The current automated baseline is 613 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -56,7 +56,7 @@ feeds.
 | F&O recommendation evidence | `test_fno_desk.py` | Approved fundamentals, event, and news providers remain open | Partial activation |
 | Investment thesis lifecycle | `test_investment_desk.py` | Investment Desk browser journey remains to be recorded for this commit | Passed automated scope |
 | AI briefing provenance and dry run | `AIBriefingTests` | Approved Azure OpenAI provider remains open | Passed implemented scope |
-| AI research access and traceability | `AIResearchTests` | Approved Azure OpenAI provider remains open | Passed implemented scope |
+| AI research access and traceability | `AIResearchTests.test_staff_can_store_traceable_research_without_broker_activity`, `test_assistant_offers_provider_neutral_evidence_questions`, `test_missing_provider_configuration_is_explicit` | Approved Azure OpenAI provider remains open; unavailable state is visible and cannot save substitute analysis | Passed implemented scope |
 
 ## Trading and performance requirements
 

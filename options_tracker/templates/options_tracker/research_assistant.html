@@ -6,13 +6,27 @@
 <section class="panel">
   <h2>Evidence-grounded research assistant</h2>
   <p class="muted">Ask about market evidence and risk. ARC records the exact question, evidence, prompt, provider, model, and response. It cannot access accounts or place orders.</p>
+  <p><span class="active-pill">{{ provider_status.state }}</span> {{ provider_status.provider }}: {{ provider_status.detail }}</p>
+  {% if not provider_status.ready %}
+  <p class="muted">ARC will not generate or save a substitute response while the approved provider is unavailable.</p>
+  {% endif %}
+  <h3>Suggested evidence questions</h3>
+  <div class="grid">
+    {% for suggested_question in suggested_questions %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="question" value="{{ suggested_question }}">
+      <button class="btn secondary" type="submit" {% if not provider_status.ready %}disabled{% endif %}>{{ suggested_question }}</button>
+    </form>
+    {% endfor %}
+  </div>
   <form method="post">
     {% csrf_token %}
     <div class="grid">
       <label>Optional symbol<input name="symbol" maxlength="40" placeholder="NIFTY"></label>
       <label>Research or risk question<textarea name="question" maxlength="500" required placeholder="What evidence supports today's regime, and what could invalidate it?"></textarea></label>
     </div>
-    <button class="btn" type="submit">Generate evidence review</button>
+    <button class="btn" type="submit" {% if not provider_status.ready %}disabled{% endif %}>Generate evidence review</button>
   </form>
 </section>
 
