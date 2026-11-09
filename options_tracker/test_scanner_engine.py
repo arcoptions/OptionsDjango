@@ -119,6 +119,10 @@ class ScannerEngineTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(ScannerDefinition.objects.filter(name="Price scanner").exists())
 
+        response = self.client.get(url)
+        self.assertContains(response, 'class="scanner-table-wrap"')
+        self.assertContains(response, ".scanner-evidence")
+
     def test_fundamental_scanner_requires_current_provider_evidence(self):
         definition = ScannerDefinition.objects.create(
             name="Fundamental quality",
