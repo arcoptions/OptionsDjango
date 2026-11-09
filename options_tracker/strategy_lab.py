@@ -360,8 +360,8 @@ def create_manifest(definition, data_start, data_end):
     }
     data_hash = digest.hexdigest()
     code_version = (
-        os.getenv("ARC_DEPLOYED_COMMIT", "").strip()
-        or running_commit()
+        running_commit()
+        or os.getenv("ARC_DEPLOYED_COMMIT", "").strip()
         or "local-uncommitted"
     )
     result_snapshot = backtest_snapshot(

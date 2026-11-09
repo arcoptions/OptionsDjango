@@ -12,7 +12,7 @@ approved or deployed to production.
 |---|---|---|
 | Application commit | Passed | `c55c9fb3217f1802be9751bc2c49b9a0f24cd093` |
 | GitHub Actions | Passed | Runs `42663557008` and `42663576656` |
-| Django tests | Passed | 586 non-browser tests in 106.100 seconds |
+| Django tests | Passed | 587 non-browser tests in 152.722 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
@@ -47,7 +47,7 @@ Runs `42663557008` and `42663576656` completed successfully against commit
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
 
-The current activation branch passed 586 non-browser tests locally after the
+The current activation branch passed 587 non-browser tests locally after the
 credential-confined history capture and scanner synchronization workflow was
 added.
 

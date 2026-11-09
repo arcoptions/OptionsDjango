@@ -108,11 +108,11 @@ class StrategyLabTests(TestCase):
         self.assertNotEqual(first.manifest_hash, second.manifest_hash)
 
     @patch("options_tracker.strategy_lab.running_commit", return_value="packaged-sha")
-    def test_manifest_records_packaged_commit_when_environment_is_unset(
+    def test_manifest_prefers_packaged_commit_over_stale_environment(
         self,
         _running_commit,
     ):
-        with patch.dict(os.environ, {"ARC_DEPLOYED_COMMIT": ""}):
+        with patch.dict(os.environ, {"ARC_DEPLOYED_COMMIT": "stale-sha"}):
             manifest = create_manifest(
                 self.definition,
                 self.start,
@@ -120,6 +120,20 @@ class StrategyLabTests(TestCase):
             )
 
         self.assertEqual(manifest.code_version, "packaged-sha")
+
+    @patch("options_tracker.strategy_lab.running_commit", return_value="")
+    def test_manifest_uses_environment_commit_without_package_stamp(
+        self,
+        _running_commit,
+    ):
+        with patch.dict(os.environ, {"ARC_DEPLOYED_COMMIT": "environment-sha"}):
+            manifest = create_manifest(
+                self.definition,
+                self.start,
+                self.start + timedelta(minutes=15),
+            )
+
+        self.assertEqual(manifest.code_version, "environment-sha")
 
     def test_manifest_stores_backtest_and_chronological_validation_results(self):
         for index in range(1, 61):
