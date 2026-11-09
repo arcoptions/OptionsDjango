@@ -9,7 +9,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .instrument_identity import register_instrument
-from .models import ChatMessage, Direction, OpportunityRevision, OpportunityStatus, OpportunityStatusEvent, TipSignal, UnifiedOpportunity
+from .models import (
+    ChatMessage,
+    Direction,
+    OpportunityRevision,
+    OpportunityStatus,
+    OpportunityStatusEvent,
+    ScannerDefinition,
+    ScannerMatch,
+    TipSignal,
+    UnifiedOpportunity,
+)
 from .opportunities import transition_opportunity, upsert_opportunity
 from .radar_models import RadarInstrument, RadarOpportunity
 
@@ -206,6 +216,36 @@ class UnifiedOpportunityTests(TestCase):
         self.assertEqual(opportunity.plan["entry"], 101)
         self.assertEqual(opportunity.plan["stop_loss"], 95)
         self.assertEqual(opportunity.plan["quantity"], 50)
+
+    def test_sync_includes_confirmed_configurable_scanner_match(self):
+        canonical = register_instrument(
+            canonical_symbol="TEST",
+            kind="EQUITY",
+            exchange_segment="NSE_EQ",
+            security_id="123",
+            aliases=(("RADAR", "TEST"),),
+        )
+        definition = ScannerDefinition.objects.create(
+            name="Persisted close scanner",
+            conditions=[{"field": "last", "operator": "gte", "value": 100}],
+        )
+        match = ScannerMatch.objects.create(
+            definition=definition,
+            symbol="TEST",
+            state="CONFIRMED",
+            evidence={"last": {"actual": 102, "provider": "DHAN_HISTORY"}},
+        )
+
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+        call_command("sync_opportunities", "--apply", stdout=StringIO())
+
+        opportunity = UnifiedOpportunity.objects.get(
+            source_ref=f"CONFIGURABLE:{match.pk}",
+        )
+        self.assertEqual(opportunity.instrument, canonical)
+        self.assertEqual(opportunity.source_type, "SCANNER")
+        self.assertEqual(opportunity.revisions.get().evidence["state"], "CONFIRMED")
+        self.assertEqual(UnifiedOpportunity.objects.count(), 1)
 
     def test_sync_excludes_unparsed_messages_unless_explicitly_requested(self):
         chat = ChatMessage.objects.create(

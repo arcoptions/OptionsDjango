@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 584 non-browser tests. The matrix records
+The current automated baseline is 585 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -42,7 +42,7 @@ feeds.
 | Stock Intelligence evidence and freshness | `test_stock_intelligence.py` | Stock Intelligence browser smoke passed; provider datasets remain open | Partial activation |
 | Five-stock historical pilot bounds | `DownloadStockDataCommandTests.test_exact_day_lookback_bounds_equity_pilot` | Approved live capture remains open | Passed automated scope |
 | Credential-confined history transfer | `HistoryFixtureImportTests` | Five-stock VM capture and 860-row staging import passed with matching hash | Passed equity scope |
-| Scanner conditions, cooldown, and matches | `test_scanner_engine.py`, including persisted-bar coverage | Persisted-bar staging scanner run remains open | Passed automated scope |
+| Scanner conditions, cooldown, and matches | `test_scanner_engine.py`, including persisted-bar coverage | Two five-symbol staging runs passed with deduplication and historical alerts suppressed | Passed |
 | F&O recommendation evidence | `test_fno_desk.py` | Approved fundamentals, event, and news providers remain open | Partial activation |
 | Investment thesis lifecycle | `test_investment_desk.py` | Investment Desk browser journey remains to be recorded for this commit | Passed automated scope |
 | AI briefing provenance and dry run | `AIBriefingTests` | Approved Azure OpenAI provider remains open | Passed implemented scope |

@@ -5,7 +5,14 @@ import json
 from django.core.management.base import BaseCommand
 
 from options_tracker.instrument_identity import resolve_instrument
-from options_tracker.models import ChatMessage, ChartinkTrigger, SignalStatus, TipSignal, TriggerStatus
+from options_tracker.models import (
+    ChatMessage,
+    ChartinkTrigger,
+    ScannerMatch,
+    SignalStatus,
+    TipSignal,
+    TriggerStatus,
+)
 from options_tracker.opportunities import upsert_opportunity
 from options_tracker.radar_models import RadarOpportunity
 
@@ -37,6 +44,13 @@ class Command(BaseCommand):
             )
         )
         triggers = list(ChartinkTrigger.objects.filter(status=TriggerStatus.MONITORING))
+        scanner_matches = list(
+            ScannerMatch.objects.select_related("definition").filter(
+                is_active=True,
+                state="CONFIRMED",
+                definition__enabled=True,
+            )
+        )
         chats = list(
             ChatMessage.objects.filter(source_category="TIPS", linked_signal__isnull=True)
         )
@@ -137,6 +151,32 @@ class Command(BaseCommand):
                     source_at=trigger.trigger_time,
                 )
                 synchronized += 1
+            for match in scanner_matches:
+                instrument = resolve_instrument(
+                    provider="RADAR",
+                    alias=match.symbol,
+                    exchange_segment="NSE_EQ",
+                )
+                upsert_opportunity(
+                    source_type="SCANNER",
+                    source_ref=f"CONFIGURABLE:{match.pk}",
+                    source_name=match.definition.name,
+                    strategy="CONFIGURABLE_SCANNER",
+                    direction="LONG",
+                    timeframe="INTRADAY",
+                    instrument=instrument,
+                    score=60,
+                    rationale=f"{match.symbol} met the configured scanner conditions.",
+                    evidence={
+                        "symbol": match.symbol,
+                        "state": match.state,
+                        "conditions": match.definition.conditions,
+                        "scanner_evidence": match.evidence,
+                    },
+                    next_action="Validate a complete risk plan before approval",
+                    source_at=match.last_seen_at,
+                )
+                synchronized += 1
             if options["include_unparsed"]:
                 for chat in chats:
                     upsert_opportunity(
@@ -159,6 +199,7 @@ class Command(BaseCommand):
                 "tips": len(tips),
                 "radar_opportunities": len(radar_opportunities),
                 "scanner_triggers": len(triggers),
+                "configurable_scanner_matches": len(scanner_matches),
                 "telegram_messages": len(chats),
             },
             "synchronized": synchronized,

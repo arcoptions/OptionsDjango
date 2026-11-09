@@ -12,7 +12,7 @@ approved or deployed to production.
 |---|---|---|
 | Application commit | Passed | `1167fd48d29d440d23a88af43d9774c238d2a249` |
 | GitHub Actions | Passed | Run `42621150014` |
-| Django tests | Passed | 584 non-browser tests in 109.983 seconds |
+| Django tests | Passed | 585 non-browser tests in 113.193 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
@@ -49,8 +49,9 @@ commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
 
-The current activation branch passed 584 non-browser tests locally after the
-credential-confined history capture and import workflow was added.
+The current activation branch passed 585 non-browser tests locally after the
+credential-confined history capture and scanner synchronization workflow was
+added.
 
 Route regression coverage verifies:
 
@@ -183,6 +184,21 @@ documented rolling-option payload tested, including index and stock
 instruments. The equity-only fallback preserves real scanner evidence without
 claiming that option history is active.
 
+## Persisted-bar scanner activation
+
+The staging scanner evaluated the imported bars twice:
+
+* Five symbols scanned on each run
+* Five confirmed matches on each run
+* Provider evidence recorded as `DHAN_HISTORY`
+* Match identities remained deduplicated
+* Cooldown timestamps remained unchanged on the immediate rerun
+* Historical notification delivery remained suppressed
+
+Confirmed configurable scanner matches now synchronize into canonical
+opportunities with stable source references. Repeated synchronization remains
+idempotent.
+
 ## Bugs found and fixed
 
 | Defect | Resolution |
@@ -205,7 +221,6 @@ claiming that option history is active.
 
 ## Open test gates
 
-* Activate and test one scanner from persisted stock bars.
 * Resolve Dhan rolling-option `DH-905` responses and complete option history.
 * Reproduce strategy results from immutable manifests.
 * Complete external penetration evidence.
