@@ -52,6 +52,9 @@ ROLLING_WINDOW_DAYS = 15
 INTRADAY_WINDOW_DAYS = 85  # the documented intraday cap is 90
 DAILY_INTERVAL = 1440      # one session, stored beside the 15-minute series
 RELATIVE_STRIKES = ["ATM", "ATM+1", "ATM-1", "ATM+2", "ATM-2", "ATM+3", "ATM-3"]
+DHAN_SYMBOL_ALIASES = {
+    "ICICIPRULI": "ICICILIFE",
+}
 
 _local = threading.local()
 _print_lock = threading.Lock()
@@ -186,8 +189,9 @@ def sync_master_metadata():
     contracts = option_contracts(rows)
     updated, unmatched = 0, []
     for stock in TrackedStock.objects.filter(is_active=True):
-        security_id = equities.get(stock.symbol, "")
-        legs = contracts.get(stock.symbol, [])
+        provider_symbol = DHAN_SYMBOL_ALIASES.get(stock.symbol, stock.symbol)
+        security_id = equities.get(provider_symbol, "")
+        legs = contracts.get(provider_symbol, [])
         if not security_id and not legs:
             unmatched.append(stock.symbol)
             continue

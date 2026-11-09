@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 
+from . import stock_data
 from .models import TrackedStock
 
 
@@ -43,3 +44,50 @@ class DownloadStockDataCommandTests(TestCase):
                 "--days=-1",
                 stdout=StringIO(),
             )
+
+    @patch("options_tracker.stock_data.load_master")
+    def test_master_sync_resolves_current_dhan_symbol_alias(self, load_master):
+        load_master.return_value = [
+            {
+                "EXCH_ID": "NSE",
+                "SEGMENT": "E",
+                "INSTRUMENT": "EQUITY",
+                "UNDERLYING_SYMBOL": "ICICILIFE",
+                "SECURITY_ID": "18652",
+            },
+            {
+                "EXCH_ID": "NSE",
+                "INSTRUMENT": "OPTSTK",
+                "UNDERLYING_SYMBOL": "ICICILIFE",
+                "SECURITY_ID": "500",
+                "STRIKE_PRICE": "500",
+                "OPTION_TYPE": "CE",
+                "SM_EXPIRY_DATE": "2026-11-26",
+                "LOT_SIZE": "925",
+                "DISPLAY_NAME": "ICICILIFE 500 CE",
+            },
+            {
+                "EXCH_ID": "NSE",
+                "INSTRUMENT": "OPTSTK",
+                "UNDERLYING_SYMBOL": "ICICILIFE",
+                "SECURITY_ID": "501",
+                "STRIKE_PRICE": "510",
+                "OPTION_TYPE": "CE",
+                "SM_EXPIRY_DATE": "2026-11-26",
+                "LOT_SIZE": "925",
+                "DISPLAY_NAME": "ICICILIFE 510 CE",
+            },
+        ]
+        stock = TrackedStock.objects.get(symbol="TEST")
+        stock.symbol = "ICICIPRULI"
+        stock.save(update_fields=["symbol"])
+
+        updated, unmatched = stock_data.sync_master_metadata()
+        stock.refresh_from_db()
+
+        self.assertEqual(updated, 1)
+        self.assertEqual(unmatched, [])
+        self.assertEqual(stock.symbol, "ICICIPRULI")
+        self.assertEqual(stock.security_id, "18652")
+        self.assertEqual(stock.lot_size, 925)
+        self.assertEqual(stock.strike_step, 10)
