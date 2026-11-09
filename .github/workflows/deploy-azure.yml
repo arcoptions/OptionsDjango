@@ -75,12 +75,46 @@ jobs:
         # when it does fail it says which call was refused.
         run: |
           zip -qr /tmp/package.zip . -x '.git/*'
+          previous_deployment_id=""
+          for attempt in $(seq 1 8); do
+            previous_deployment_id="$(az webapp log deployment list \
+              --resource-group rg-optionsdjango-centralindia \
+              --name arc-options-2fa45de1 \
+              --query '[0].id' --output tsv 2>/dev/null)"
+            [ -n "$previous_deployment_id" ] && break
+            echo "Kudu history unavailable before deployment; retrying in 15 seconds."
+            sleep 15
+          done
+          if [ -z "$previous_deployment_id" ]; then
+            echo "::error::Could not establish the previous Kudu deployment ID; refusing an ambiguous deploy."
+            exit 1
+          fi
+
           set +e
-          az webapp deploy \
-            --resource-group rg-optionsdjango-centralindia \
-            --name arc-options-2fa45de1 \
-            --src-path /tmp/package.zip --type zip > /tmp/deploy.log 2>&1
-          code=$?
+          : > /tmp/deploy.log
+          deployment_started=false
+          for initiation_attempt in $(seq 1 3); do
+            az webapp deploy \
+              --resource-group rg-optionsdjango-centralindia \
+              --name arc-options-2fa45de1 \
+              --src-path /tmp/package.zip --type zip >> /tmp/deploy.log 2>&1
+            code=$?
+            [ $code -eq 0 ] && break
+
+            for discovery_attempt in $(seq 1 8); do
+              latest_id="$(az webapp log deployment list \
+                --resource-group rg-optionsdjango-centralindia \
+                --name arc-options-2fa45de1 \
+                --query '[0].id' --output tsv 2>/dev/null)"
+              if [ -n "$latest_id" ] && [ "$latest_id" != "$previous_deployment_id" ]; then
+                deployment_started=true
+                break
+              fi
+              sleep 15
+            done
+            [ "$deployment_started" = "true" ] && break
+            echo "Deployment initiation attempt $initiation_attempt created no Kudu deployment; retrying."
+          done
           cat /tmp/deploy.log
           # On a B1 plan Oryx can outlive the CLI's five-minute HTTP request.
           # The deployment is still running in Kudu: the 13 October package
@@ -100,6 +134,11 @@ jobs:
               deployment_complete="$(jq -r '.complete // false' <<< "$deployment")"
               deployment_progress="$(jq -r '.progress // ""' <<< "$deployment")"
               echo "Kudu attempt $attempt: id=$deployment_id status=$deployment_status complete=$deployment_complete progress=$deployment_progress"
+              if [ -z "$deployment_id" ] || [ "$deployment_id" = "$previous_deployment_id" ]; then
+                echo "Waiting for a new Kudu deployment ID; refusing to reuse $previous_deployment_id."
+                sleep 15
+                continue
+              fi
               if [ "$deployment_complete" = "true" ] || [ "$deployment_complete" = "True" ]; then
                 if [ "$deployment_status" = "4" ]; then
                   code=0
