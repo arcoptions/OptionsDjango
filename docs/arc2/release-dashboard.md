@@ -245,7 +245,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
-| G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL database name, and code-forced preview mode; cloud staging resources and isolated workers remain |
+| G-05 | Staging isolation | Partial | Fail-closed settings require explicit hosts and secret, an isolated PostgreSQL target, code-forced preview mode, and an `ARC_BACKGROUND_WORKERS=0` worker boundary; cloud smoke evidence remains |
 | G-06 | Migration rehearsal | Partial | `0024`-`0037` pass empty test databases; populated SQLite rollback to `0033` and forward reapplication preserve core data; existing-data PostgreSQL rehearsal remains |
 | G-07 | Production-sized data validation | Open | Query, lock, duration, and backfill-resume evidence |
 | G-08 | Performance budgets | Partial | Query ceilings pass; local browser DOM readiness was 366-559 ms across 10 critical pages, while production load and polling measurements remain |
