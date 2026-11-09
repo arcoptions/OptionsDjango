@@ -10,8 +10,8 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Application commit | Passed | `1167fd48d29d440d23a88af43d9774c238d2a249` |
-| GitHub Actions | Passed | Run `42621150014` |
+| Application commit | Passed | `c55c9fb3217f1802be9751bc2c49b9a0f24cd093` |
+| GitHub Actions | Passed | Runs `42663557008` and `42663576656` |
 | Django tests | Passed | 585 non-browser tests in 113.193 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
@@ -19,7 +19,7 @@ approved or deployed to production.
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Commit `1167fd4` reported through deployment health |
+| Staging deployment | Passed for tested commit | Deployment `c7a2084f`; commit `c55c9fb` reported through deployment health |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
 | Opportunity activation | Passed with identity gap | 152 opportunities and 152 revisions; 40 canonical links |
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
@@ -42,10 +42,8 @@ python manage.py collectstatic --noinput
 python manage.py test --exclude-tag=browser
 ```
 
-Run `42621150014` completed successfully against commit `67cfa95`.
-
-Security workflow run `42623063766` completed successfully against workflow
-commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
+Runs `42663557008` and `42663576656` completed successfully against commit
+`c55c9fb`. They audited production requirements with `pip-audit`, scanned
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
 
@@ -117,16 +115,17 @@ Dry-run candidates:
 * Scanner triggers: 0
 * Unparsed Telegram messages: 2,147
 
-Applied evidence:
+Applied baseline evidence:
 
-* Unified opportunities: 152
-* Revisions: 152
-* Canonically linked opportunities: 40
+* Tip-derived opportunities: 152
+* Tip-derived revisions: 152
+* Canonically linked tip opportunities: 40
 * Unparsed Telegram opportunities: 0
 
-Repeating synchronization kept 152 opportunities and 152 revisions. The
-fingerprint remained stable while newly resolvable canonical identities were
-attached.
+Persisted-bar scanner activation added five canonically linked configurable
+scanner opportunities. Repeating synchronization retained one revision for
+each scanner opportunity, bringing the unified total to 157. The fingerprint
+remained stable while newly resolvable canonical identities were attached.
 
 The remaining 112 parsed tips do not contain a resolvable canonical exchange
 and security identity. They remain visible with source evidence rather than a
@@ -214,6 +213,7 @@ idempotent.
 | Production had no tracked-stock rows for bounded capture | Explicit reviewed `SYMBOL:SECURITY_ID` inputs |
 | Dhan rolling-option history rejected documented payloads | Explicit equity-only fallback; option gate remains open |
 | Scanners could not consume imported stock candles | History-backed scanner source with notifications suppressed |
+| First post-deploy management connection timed out | Verified PostgreSQL `Ready`, retried with bounded connection recovery, and completed synchronization |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
 | Release gates mixed the prior production baseline with current activation | Activation-specific pending states |
 | Stock counts disagreed | Active-only dashboard count |

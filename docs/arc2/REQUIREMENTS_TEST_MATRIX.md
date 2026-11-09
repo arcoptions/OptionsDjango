@@ -35,7 +35,7 @@ feeds.
 |---|---|---|---|
 | Command Centre ranks current evidence | `CommandCentreTests` | Command Centre browser journey remains to be recorded for this commit | Passed automated scope |
 | Market context fails unavailable | `test_market_context.py` | Approved market-context provider remains open | Passed implemented scope |
-| Opportunity identity and revisions | `test_opportunities.py` | 152 staging opportunities and 152 revisions | Passed |
+| Opportunity identity and revisions | `test_opportunities.py` | 152 tip opportunities plus five canonical scanner opportunities; scanner rerun retained one revision each | Passed |
 | Canonical instrument reconciliation | `test_instrument_identity.py` | 74,917 staging mappings and zero unmapped radar instruments | Passed |
 | Unparsed Telegram messages require opt-in | `test_opportunities.py` | 2,147 staging messages remain excluded | Passed |
 | Telegram tip parsing | `TelegramTipParserTests` in `tests.py` | Live source monitoring remains required | Passed implemented scope |
