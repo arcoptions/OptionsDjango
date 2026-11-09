@@ -33,6 +33,30 @@ python manage.py capture_stock_history_fixture ^
   --interval=15
 ```
 
+If the token-owning runtime does not have the staging stock universe, pass the
+reviewed symbols and Dhan security IDs explicitly:
+
+```text
+python manage.py capture_stock_history_fixture ^
+  C:\arc-transfer\dhan-history-5x10.json ^
+  --days=10 ^
+  --stock=RELIANCE:2885 ^
+  --stock=HDFCBANK:1333 ^
+  --stock=ICICIBANK:4963 ^
+  --stock=INFY:1594 ^
+  --stock=TCS:11536 ^
+  --interval=15
+```
+
+Explicit stocks avoid production database writes. The command validates each
+symbol and security ID before calling Dhan.
+
+If Dhan explicitly rejects the rolling-option endpoint, capture the same
+reviewed stocks with `--equity-only`. This mode preserves real equity data for
+scanner activation and records an empty option array. It does not satisfy the
+option-history acceptance gate, which remains blocked until Dhan restores or
+clarifies the provider contract.
+
 The command captures:
 
 * Fifteen-minute equity candles
@@ -102,4 +126,3 @@ The pilot passes when:
 * A repeated import inserts zero additional candles
 * One scanner run reads the persisted equity bars
 * The Release Dashboard reports the resulting candle and scanner counts
-

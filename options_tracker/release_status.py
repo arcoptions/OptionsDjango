@@ -114,7 +114,7 @@ RELEASE_GATES = (
         "name": "Complete automated suite",
         "state": "Passed in CI",
         "status_key": "complete",
-        "next_step": "580 non-browser tests passed on the activation branch; browser journeys remain separate evidence.",
+        "next_step": "584 non-browser tests passed on the activation branch; browser journeys remain separate evidence.",
     },
     {
         "id": "G-02",
@@ -262,7 +262,7 @@ def release_dashboard_snapshot() -> dict[str, object]:
     }
     return {
         "evidence_date": "9 November 2026",
-        "automated_tests": 580,
+        "automated_tests": 584,
         "execution_default": "Manual",
         "deployment_state": "Production deployed and runtime verified",
         "releases": RELEASES,

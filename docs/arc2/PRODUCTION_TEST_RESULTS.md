@@ -10,23 +10,23 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Application commit | Passed | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
+| Application commit | Passed | `1167fd48d29d440d23a88af43d9774c238d2a249` |
 | GitHub Actions | Passed | Run `42621150014` |
-| Django tests | Passed | 580 non-browser tests in 119.685 seconds |
+| Django tests | Passed | 584 non-browser tests in 109.983 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Commit `67cfa95` reported through deployment health |
+| Staging deployment | Passed for tested commit | Commit `1167fd4` reported through deployment health |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
 | Opportunity activation | Passed with identity gap | 152 opportunities and 152 revisions; 40 canonical links |
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
 | Dhan master | Passed with alias fix | 194 direct matches and one verified provider rename |
-| Stock history | Blocked in staging | No trading-capable Dhan token copied into staging |
-| Safe history transfer | Passed in tests | Read-only capture and dry-run-first sanitized import |
-| Browser smoke | Passed with fixes | Five authenticated critical routes rendered without console or overflow errors |
+| Stock history | Equity pilot passed | 860 real candles for five stocks; option endpoint remains blocked by Dhan `DH-905` |
+| Safe history transfer | Passed | Matching SHA-256, dry run, atomic apply, and zero-row idempotency rerun |
+| Browser smoke | Passed | Nineteen authenticated routes rendered without console or overflow errors |
 | Production backup | Passed for backup existence | 14-day retention and 11 visible automatic full backups |
 | Restore rehearsal | Not run | Temporary billable server requires explicit approval |
 | Production activation | Not run | Explicit operator approval and backup evidence required |
@@ -49,7 +49,7 @@ commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
 
-The current activation branch passed 580 non-browser tests locally after the
+The current activation branch passed 584 non-browser tests locally after the
 credential-confined history capture and import workflow was added.
 
 Route regression coverage verifies:
@@ -142,27 +142,46 @@ preserves the broker-history symbol while refreshing current Dhan metadata.
 
 ## Browser validation
 
-Authenticated staging checks covered:
+Authenticated staging checks covered all 19 left-navigation routes. Every
+route returned HTTP 200 without JavaScript console errors, page errors, or
+horizontal overflow.
 
 | Route | Result | Observed browser load | Measurement state |
 |---|---|---:|---|
-| Release Dashboard | Rendered | 0.56 seconds | Quiet database |
-| Operations Health | Rendered | 1.3 seconds | Initial smoke |
-| Opportunity Inbox | Rendered | 0.35 seconds | Quiet database |
-| Stock Intelligence/Data | Rendered | 2.2 seconds | Initial smoke |
-| Trading Workspace | Rendered | 2.40 seconds | Quiet database |
+| Action List | Rendered | One level-one heading | Regression check |
+| Trading Workspace | Rendered | 1.611 seconds | Full sweep |
+| Trading Workspace | Rendered | 2.968, 1.382, and 1.379 seconds | Repeat loads |
+| F&O Research | Rendered | 1.201 seconds | Full sweep |
+| Command Centre | Rendered | 0.929 seconds | Full sweep |
 
 No JavaScript console errors or horizontal overflow were observed.
 
-Two clarity defects were fixed:
+Three defects were fixed:
 
 * Release Dashboard now reports 195 active stocks, matching Stock Data.
 * Opportunity Inbox no longer repeats its page title.
+* Action List no longer repeats its level-one heading.
 
-The first smoke ran during tens of thousands of identity writes and produced
-13-second outliers. The final quiet-database retest reduced the Release
-Dashboard to 0.56 seconds, Opportunity Inbox to 0.35 seconds, and Trading
-Workspace to 2.40 seconds.
+Trading Workspace previously required 2.864 to 6.442 seconds. Reusing the
+Action List and CAS context reduced the tested repeat range to 1.379 to 2.968
+seconds.
+
+## Historical-data pilot
+
+The production VM retained exclusive Dhan-token ownership. A read-only capture
+produced a credential-free fixture for RELIANCE, HDFCBANK, ICICIBANK, INFY,
+and TCS.
+
+* Source and staging SHA-256:
+  `ef248f5eaa51e0af534c4b711f45ba35f4992050067e9f04b8ed48235fb6b58d`
+* Equity rows captured and imported: 860
+* Rows inserted on the idempotency rerun: 0
+* Option rows: 0
+
+Dhan accepted the equity-history requests but returned `DH-905` for every
+documented rolling-option payload tested, including index and stock
+instruments. The equity-only fallback preserves real scanner evidence without
+claiming that option history is active.
 
 ## Bugs found and fixed
 
@@ -176,6 +195,9 @@ Workspace to 2.40 seconds.
 | Ten-day pilot could not be expressed | Exact `--days` lookback |
 | Dhan provider renamed `ICICIPRULI` | Explicit `ICICILIFE` provider alias |
 | Historical pilot required token exposure in staging | Credential-confined capture and sanitized fixture import |
+| Production had no tracked-stock rows for bounded capture | Explicit reviewed `SYMBOL:SECURITY_ID` inputs |
+| Dhan rolling-option history rejected documented payloads | Explicit equity-only fallback; option gate remains open |
+| Scanners could not consume imported stock candles | History-backed scanner source with notifications suppressed |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
 | Release gates mixed the prior production baseline with current activation | Activation-specific pending states |
 | Stock counts disagreed | Active-only dashboard count |
@@ -183,9 +205,8 @@ Workspace to 2.40 seconds.
 
 ## Open test gates
 
-* Run the five-stock historical pilot when a staging-safe read-only Dhan
-  credential is approved.
 * Activate and test one scanner from persisted stock bars.
+* Resolve Dhan rolling-option `DH-905` responses and complete option history.
 * Reproduce strategy results from immutable manifests.
 * Complete external penetration evidence.
 * Restore the production point-in-time backup to a temporary server and

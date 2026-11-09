@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 580 non-browser tests. The matrix records
+The current automated baseline is 584 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -41,8 +41,8 @@ feeds.
 | Telegram tip parsing | `TelegramTipParserTests` in `tests.py` | Live source monitoring remains required | Passed implemented scope |
 | Stock Intelligence evidence and freshness | `test_stock_intelligence.py` | Stock Intelligence browser smoke passed; provider datasets remain open | Partial activation |
 | Five-stock historical pilot bounds | `DownloadStockDataCommandTests.test_exact_day_lookback_bounds_equity_pilot` | Approved live capture remains open | Passed automated scope |
-| Credential-confined history transfer | `HistoryFixtureImportTests` | VM capture and staging import remain open | Passed automated scope |
-| Scanner conditions, cooldown, and matches | `test_scanner_engine.py` | Persisted-bar staging scanner run remains open | Passed automated scope |
+| Credential-confined history transfer | `HistoryFixtureImportTests` | Five-stock VM capture and 860-row staging import passed with matching hash | Passed equity scope |
+| Scanner conditions, cooldown, and matches | `test_scanner_engine.py`, including persisted-bar coverage | Persisted-bar staging scanner run remains open | Passed automated scope |
 | F&O recommendation evidence | `test_fno_desk.py` | Approved fundamentals, event, and news providers remain open | Partial activation |
 | Investment thesis lifecycle | `test_investment_desk.py` | Investment Desk browser journey remains to be recorded for this commit | Passed automated scope |
 | AI briefing provenance and dry run | `AIBriefingTests` | Approved Azure OpenAI provider remains open | Passed implemented scope |
@@ -52,7 +52,7 @@ feeds.
 
 | Requirement | Named automated evidence | Non-unit evidence | State |
 |---|---|---|---|
-| Trading Workspace manual controls | `test_manual_execution.py`, `test_radar_workspace.py` | Trading Workspace browser load passed at 2.40 seconds | Passed |
+| Trading Workspace manual controls | `test_manual_execution.py`, `test_radar_workspace.py` | Trading Workspace repeat loads passed at 1.379 to 2.968 seconds | Passed |
 | Radar readiness and quote freshness | `test_radar_readiness.py`, `test_radar.py` | Production market-session monitoring remains required | Passed implemented scope |
 | Immutable radar history | `test_radar_history.py` | Production retention monitoring remains required | Passed |
 | NIFTY live collector safety | `test_cas_nowcast.py` | VM worker lease and market-session freshness remain required | Passed implemented scope |
@@ -75,18 +75,10 @@ feeds.
 
 ## Browser coverage status
 
-Authenticated staging evidence exists for:
-
-* Release Dashboard
-* Operations Health
-* Opportunity Inbox
-* Stock Intelligence and Stock Data
-* Trading Workspace
-
-No console errors or horizontal overflow were observed on those routes.
-Additional browser journeys remain required for Command Centre, Options,
-Equities, Scanner Builder, F&O Research, Trade Journal, Investment Desk,
-Strategy Lab, Performance, and AI workflows.
+Authenticated staging evidence covers all 19 left-navigation routes on commit
+`1167fd4`. Every route returned HTTP 200. No console errors, page errors, or
+horizontal overflow were observed. Action List rendered exactly one
+level-one heading.
 
 ## Gate interpretation
 

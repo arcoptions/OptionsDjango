@@ -195,3 +195,102 @@ class HistoryFixtureImportTests(TestCase):
             )
 
         self.assertFalse(path.exists())
+
+    @patch("options_tracker.stock_data.get_rolling_bars")
+    @patch("options_tracker.stock_data.get_equity_bars")
+    def test_capture_accepts_explicit_stocks_without_database_rows(
+        self,
+        get_equity_bars,
+        get_rolling_bars,
+    ):
+        TrackedStock.objects.all().delete()
+        timestamp = timezone.now() - dt.timedelta(minutes=15)
+        get_equity_bars.return_value = ([{
+            "symbol": "RELIANCE",
+            "interval_minutes": 15,
+            "timestamp": timestamp,
+            "open": "1450",
+            "high": "1460",
+            "low": "1445",
+            "close": "1458",
+            "volume": 12500,
+        }], "")
+        get_rolling_bars.return_value = ([{
+            "symbol": "RELIANCE",
+            "expiry_code": 1,
+            "relative_strike": "ATM",
+            "option_type": "CALL",
+            "interval_minutes": 15,
+            "timestamp": timestamp,
+            "strike": "1460",
+            "spot": "1458",
+            "open": "24",
+            "high": "27",
+            "low": "23",
+            "close": "26.5",
+            "volume": 5000,
+            "oi": 120000,
+            "implied_volatility": 18.25,
+        }], "")
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "captured.json"
+
+        call_command(
+            "capture_stock_history_fixture",
+            path,
+            "--stock=RELIANCE:2885",
+            stdout=StringIO(),
+        )
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["equity"][0]["symbol"], "RELIANCE")
+        self.assertEqual(len(payload["options"]), 2)
+
+    def test_capture_rejects_invalid_explicit_stock(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "captured.json"
+
+        with self.assertRaisesRegex(CommandError, "SYMBOL:SECURITY_ID"):
+            call_command(
+                "capture_stock_history_fixture",
+                path,
+                "--stock=RELIANCE",
+                stdout=StringIO(),
+            )
+
+    @patch("options_tracker.stock_data.get_rolling_bars")
+    @patch("options_tracker.stock_data.get_equity_bars")
+    def test_equity_only_capture_does_not_call_rolling_option_provider(
+        self,
+        get_equity_bars,
+        get_rolling_bars,
+    ):
+        timestamp = timezone.now() - dt.timedelta(minutes=15)
+        get_equity_bars.return_value = ([{
+            "symbol": "RELIANCE",
+            "interval_minutes": 15,
+            "timestamp": timestamp,
+            "open": "1450",
+            "high": "1460",
+            "low": "1445",
+            "close": "1458",
+            "volume": 12500,
+        }], "")
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "captured.json"
+
+        call_command(
+            "capture_stock_history_fixture",
+            path,
+            "--limit=1",
+            "--equity-only",
+            stdout=StringIO(),
+        )
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["equity"]), 1)
+        self.assertEqual(payload["options"], [])
+        get_rolling_bars.assert_not_called()

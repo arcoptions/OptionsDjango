@@ -14,6 +14,7 @@ from .models import (
     ScannerDefinition,
     ScannerMatch,
     RadarNotificationRoute,
+    StockEquityCandle,
     StockFundamentalSnapshot,
     StockScoreSnapshot,
 )
@@ -189,6 +190,42 @@ class ScannerEngineTests(TestCase):
         self.assertIn('"scanners": 0', output.getvalue())
         with self.assertRaises(CommandError):
             call_command("run_scanners", interval_seconds=1, stdout=StringIO())
+
+    def test_historical_scanner_reads_persisted_equity_bars_without_alerting(self):
+        definition = ScannerDefinition.objects.create(
+            name="Persisted close scanner",
+            conditions=[{"field": "last", "operator": "gte", "value": 100}],
+        )
+        prior_session = timezone.now() - timedelta(days=1)
+        current_session = timezone.now()
+        StockEquityCandle.objects.create(
+            symbol="TEST",
+            interval_minutes=15,
+            timestamp=prior_session,
+            open=98,
+            high=100,
+            low=97,
+            close=99,
+            volume=1000,
+        )
+        StockEquityCandle.objects.create(
+            symbol="TEST",
+            interval_minutes=15,
+            timestamp=current_session,
+            open=100,
+            high=103,
+            low=99,
+            close=102,
+            volume=2000,
+        )
+
+        run = evaluate_scanner(definition, source="STOCK_HISTORY")
+
+        self.assertEqual(run.scanned, 1)
+        self.assertEqual(run.confirmed, 1)
+        match = ScannerMatch.objects.get(definition=definition, symbol="TEST")
+        self.assertEqual(match.evidence["last"]["provider"], "DHAN_HISTORY")
+        self.assertGreater(match.next_delivery_at, timezone.now() + timedelta(days=3000))
 
     @patch("options_tracker.scanner_alerts.telegram_bot.send")
     def test_scanner_telegram_delivery_is_private_advisory_and_deduplicated(
