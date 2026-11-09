@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .action_workspace import action_list_context
 from .market_context import market_context_evidence
+from .market_breadth import latest_market_breadth_snapshot
 from .models import (
     AIBriefingSnapshot,
     EconomicEvent,
@@ -226,6 +227,26 @@ def _breadth(now):
         key=lambda row: (row["average_change_percent"], row["total"], row["name"]),
         reverse=True,
     )
+    snapshot = latest_market_breadth_snapshot(now)
+    historical = snapshot.metrics if snapshot else {}
+    unavailable = snapshot.unavailable if snapshot else [
+        {
+            "name": "EMA breadth",
+            "reason": "No current qualifying offline breadth snapshot exists.",
+        },
+        {
+            "name": "RSI distribution",
+            "reason": "No current qualifying offline breadth snapshot exists.",
+        },
+        {
+            "name": "Volume surge",
+            "reason": "No current qualifying offline breadth snapshot exists.",
+        },
+        {
+            "name": "52-week highs and lows",
+            "reason": "No current qualifying offline breadth snapshot exists.",
+        },
+    ]
     return {
         "advances": advances,
         "declines": declines,
@@ -251,24 +272,10 @@ def _breadth(now):
             "unfilled": sum(row["gap_filled"] is False for row in gap_ups + gap_downs),
         },
         "sectors": sectors[:8],
-        "unavailable": [
-            {
-                "name": "EMA breadth",
-                "reason": "No complete per-instrument EMA baseline has been validated for the selected universe.",
-            },
-            {
-                "name": "RSI distribution",
-                "reason": "No complete per-instrument RSI baseline has been validated for the selected universe.",
-            },
-            {
-                "name": "Volume surge",
-                "reason": "Current quote volume has no verified rolling average-volume baseline.",
-            },
-            {
-                "name": "52-week highs and lows",
-                "reason": "The active universe does not yet have complete verified 52-week history.",
-            },
-        ],
+        "historical": historical,
+        "historical_source_at": snapshot.source_at if snapshot else None,
+        "historical_universe": snapshot.universe if snapshot else "FNO",
+        "unavailable": unavailable,
         "source": "Fresh Dhan radar quotes",
         "updated_at": max((row["source_at"] for row in rows), default=None),
     }

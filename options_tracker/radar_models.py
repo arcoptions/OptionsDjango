@@ -144,6 +144,33 @@ class RadarSector(models.Model):
     verified_at = models.DateTimeField(default=timezone.now)
 
 
+class MarketBreadthSnapshot(models.Model):
+    universe = models.CharField(max_length=32)
+    version = models.CharField(max_length=32)
+    input_hash = models.CharField(max_length=64)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    active_instruments = models.PositiveIntegerField()
+    covered_instruments = models.PositiveIntegerField()
+    metrics = models.JSONField(default=dict)
+    unavailable = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["-source_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["universe", "version", "input_hash"],
+                name="market_breadth_snapshot_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["universe", "version", "-source_at"],
+                name="idx_market_breadth_latest",
+            ),
+        ]
+
+
 class RadarOpportunity(models.Model):
     class State(models.TextChoices):
         ARMED = "ARMED", "Armed"

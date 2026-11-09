@@ -8,7 +8,7 @@ from .radar_models import (
     RadarOptionPoint, RadarQuote, RadarWatch, RadarWorker, RadarWorkspace,
     RadarNotificationRoute, RadarPriceAlert, RadarSector,
     RadarAssistantSnapshot, RadarResearchProtocol, RadarResearchObservation,
-    RadarCatalyst, RadarHistoryConflict,
+    RadarCatalyst, RadarHistoryConflict, MarketBreadthSnapshot,
 )
 
 

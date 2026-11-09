@@ -17,6 +17,51 @@
       {% if command.market_session.market_open %}Scheduled cash-market session{% else %}Market entries are not assumed open{% endif %}
     </div>
   </div>
+  {% if command.breadth.historical %}
+  <h3>
+    Historical breadth · {{ command.breadth.historical_universe }}
+    <span class="muted">as of {{ command.breadth.historical_source_at|date:"d M H:i" }}</span>
+  </h3>
+  <div class="grid">
+    {% for period, metric in command.breadth.historical.ema.items %}
+    {% if metric.available %}
+    <article class="card">
+      <strong>Above EMA {{ period }}</strong>
+      <p>{{ metric.above }} of {{ metric.covered }}</p>
+      <p class="muted">{{ metric.percent }}% universe coverage</p>
+    </article>
+    {% endif %}
+    {% endfor %}
+    {% if command.breadth.historical.rsi.available %}
+    <article class="card">
+      <strong>RSI distribution</strong>
+      <p>
+        Oversold {{ command.breadth.historical.rsi.oversold }} ·
+        neutral {{ command.breadth.historical.rsi.neutral }} ·
+        overbought {{ command.breadth.historical.rsi.overbought }}
+      </p>
+      <p class="muted">{{ command.breadth.historical.rsi.percent }}% universe coverage</p>
+    </article>
+    {% endif %}
+    {% if command.breadth.historical.volume.available %}
+    <article class="card">
+      <strong>Complete-session volume surge</strong>
+      <p>{{ command.breadth.historical.volume.surging }} of {{ command.breadth.historical.volume.covered }}</p>
+      <p class="muted">At least {{ command.breadth.historical.volume.multiplier }}x the previous 20-session average.</p>
+    </article>
+    {% endif %}
+    {% if command.breadth.historical.high_low_52_week.available %}
+    <article class="card">
+      <strong>52-week context</strong>
+      <p>
+        New highs {{ command.breadth.historical.high_low_52_week.new_highs }} ·
+        new lows {{ command.breadth.historical.high_low_52_week.new_lows }}
+      </p>
+      <p class="muted">{{ command.breadth.historical.high_low_52_week.percent }}% universe coverage</p>
+    </article>
+    {% endif %}
+  </div>
+  {% endif %}
   <div class="grid">
     {% for session in command.market_session.sessions %}
     <article class="card" style="{% if session.active %}border-color:#d1a553;{% endif %}">

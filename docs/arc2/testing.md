@@ -7,9 +7,9 @@ description: Test strategy, current coverage, release gates, and validation requ
 
 The application currently has:
 
-* 38 `test*.py` files.
-* 76 test classes ending in `Tests`.
-* 608 discovered `test_` methods.
+* 39 `test*.py` files.
+* 79 test classes ending in `Tests`.
+* 616 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -207,19 +207,21 @@ Release 0 requires no application test run because it changes documentation only
 
 ## Latest expansion validation
 
-The first R11 Market Pulse slice passed:
+The current R11 Market Pulse slices passed:
 
-* 11 focused Command Centre and Release Dashboard tests
+* 31 focused breadth, Command Centre, strategy, and performance tests
 * The critical-page database query budget
-* 593 non-browser tests in 85.683 seconds
-* 608 total tests in 173.536 seconds
+* 601 non-browser tests in 47.412 seconds
+* 616 total tests in 162.395 seconds
 * Django system checks during both complete runs
 
 The tests cover all five time windows, weekend closure, attributed holiday
 closure, one active session, fail-honest schedule-only behavior, fresh-universe
 coverage, advance/decline percentages, opening-gap state, price distribution,
-industry ranking, and unavailable baseline states. No migration or JSON API
-change was introduced.
+industry ranking, known-answer EMA and RSI calculations, incomplete-session
+exclusion, deterministic hashing, idempotent persistence, coverage gates,
+stale-snapshot rejection, and unavailable baseline states. Migration `0040`
+adds the snapshot table; no JSON API change was introduced.
 
 ## Latest Release 1 validation
 

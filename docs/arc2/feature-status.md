@@ -131,8 +131,12 @@ requirements with existing ARC capabilities.
   Centre without claiming an unverified exchange holiday calendar.
 * [x] Add fresh-universe coverage, advance/decline percentages, opening gaps,
   price distribution, and industry breadth.
-* [ ] Add configurable market universes, EMA breadth, RSI distribution,
-  verified volume surge, and 52-week context.
+* [x] Add an idempotent offline F&O-universe snapshot for EMA breadth, Wilder
+  RSI distribution, complete-session volume surge, and 52-week context.
+* [x] Require 80% complete-history coverage and reject stale snapshots before
+  displaying historical breadth.
+* [ ] Add authoritative configurable NIFTY 50, NIFTY 100, and NIFTY 500
+  universe membership.
 * [ ] Add reproducible breakout taxonomy, validation, ranking, and cards.
 * [ ] Add persisted technical patterns, support/resistance, automatic levels,
   and multi-timeframe agreement.

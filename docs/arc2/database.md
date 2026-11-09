@@ -110,9 +110,24 @@ The first session-awareness slice has no migration. It reads attributed
 explicitly schedule-only rather than being recorded as a verified trading
 day.
 
-Historical breadth, breakout, technical-pattern, and event-reaction models are
-deferred until their write paths, retention, indexes, and query volumes are
-measured.
+Migration `0040_marketbreadthsnapshot` adds one append-only historical breadth
+snapshot table. Each row retains:
+
+* Universe and calculation version
+* Deterministic input hash
+* Source and receipt timestamps
+* Active and historically covered instrument counts
+* Versioned metric payload
+* Explicit unavailable reasons
+
+The unique universe, version, and input-hash constraint makes reruns
+idempotent. The universe, version, and descending source-time index supports
+the single latest-snapshot Command Centre lookup. Minute bars remain immutable,
+and historical aggregation runs only through the offline
+`build_market_breadth` command.
+
+Breakout, technical-pattern, and event-reaction models remain deferred until
+their write paths, retention, indexes, and query volumes are measured.
 
 ## Planned work
 

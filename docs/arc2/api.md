@@ -153,6 +153,11 @@ The context contains:
 * Scheduled market-open state
 * Calendar evidence state and source
 * An explicit warning when no attributed exchange-holiday record exists
+* Fresh quote breadth and an optional current offline historical-breadth
+  snapshot
+* Explicit unavailable reasons when complete-history coverage is below 80%
 
-Any future client-facing Market Pulse endpoint must use the existing versioned
-contract policy before browser consumers depend on it.
+The offline builder is a management command, not an HTTP endpoint. It previews
+by default and persists only with `--apply`. Any future client-facing Market
+Pulse endpoint must use the existing versioned contract policy before browser
+consumers depend on it.

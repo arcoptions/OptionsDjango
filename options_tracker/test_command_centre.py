@@ -14,6 +14,7 @@ from .command_centre import (
 from .models import (
     EconomicEvent,
     IndexOISnapshot,
+    MarketBreadthSnapshot,
     StockFundamentalSnapshot,
     StockScoreSnapshot,
 )
@@ -201,6 +202,46 @@ class CommandCentreTests(TestCase):
         self.assertEqual(breadth["sectors"][0]["name"], "Banking")
         self.assertEqual(breadth["sectors"][0]["total"], 2)
         self.assertEqual(len(breadth["unavailable"]), 4)
+
+    def test_breadth_uses_current_qualified_historical_snapshot(self):
+        now = timezone.now()
+        MarketBreadthSnapshot.objects.create(
+            universe="FNO",
+            version="market-breadth-v1",
+            input_hash="b" * 64,
+            source_at=now,
+            active_instruments=10,
+            covered_instruments=10,
+            metrics={
+                "ema": {
+                    "20": {
+                        "covered": 10,
+                        "active": 10,
+                        "percent": 100.0,
+                        "available": True,
+                        "above": 7,
+                        "below_or_equal": 3,
+                    },
+                },
+                "rsi": {
+                    "covered": 10,
+                    "active": 10,
+                    "percent": 100.0,
+                    "available": True,
+                    "oversold": 1,
+                    "neutral": 8,
+                    "overbought": 1,
+                },
+            },
+            unavailable=[],
+        )
+
+        breadth = command_centre_context(now)["breadth"]
+
+        self.assertEqual(breadth["historical"]["ema"]["20"]["above"], 7)
+        self.assertEqual(breadth["historical_universe"], "FNO")
+        self.assertEqual(breadth["historical_source_at"], now)
+        self.assertEqual(breadth["unavailable"], [])
 
     def test_context_ranks_only_current_evidence_backed_investments(self):
         now = timezone.now()
