@@ -61,6 +61,7 @@ urlpatterns = [
     path("stocks/<str:symbol>/", authenticated(stock_views.stock_option_detail), name="stock_option_detail"),
     path("breakeven/", authenticated(stock_views.breakeven), name="breakeven"),
     path("research/", authenticated(research_views.research_report), name="research_report"),
+    path("deployment-health/", operations_views.deployment_health, name="deployment_health"),
     path("operations/", authenticated(operations_views.operations_health), name="operations_health"),
     path("release-status/", authenticated(operations_views.release_dashboard), name="release_dashboard"),
     path("opportunities/", authenticated(opportunity_views.opportunity_inbox), name="opportunity_inbox"),

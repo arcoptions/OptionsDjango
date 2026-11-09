@@ -38,7 +38,7 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 573 passed across the full suite; 559 non-browser tests passed in production CI |
+| Django application tests | 574 passed across the full suite; 560 non-browser tests passed in production CI |
 | Test files | 35 |
 | Test classes ending in `Tests` | 73 |
 | Django system check | Passed with no issues |
@@ -46,9 +46,9 @@ Last evidence refresh: 2026-11-09.
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
 | Current ARC 2.0 schema changes | Migrations `0024`-`0039` applied to test SQLite and restored production PostgreSQL |
-| Latest Release 1 deployment | Production deployed through guarded Kudu deployment `af3fa61e-7267-430f-b5da-387955ab8c75` and synchronized to the static-IP VM |
+| Latest Release 1 deployment | Production deployed through guarded Kudu status verification, commit-specific runtime health, and static-IP VM synchronization |
 | Latest staging browser smoke | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow; steady DOM readiness was 220-1,532 ms after F&O optimization |
-| Latest Release 1 production smoke | Login and static warm-up passed; App Service and VM synchronized at `0fa63f5`; core services and evaluator progress heartbeats verified |
+| Latest Release 1 production smoke | Login, static, and deployed-commit warm-up passed; App Service and VM synchronized; core services and evaluator progress heartbeats verified |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
 | Production App Service | Running on Linux Basic in Central India; staging uses a separate Linux Basic plan |
 | Production PostgreSQL | Version 16, Standard B1ms, 32 GB, 14-day backup retention, geo-redundant backup disabled |
@@ -63,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented | 573 application tests, staging smoke, and production activation passed | Production deployed | Complete |
+| 1 | Foundation and safety | Implemented | 574 application tests, staging smoke, and production activation passed | Production deployed | Complete |
 | 2 | Command Centre | Partial | Passed for implemented scope | Production deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented scope | Production deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented scope | Production deployed | In progress |
@@ -241,7 +241,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed | 559 non-browser tests passed in production CI; 573 tests are tracked across the full suite |
+| G-01 | Complete automated suite | Passed | 560 non-browser tests passed in production CI; 574 tests are tracked across the full suite |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |

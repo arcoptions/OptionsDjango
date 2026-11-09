@@ -168,17 +168,21 @@ jobs:
       - name: Warm and verify the deployed web application
         run: |
           base_url="https://arc-options-2fa45de1.azurewebsites.net"
-          for attempt in $(seq 1 40); do
+          for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 20 \
+              "${base_url}/deployment-health/" --output /tmp/deployment-health.json &&
+              jq --exit-status --arg sha "${{ github.sha }}" \
+                '.status == "ok" and .commit == $sha' /tmp/deployment-health.json &&
+              curl --fail --silent --show-error --max-time 20 \
               "${base_url}/admin/login/" --output /tmp/login.html &&
               curl --fail --silent --show-error --max-time 20 \
               "${base_url}/static/options_tracker/radar_workspace.css" \
               --output /tmp/radar-workspace.css; then
-              echo "Deployment warm-up passed on attempt ${attempt}."
+              echo "Deployment warm-up passed for ${{ github.sha }} on attempt ${attempt}."
               exit 0
             fi
             echo "Warm-up attempt ${attempt} failed; retrying in 15 seconds."
             sleep 15
           done
-          echo "::error::Deployment completed but web/static warm-up did not pass."
+          echo "::error::Deployment completed but the expected commit and web/static warm-up did not pass."
           exit 1

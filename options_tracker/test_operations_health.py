@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -9,6 +11,13 @@ from .radar_models import RadarWorker
 
 
 class OperationsHealthTests(TestCase):
+    @patch("options_tracker.operations_views.running_commit", return_value="abc123")
+    def test_deployment_health_exposes_current_commit_without_authentication(self, _running_commit):
+        response = self.client.get(reverse("deployment_health"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok", "commit": "abc123"})
+
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username="reader", password="test-password")
