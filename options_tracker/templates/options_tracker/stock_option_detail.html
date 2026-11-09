@@ -243,7 +243,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
   const timeframeSeries = {{ timeframe_json|safe }};
   const chartHost = document.getElementById("timeframe-charts");
   if (chartHost) {

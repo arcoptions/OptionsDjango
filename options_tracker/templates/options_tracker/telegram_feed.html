@@ -75,14 +75,14 @@
   </section>
 </div>
 
-<style>
+<style nonce="{{ request.csp_nonce }}">
   .telegram-tabs { display: flex; gap: 6px; border-bottom: 1px solid #dfe5ef; margin-bottom: 20px; }
   .telegram-tab { appearance: none; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #52627a; cursor: pointer; font: inherit; font-weight: 700; padding: 11px 16px; }
   .telegram-tab.active { border-bottom-color: #d8a83e; color: #10182b; }
   .raw-summary { color: #805d09; cursor: pointer; font-weight: 700; }
   .raw-message { margin-top: 8px; min-width: 280px; max-width: 520px; white-space: normal; }
 </style>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   (() => {
     const rawButton = document.getElementById("toggle-raw-form");
     const rawForm = document.getElementById("raw-telegram-form");

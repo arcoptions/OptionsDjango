@@ -1,7 +1,7 @@
 {% extends "options_tracker/dashboard_base.html" %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.csp_nonce }}">
   .live-head { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
   .badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; letter-spacing:.4px; }
   .badge.armed { background:#dcfce7; color:#15803d; }
@@ -367,7 +367,7 @@
         <button class="btn" name="action" value="save">Save settings</button>
         <button class="btn secondary" name="action" value="preview">Preview sizing</button>
         <button class="btn secondary" name="action" value="reset"
-                onclick="return confirm('Reset every setting to the validated configuration?');">Reset to validated</button>
+                data-confirm="Reset every setting to the validated configuration?">Reset to validated</button>
         <span class="muted">Changes apply from the next entry. A running trade keeps the stop and trail it was opened with.</span>
       </div>
     </div>
@@ -422,7 +422,7 @@
   </form>
 {% endif %}
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
   (() => {
     if ("{{ tab }}" !== "live") return;
     const fmt = (value) => Number(value).toLocaleString("en-IN", {maximumFractionDigits: 2});

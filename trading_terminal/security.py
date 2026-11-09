@@ -1,3 +1,6 @@
+import secrets
+
+
 CONTENT_SECURITY_POLICY = "; ".join(
     (
         "default-src 'self'",
@@ -10,8 +13,10 @@ CONTENT_SECURITY_POLICY = "; ".join(
         "img-src 'self' data:",
         "media-src 'none'",
         "object-src 'none'",
-        "script-src 'self' 'unsafe-inline'",
-        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'nonce-{nonce}'",
+        "script-src-attr 'none'",
+        "style-src 'self' 'nonce-{nonce}'",
+        "style-src-attr 'unsafe-inline'",
         "worker-src 'none'",
         "upgrade-insecure-requests",
     ),
@@ -26,8 +31,12 @@ class BrowserSecurityHeadersMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        request.csp_nonce = secrets.token_urlsafe(16)
         response = self.get_response(request)
-        response.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.setdefault(
+            "Content-Security-Policy",
+            CONTENT_SECURITY_POLICY.format(nonce=request.csp_nonce),
+        )
         response.setdefault("Cross-Origin-Embedder-Policy", "require-corp")
         response.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         response.setdefault("Permissions-Policy", PERMISSIONS_POLICY)

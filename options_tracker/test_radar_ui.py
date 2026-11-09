@@ -506,11 +506,14 @@ class RadarUITests(StaticLiveServerTestCase):
         expect(self.page.locator("#price-alert-status")).to_contain_text("No private Telegram route")
         expect(self.page.get_by_role("button", name="Create private alert", exact=True)).to_be_disabled()
         self.page.set_viewport_size({"width": 390, "height": 844})
-        self.page.wait_for_function("""() => {
-            const chart=document.querySelector('#stock-chart');
-            const svg=chart.querySelector('svg');
-            return Math.abs(svg.viewBox.baseVal.width-Math.max(320,chart.clientWidth))<2;
-        }""")
+        chart = self.page.locator("#stock-chart")
+        expected_width = chart.evaluate(
+            "element => Math.max(320, element.clientWidth)",
+        )
+        expect(chart.locator("svg")).to_have_attribute(
+            "viewBox",
+            f"0 0 {expected_width} 540",
+        )
         timeline = self.page.locator("#stock-chart .chart-timeline text").first.bounding_box()
         self.assertIsNotNone(timeline)
         self.assertGreaterEqual(timeline["height"], 10, "Mobile timeline text must not shrink after resizing")

@@ -3,7 +3,7 @@
 {% block title %}ARC 2.0 Release Dashboard | ARC Trading Journal{% endblock %}
 
 {% block extra_head %}
-<style>
+<style nonce="{{ request.csp_nonce }}">
   .release-summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   .release-summary .value { font-size: 24px; }
   .status-pill {

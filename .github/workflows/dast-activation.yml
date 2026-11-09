@@ -34,7 +34,6 @@ jobs:
           from pathlib import Path
 
           allowed = {
-              ("10055", "CSP: script-src unsafe-inline"),
               ("10055", "CSP: style-src unsafe-inline"),
           }
           report = json.loads(Path("report_json.json").read_text(encoding="utf-8"))
