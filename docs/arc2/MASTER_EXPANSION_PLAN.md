@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 601 non-browser and 616 total passing tests. A rendered page
+baseline to 604 non-browser and 619 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 601 passing non-browser tests
-* 616 passing tests including browser-tagged journeys
+* 604 passing non-browser tests
+* 619 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -32,7 +32,7 @@ The current baseline has:
 | Rolling option history | Blocked by provider or entitlement | Twelve official-contract requests returned Dhan `DH-905` while equity history succeeded | Dhan account or backend resolution |
 | Market breadth | Partially functional | Fresh-quote metrics plus idempotent offline EMA, RSI, volume-surge, and 52-week snapshots with 80% coverage gates | Authoritative named-universe membership and enough complete history to qualify each metric |
 | Market session awareness | Backend implemented only as a coarse weekday clock | Existing collectors use weekday and time windows | Exchange-calendar evidence, holidays, and five user-facing session states |
-| Breakout intelligence | Partially functional | Opening-range radar strategies and configurable scanners | Full breakout taxonomy, reproducible ranking, evidence cards, and false-positive analysis |
+| Breakout intelligence | Partially functional | Classified S1 failed-break, S2 compression-breakout, and S3 trend-continuation setups now enter the unified Action List with transparent ranking and manual review | Broader breakout families, filters, evidence cards, and false-positive analysis |
 | Technical charting | Partially functional | Multi-timeframe candlesticks, RSI, overlays, and deterministic labels | Verified pattern geometry, support/resistance engine, automatic levels, and timeframe agreement |
 | Event intelligence | Backend implemented but disconnected | Normalized results, actions, news, and economic-event models | Approved announcement source, timeline, waiting list, and price-reaction engine |
 | Unified opportunities | Fully functional for current sources | Canonical persistence, immutable revisions, state guards, audit, and synchronization | General trade-setup entity and full user-executed lifecycle across all sources |
@@ -205,5 +205,11 @@ coverage, metrics, and unavailable reasons. EMA 20/50/200, Wilder RSI(14),
 when at least 80% of the active universe qualifies. Stale snapshots are
 rejected, and the request path performs no historical scan.
 
-The current branch passed 601 non-browser tests in 47.412 seconds and 616
-total tests in 162.395 seconds.
+The first R12 slice routes current persisted radar opportunities into the
+unified Action List. S1, S2, and S3 retain explicit taxonomy, strategy and
+state rank components, trigger, stop, analytical 2R target, evidence reason,
+and validity. Triggered rows still require manual review and are never
+labelled buy-ready.
+
+The current branch passed 604 non-browser tests in 52.689 seconds and 619
+total tests in 149.339 seconds.

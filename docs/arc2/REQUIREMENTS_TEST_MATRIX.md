@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 601 non-browser tests. The matrix records
+The current automated baseline is 604 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -39,6 +39,7 @@ feeds.
 | Five-state market session context | `CommandCentreTests.test_market_session_context_classifies_five_windows`, `test_market_session_context_closes_weekends_and_verified_holidays` | Approved exchange-holiday feed remains open; weekdays without attributed holiday evidence are labeled schedule-only | Passed implemented scope |
 | Fresh-universe breadth detail | `CommandCentreTests.test_breadth_reports_coverage_gaps_distribution_and_industries` | Authoritative named-universe membership remains open | Passed implemented scope |
 | Historical breadth snapshot | `IndicatorMathTests`, `MarketBreadthCalculationTests`, `MarketBreadthPersistenceTests`, `CommandCentreTests.test_breadth_uses_current_qualified_historical_snapshot` | Current production history must reach the 80% gates before metrics display | Passed implementation; activation pending data coverage |
+| Classified radar breakouts | `BreakoutIntelligenceTests` | Current persisted radar opportunities require live-session acceptance evidence | Passed automated scope |
 | Market context fails unavailable | `test_market_context.py` | Approved market-context provider remains open | Passed implemented scope |
 | Opportunity identity and revisions | `test_opportunities.py` | 152 tip opportunities plus five canonical scanner opportunities; scanner rerun retained one revision each | Passed |
 | Canonical instrument reconciliation | `test_instrument_identity.py` | 74,917 staging mappings and zero unmapped radar instruments | Passed |

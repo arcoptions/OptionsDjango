@@ -7,7 +7,7 @@
   <div class="page-head" style="margin-bottom: 8px;">
     <div>
       <h1 class="page-title">Action List</h1>
-      <p class="page-subtitle">Current option-tracker plans, Telegram review items, and scanner triggers in one ranked queue.</p>
+      <p class="page-subtitle">Current option-tracker plans, classified ARC radar setups, Telegram review items, and scanner triggers in one ranked queue.</p>
     </div>
     <div class="row" style="align-items:center;">
       <span class="active-pill">{{ buy_count }} buy-ready</span>
@@ -28,8 +28,8 @@
     <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ buy_count }}</div>
   </div>
   <div class="card">
-    <div class="muted">Scanner triggers</div>
-    <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ triggered_count }}</div>
+    <div class="muted">ARC radar setups</div>
+    <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ breakout_count }}</div>
   </div>
   <div class="card">
     <div class="muted">Watch / review</div>
@@ -79,6 +79,7 @@
         <td>
           Score: {{ row.score }}<br>
           <span class="muted">{{ row.status }}</span>
+          {% if row.score_reason %}<br><span class="muted">{{ row.score_reason }}</span>{% endif %}
           {% if row.recommendation %}<br><span class="muted">{{ row.recommendation }}</span>{% endif %}
         </td>
         <td>{{ row.entry|default:"-" }}</td>

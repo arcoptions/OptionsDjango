@@ -137,7 +137,12 @@ requirements with existing ARC capabilities.
   displaying historical breadth.
 * [ ] Add authoritative configurable NIFTY 50, NIFTY 100, and NIFTY 500
   universe membership.
-* [ ] Add reproducible breakout taxonomy, validation, ranking, and cards.
+* [x] Add S1 failed-break, S2 compression-breakout, and S3 trend-continuation
+  taxonomy to the unified Action List with transparent rank components.
+* [x] Keep radar setups manual-only with trigger, stop, analytical 2R target,
+  validity, and evidence reason.
+* [ ] Add broader breakout families, filters, dedicated evidence cards, and
+  false-positive analysis.
 * [ ] Add persisted technical patterns, support/resistance, automatic levels,
   and multi-timeframe agreement.
 * [ ] Activate verified event ingestion, timelines, and price reactions.

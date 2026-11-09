@@ -7,9 +7,9 @@ description: Test strategy, current coverage, release gates, and validation requ
 
 The application currently has:
 
-* 39 `test*.py` files.
-* 79 test classes ending in `Tests`.
-* 616 discovered `test_` methods.
+* 40 `test*.py` files.
+* 80 test classes ending in `Tests`.
+* 619 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -222,6 +222,16 @@ industry ranking, known-answer EMA and RSI calculations, incomplete-session
 exclusion, deterministic hashing, idempotent persistence, coverage gates,
 stale-snapshot rejection, and unavailable baseline states. Migration `0040`
 adds the snapshot table; no JSON API change was introduced.
+
+The first R12 breakout slice additionally passed:
+
+* 9 focused breakout, Action List, and performance-budget tests
+* 604 non-browser tests in 52.689 seconds
+* 619 total tests in 149.339 seconds
+
+The new tests verify deterministic taxonomy, transparent strategy and state
+rank components, CE and PE 2R target direction, expiry filtering, manual-only
+trigger actions, and Action List query-budget preservation.
 
 ## Latest Release 1 validation
 

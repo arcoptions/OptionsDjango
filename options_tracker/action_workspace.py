@@ -18,6 +18,7 @@ from .models import (
     Direction,
     PickSource,
     RadarInstrument,
+    RadarOpportunity,
     SignalStatus,
     SwingSignal,
     SwingStatus,
@@ -36,6 +37,17 @@ ACTION_LIST_PRIORITY = {
     "TRIGGERED": 3,
     "WATCH": 2,
     "REVIEW": 1,
+}
+BREAKOUT_TAXONOMY = {
+    "S1": ("FAILED_BREAK_RECLAIM", "Failed break and reclaim"),
+    "S2": ("COMPRESSION_BREAKOUT", "Compression breakout"),
+    "S3": ("TREND_PULLBACK", "Trend pullback continuation"),
+}
+BREAKOUT_STRATEGY_POINTS = {"S1": 60, "S2": 70, "S3": 50}
+BREAKOUT_STATE_POINTS = {
+    RadarOpportunity.State.ARMED: 0,
+    RadarOpportunity.State.TRIGGERED: 10,
+    RadarOpportunity.State.ELIGIBLE: 20,
 }
 
 
@@ -76,12 +88,70 @@ def _chart_url(symbol: str, radar_symbols: set[str]) -> str:
     return f"{reverse('radar')}?{urlencode({'symbol': underlying})}#selected-stock"
 
 
+def breakout_action_row(
+    opportunity: RadarOpportunity,
+    radar_symbols: set[str],
+) -> dict[str, object]:
+    taxonomy, label = BREAKOUT_TAXONOMY[opportunity.strategy]
+    state_points = BREAKOUT_STATE_POINTS[opportunity.state]
+    strategy_points = BREAKOUT_STRATEGY_POINTS[opportunity.strategy]
+    score = strategy_points + state_points
+    risk = abs(opportunity.trigger - opportunity.stop)
+    target = (
+        opportunity.trigger + 2 * risk
+        if opportunity.side == "CE"
+        else opportunity.trigger - 2 * risk
+    )
+    triggered = opportunity.state in {
+        RadarOpportunity.State.TRIGGERED,
+        RadarOpportunity.State.ELIGIBLE,
+    }
+    return {
+        "id": opportunity.pk,
+        "symbol": opportunity.symbol,
+        "underlying": opportunity.symbol,
+        "type": label,
+        "source": "ARC Radar",
+        "source_type": "Breakout intelligence",
+        "source_key": "radar_breakout",
+        "score": score,
+        "score_reason": (
+            f"{strategy_points} taxonomy points + {state_points} state points"
+        ),
+        "action": "TRIGGERED" if triggered else "WATCH",
+        "action_reason": (
+            "Underlying trigger confirmed; review execution quality and risk before any manual decision."
+            if triggered
+            else "Setup is armed but its underlying trigger has not confirmed."
+        ),
+        "is_buy": False,
+        "direction": opportunity.side,
+        "entry": opportunity.trigger,
+        "stop": opportunity.stop,
+        "target": target,
+        "status": opportunity.state,
+        "reason": opportunity.reason,
+        "timestamp": opportunity.trigger_at or opportunity.setup_at,
+        "recommendation": taxonomy,
+        "detail_url": _chart_url(opportunity.symbol, radar_symbols),
+        "chart_url": _chart_url(opportunity.symbol, radar_symbols),
+        "breakout_classification": taxonomy,
+    }
+
+
 def action_list_context() -> dict[str, object]:
     today = timezone.localdate()
     action_rows: list[dict[str, object]] = []
     radar_symbols = set(
         RadarInstrument.objects.filter(kind="EQUITY", active=True).values_list("symbol", flat=True)
     )
+
+    for opportunity in RadarOpportunity.objects.filter(
+        state__in=BREAKOUT_STATE_POINTS,
+        valid_until__gte=timezone.now(),
+        strategy__in=BREAKOUT_TAXONOMY,
+    ).order_by("-setup_at")[:25]:
+        action_rows.append(breakout_action_row(opportunity, radar_symbols))
 
     signals = TipSignal.objects.filter(
         status__in=ACTION_LIST_SIGNAL_STATUSES,
@@ -206,6 +276,10 @@ def action_list_context() -> dict[str, object]:
         "triggered_count": sum(1 for row in rows if row["action"] == "TRIGGERED"),
         "watch_count": sum(1 for row in rows if row["action"] in {"WATCH", "REVIEW"}),
         "source_count": len({row["source"] for row in rows}),
+        "breakout_count": sum(
+            row["source_key"] == "radar_breakout"
+            for row in rows
+        ),
     }
 
 
