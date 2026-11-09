@@ -29,6 +29,8 @@ staging App Service and staging PostgreSQL database.
 | Check | Result |
 |---|---|
 | App Service | `arc-options-staging-2fa45de1` |
+| Application commit | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
+| Kudu deployment | `362fdbf5-0b89-4bbf-87f2-301978c6b734`, status `4` |
 | Database | `pg-options-arc2-stage-1109` |
 | Runtime mode | Preview |
 | Token ownership | Disabled |
@@ -78,4 +80,3 @@ After deployment:
 
 Production approval is pending. This report is evidence for review, not an
 authorization to merge, deploy, mutate production data, or place orders.
-

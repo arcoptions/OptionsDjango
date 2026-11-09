@@ -10,14 +10,14 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Branch commit | Passed | `a261fb7f0d38f00f8b79e473ff7e9e570388d93a` |
-| GitHub Actions | Passed | Run `42620719950` |
+| Application commit | Passed | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
+| GitHub Actions | Passed | Run `42621150014` |
 | Django tests | Passed | 571 non-browser tests in 61.388 seconds |
 | Django checks | Passed | No issues |
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Commit `90c0f99` reported through deployment health |
+| Staging deployment | Passed for tested commit | Commit `67cfa95` reported through deployment health |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
 | Opportunity activation | Passed with identity gap | 152 opportunities and 152 revisions; 40 canonical links |
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
@@ -37,7 +37,7 @@ python manage.py collectstatic --noinput
 python manage.py test --exclude-tag=browser
 ```
 
-Run `42620719950` completed successfully against commit `a261fb7`.
+Run `42621150014` completed successfully against commit `67cfa95`.
 
 ## Staging safety
 
@@ -118,13 +118,13 @@ preserves the broker-history symbol while refreshing current Dhan metadata.
 
 Authenticated staging checks covered:
 
-| Route | Result | Observed load |
-|---|---|---:|
-| Release Dashboard | Rendered | 13.8 seconds during identity activation |
-| Operations Health | Rendered | 1.3 seconds |
-| Opportunity Inbox | Rendered | 5.8 seconds |
-| Stock Intelligence/Data | Rendered | 2.2 seconds |
-| Trading Workspace | Rendered | 13.4 seconds during identity activation |
+| Route | Result | Observed browser load | Measurement state |
+|---|---|---:|---|
+| Release Dashboard | Rendered | 0.56 seconds | Quiet database |
+| Operations Health | Rendered | 1.3 seconds | Initial smoke |
+| Opportunity Inbox | Rendered | 0.35 seconds | Quiet database |
+| Stock Intelligence/Data | Rendered | 2.2 seconds | Initial smoke |
+| Trading Workspace | Rendered | 2.40 seconds | Quiet database |
 
 No JavaScript console errors or horizontal overflow were observed.
 
@@ -133,9 +133,10 @@ Two clarity defects were fixed:
 * Release Dashboard now reports 195 active stocks, matching Stock Data.
 * Opportunity Inbox no longer repeats its page title.
 
-The two slow pages were measured while the staging database was processing
-tens of thousands of identity writes. They require a quiet-database retest on
-the final staging commit before production approval.
+The first smoke ran during tens of thousands of identity writes and produced
+13-second outliers. The final quiet-database retest reduced the Release
+Dashboard to 0.56 seconds, Opportunity Inbox to 0.35 seconds, and Trading
+Workspace to 2.40 seconds.
 
 ## Bugs found and fixed
 
@@ -154,8 +155,6 @@ the final staging commit before production approval.
 
 ## Open test gates
 
-* Deploy and verify the final activation commit in staging.
-* Repeat browser timings without bulk database writes.
 * Run the five-stock historical pilot when a staging-safe read-only Dhan
   credential is approved.
 * Activate and test one scanner from persisted stock bars.
@@ -163,4 +162,3 @@ the final staging commit before production approval.
 * Complete dependency, route-security, and penetration evidence.
 * Rehearse production backup and restore for the activation release.
 * Obtain explicit production approval.
-
