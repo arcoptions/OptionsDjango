@@ -92,3 +92,37 @@ class InstrumentIdentityTests(TestCase):
         self.assertEqual(report["applied"], 2)
         self.assertEqual(report["remaining"], 1)
         self.assertEqual(CanonicalInstrument.objects.count(), 2)
+
+    def test_option_reconciliation_uses_contract_specific_radar_aliases(self):
+        for security_id, strike, side in [
+            ("101", 100, "CE"),
+            ("102", 100, "PE"),
+            ("103", 110, "CE"),
+        ]:
+            RadarInstrument.objects.create(
+                security_id=security_id,
+                segment="NSE_FNO",
+                symbol="TEST",
+                kind="OPTION",
+                expiry="2026-11-26",
+                strike=strike,
+                side=side,
+                lot_size=50,
+            )
+
+        output = StringIO()
+        call_command(
+            "reconcile_instruments",
+            "--apply",
+            "--kind=OPTION",
+            stdout=output,
+        )
+        report = json.loads(output.getvalue())
+
+        self.assertEqual(report["applied"], 3)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(CanonicalInstrument.objects.count(), 3)
+        self.assertEqual(
+            InstrumentAlias.objects.filter(provider="RADAR").count(),
+            3,
+        )

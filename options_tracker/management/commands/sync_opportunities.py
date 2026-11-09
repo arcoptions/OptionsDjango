@@ -4,8 +4,19 @@ import json
 
 from django.core.management.base import BaseCommand
 
+from options_tracker.instrument_identity import resolve_instrument
 from options_tracker.models import ChatMessage, ChartinkTrigger, SignalStatus, TipSignal, TriggerStatus
 from options_tracker.opportunities import upsert_opportunity
+from options_tracker.radar_models import RadarOpportunity
+
+
+ACTIVE_RADAR_STATES = (
+    RadarOpportunity.State.ARMED,
+    RadarOpportunity.State.TRIGGERED,
+    RadarOpportunity.State.ELIGIBLE,
+    RadarOpportunity.State.TAKEN,
+    RadarOpportunity.State.EXIT_PENDING,
+)
 
 
 class Command(BaseCommand):
@@ -13,6 +24,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument(
+            "--include-unparsed",
+            action="store_true",
+            help="Include unparsed Telegram messages as score-zero review items.",
+        )
 
     def handle(self, *args, **options):
         tips = list(
@@ -24,9 +40,21 @@ class Command(BaseCommand):
         chats = list(
             ChatMessage.objects.filter(source_category="TIPS", linked_signal__isnull=True)
         )
+        radar_opportunities = list(
+            RadarOpportunity.objects.select_related("contract__canonical_instrument").filter(
+                state__in=ACTIVE_RADAR_STATES,
+            )
+        )
         synchronized = 0
         if options["apply"]:
             for signal in tips:
+                instrument = signal.instrument or resolve_instrument(
+                    exchange_segment=signal.exchange_segment,
+                    security_id=signal.security_id,
+                )
+                if instrument and signal.instrument_id != instrument.pk:
+                    signal.instrument = instrument
+                    signal.save(update_fields=["instrument", "updated_at"])
                 upsert_opportunity(
                     source_type=signal.source_type or "TIP",
                     source_ref=f"TIP:{signal.pk}",
@@ -34,7 +62,7 @@ class Command(BaseCommand):
                     strategy=signal.trade_style,
                     direction=signal.direction,
                     timeframe=signal.trade_style,
-                    instrument=signal.instrument,
+                    instrument=instrument,
                     score=signal.score,
                     rationale=signal.reason_tags or signal.raw_text,
                     evidence={
@@ -50,6 +78,44 @@ class Command(BaseCommand):
                     },
                     next_action="Manage position" if signal.status == SignalStatus.ACTIVE else "Validate trade plan",
                     source_at=signal.tip_time,
+                )
+                synchronized += 1
+            for radar in radar_opportunities:
+                contract = radar.contract
+                upsert_opportunity(
+                    source_type="RADAR",
+                    source_ref=f"RADAR:{radar.pk}",
+                    source_name="F&O Paper Radar",
+                    strategy=f"{radar.strategy}:{radar.version}",
+                    direction=radar.side,
+                    timeframe="INTRADAY",
+                    instrument=contract.canonical_instrument if contract else None,
+                    rationale=radar.reason,
+                    evidence={
+                        "key": radar.key,
+                        "symbol": radar.symbol,
+                        "state": radar.state,
+                        "setup_at": radar.setup_at,
+                        "trigger_at": radar.trigger_at,
+                        "valid_until": radar.valid_until,
+                        "policy": radar.policy,
+                        "radar_evidence": radar.evidence,
+                    },
+                    plan={
+                        "entry": radar.entry_limit or radar.trigger,
+                        "stop_loss": radar.stop,
+                        "quantity": radar.quantity,
+                    },
+                    next_action=(
+                        "Manage paper position"
+                        if radar.state in {
+                            RadarOpportunity.State.TAKEN,
+                            RadarOpportunity.State.EXIT_PENDING,
+                        }
+                        else "Validate complete risk plan"
+                    ),
+                    source_at=radar.trigger_at or radar.setup_at,
+                    expires_at=radar.valid_until,
                 )
                 synchronized += 1
             for trigger in triggers:
@@ -71,24 +137,27 @@ class Command(BaseCommand):
                     source_at=trigger.trigger_time,
                 )
                 synchronized += 1
-            for chat in chats:
-                upsert_opportunity(
-                    source_type="TELEGRAM",
-                    source_ref=f"CHAT:{chat.pk}",
-                    source_name=chat.source_name,
-                    strategy="UNPARSED_TIP",
-                    timeframe="UNKNOWN",
-                    score=0,
-                    rationale=(chat.normalized_text or chat.raw_text)[:500],
-                    evidence={"message": chat.raw_text},
-                    next_action="Parse and validate source claims",
-                    source_at=chat.telegram_message_at or chat.created_at,
-                )
-                synchronized += 1
+            if options["include_unparsed"]:
+                for chat in chats:
+                    upsert_opportunity(
+                        source_type="TELEGRAM",
+                        source_ref=f"CHAT:{chat.pk}",
+                        source_name=chat.source_name,
+                        strategy="UNPARSED_TIP",
+                        timeframe="UNKNOWN",
+                        score=0,
+                        rationale=(chat.normalized_text or chat.raw_text)[:500],
+                        evidence={"message": chat.raw_text},
+                        next_action="Parse and validate source claims",
+                        source_at=chat.telegram_message_at or chat.created_at,
+                    )
+                    synchronized += 1
         self.stdout.write(json.dumps({
             "mode": "apply" if options["apply"] else "dry-run",
+            "include_unparsed": options["include_unparsed"],
             "candidates": {
                 "tips": len(tips),
+                "radar_opportunities": len(radar_opportunities),
                 "scanner_triggers": len(triggers),
                 "telegram_messages": len(chats),
             },
