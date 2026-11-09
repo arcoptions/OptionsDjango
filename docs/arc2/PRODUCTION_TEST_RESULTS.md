@@ -13,6 +13,8 @@ approved or deployed to production.
 | Application commit | Passed | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
 | GitHub Actions | Passed | Run `42621150014` |
 | Django tests | Passed | 571 non-browser tests in 61.388 seconds |
+| Dependency audit | Passed | `pip-audit` in run `42623063766` |
+| Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
@@ -38,6 +40,19 @@ python manage.py test --exclude-tag=browser
 ```
 
 Run `42621150014` completed successfully against commit `67cfa95`.
+
+Security workflow run `42623063766` completed successfully against workflow
+commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
+application source with Bandit at medium-and-higher severity, and repeated the
+complete application validation.
+
+Route regression coverage verifies:
+
+* Anonymous and non-staff users cannot mutate legacy routes
+* Read-only application pages require authentication
+* Staff mutations reject missing CSRF tokens
+* Scanner synchronization and archiving reject GET mutations
+* NIFTY engine status remains staff-only
 
 ## Staging safety
 

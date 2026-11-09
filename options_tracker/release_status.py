@@ -128,14 +128,14 @@ RELEASE_GATES = (
         "name": "Full route security assessment",
         "state": "Partial",
         "status_key": "progress",
-        "next_step": "Complete production penetration and route assessment evidence.",
+        "next_step": "Automated role, method, and CSRF controls pass; complete external production penetration evidence.",
     },
     {
         "id": "G-04",
         "name": "Dependency vulnerability assessment",
-        "state": "Passed locally",
+        "state": "Passed in CI",
         "status_key": "complete",
-        "next_step": "Repeat the audit in CI at the release commit.",
+        "next_step": "pip-audit and Bandit pass in the isolated activation workflow.",
     },
     {
         "id": "G-05",
