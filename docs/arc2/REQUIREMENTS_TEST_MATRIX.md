@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 579 non-browser tests. The matrix records
+The current automated baseline is 580 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -94,4 +94,3 @@ The requirements-to-tests mapping gate is complete for implemented behavior.
 This does not promote partial provider workflows to complete. Provider,
 market-session, browser, restore, penetration, and production-deployment
 evidence remain separate release gates.
-

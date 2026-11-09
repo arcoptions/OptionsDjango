@@ -12,7 +12,7 @@ approved or deployed to production.
 |---|---|---|
 | Application commit | Passed | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
 | GitHub Actions | Passed | Run `42621150014` |
-| Django tests | Passed | 579 non-browser tests in 107.121 seconds |
+| Django tests | Passed | 580 non-browser tests in 119.685 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
@@ -49,7 +49,7 @@ commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
 
-The current activation branch passed 579 non-browser tests locally after the
+The current activation branch passed 580 non-browser tests locally after the
 credential-confined history capture and import workflow was added.
 
 Route regression coverage verifies:

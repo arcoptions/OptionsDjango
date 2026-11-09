@@ -166,6 +166,11 @@ class ActionListTests(TestCase):
 			for row in response.context["rows"]
 		}
 
+	def test_page_renders_one_action_list_heading(self):
+		response = self.client.get(reverse("action_list"))
+
+		self.assertEqual(response.content.count(b"<h1"), 1)
+
 	def test_closed_rejected_archived_and_expired_signals_are_not_action_rows(self):
 		current = self.make_signal(option_symbol="CURRENT 24000 CE")
 		closed = self.make_signal(option_symbol="CLOSED 24000 CE", status=SignalStatus.CLOSED)
