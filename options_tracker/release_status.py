@@ -212,11 +212,12 @@ CURRENT_BLOCKERS = (
 )
 
 
-def _activation_row(name, model, latest_field=None):
+def _activation_row(name, source, latest_field=None):
+    queryset = source.objects.all() if isinstance(source, type) else source
     aggregates = {"count": Count("pk")}
     if latest_field:
         aggregates["latest"] = Max(latest_field)
-    evidence = model.objects.aggregate(**aggregates)
+    evidence = queryset.aggregate(**aggregates)
     count = evidence["count"]
     return {
         "name": name,
@@ -231,7 +232,11 @@ def activation_evidence():
     return (
         _activation_row("Canonical instruments", CanonicalInstrument, "updated_at"),
         _activation_row("Unified opportunities", UnifiedOpportunity, "updated_at"),
-        _activation_row("Tracked stock universe", TrackedStock, "updated_at"),
+        _activation_row(
+            "Active tracked stocks",
+            TrackedStock.objects.filter(is_active=True),
+            "updated_at",
+        ),
         _activation_row("Stock equity candles", StockEquityCandle, "timestamp"),
         _activation_row("Stock option candles", StockOptionCandle, "timestamp"),
         _activation_row("Scanner runs", ScannerRun, "started_at"),

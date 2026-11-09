@@ -58,5 +58,5 @@ class ReleaseDashboardTests(TestCase):
 
         self.assertEqual(evidence["Canonical instruments"]["count"], 1)
         self.assertEqual(evidence["Canonical instruments"]["state"], "Activated")
-        self.assertEqual(evidence["Tracked stock universe"]["count"], 1)
+        self.assertEqual(evidence["Active tracked stocks"]["count"], 1)
         self.assertEqual(evidence["Stock equity candles"]["state"], "Pending activation")
