@@ -79,6 +79,7 @@ class Command(BaseCommand):
                 ticks_waiting = TickBuffer()
                 connected_at = timezone.now()
                 last_fresh_at = None
+                last_packet_at = None
                 refresh_at = connected_at
                 scan_at = timezone.now()
                 while True:
@@ -101,6 +102,8 @@ class Command(BaseCommand):
                     if data is not None and not isinstance(data, bytes):
                         raise ValueError("Unexpected text response from market feed; verify account data entitlement.")
                     ticks = decode_packets(data, timezone.now()) if isinstance(data, bytes) else []
+                    if ticks:
+                        last_packet_at = timezone.now()
                     for tick in ticks_waiting.ready(ticks, timezone.now()):
                         instrument = active.get((tick.segment, tick.security_id))
                         if instrument:
@@ -112,8 +115,8 @@ class Command(BaseCommand):
                     collector.flush(now)
                     local = timezone.localtime(now)
                     if (local.weekday() < 5 and clock_time(9, 15) <= local.time() < clock_time(15, 30)
-                            and now-(last_fresh_at or connected_at) >= timedelta(seconds=30)):
-                        raise ConnectionError("No fresh market packets for 30 seconds; discarding stalled connection.")
+                            and now-(last_packet_at or connected_at) >= timedelta(seconds=30)):
+                        raise ConnectionError("No market packets for 30 seconds; discarding stalled connection.")
                     if now >= scan_at:
                         result = {"mode": "COLLECT_ONLY"} if collect_only else scan(now)
                         finished_at = timezone.now()

@@ -31,7 +31,7 @@ def response_data(stamps):
 
 
 class StreamTimingTests(RadarTestCase):
-    def run_stream(self, receive, scan, *, collect_only=False):
+    def run_stream(self, receive, scan, *, collect_only=False, decoded_ticks=None):
         from .management.commands.radar_run import Command
         module = "options_tracker.management.commands.radar_run"
         socket, collector, beat = Mock(), Mock(), Mock()
@@ -39,7 +39,7 @@ class StreamTimingTests(RadarTestCase):
         with patch.multiple(
             module, credentials=Mock(return_value=("test-token", "test-client")),
             subscriptions=Mock(return_value=[self.equity]), CandleCollector=Mock(return_value=collector),
-            scan=scan, heartbeat=beat, decode_packets=Mock(return_value=[]),
+            scan=scan, heartbeat=beat, decode_packets=Mock(return_value=decoded_ticks or []),
         ), patch(module+".timezone.now", side_effect=lambda: self.clock[0]), patch(
             module+".websocket.create_connection", return_value=socket,
         ) as connect, patch(module+".time.sleep"):
@@ -91,8 +91,30 @@ class StreamTimingTests(RadarTestCase):
         connect, beat = self.run_stream(receive, Mock(return_value={}), collect_only=True)
         self.assertEqual(connect.call_count, 2)
         self.assertEqual(beat.call_args_list[0].args[1], "RECONNECTING")
-        self.assertIn("No fresh market packets", beat.call_args_list[0].args[2])
+        self.assertIn("No market packets", beat.call_args_list[0].args[2])
         self.assertIn("COLLECT_ONLY", beat.call_args_list[0].args[2])
+
+    def test_stale_quotes_do_not_make_a_receiving_socket_look_stalled(self):
+        self.clock = [NOW]
+        calls = 0
+
+        def receive():
+            nonlocal calls
+            calls += 1
+            if calls > 2:
+                raise KeyboardInterrupt
+            self.clock[0] += timedelta(seconds=31)
+            return b"packet"
+
+        tick = Mock(source_at=NOW, received_at=NOW, segment="NSE_EQ", security_id=self.equity.security_id)
+        connect, beat = self.run_stream(
+            receive,
+            Mock(return_value={}),
+            collect_only=True,
+            decoded_ticks=[tick],
+        )
+        self.assertEqual(connect.call_count, 1)
+        self.assertNotIn("RECONNECTING", [call.args[1] for call in beat.call_args_list])
 
 
 class RadarHistoryTests(RadarTestCase):
