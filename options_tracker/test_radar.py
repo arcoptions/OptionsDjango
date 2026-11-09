@@ -763,6 +763,24 @@ class WebAndCommandTests(RadarTestCase):
         bar_queries = [query for query in queries if 'FROM "options_tracker_radarbar"' in query["sql"]]
         self.assertEqual(len(bar_queries), 2)
 
+    @patch("options_tracker.radar.detect_setups", return_value=[])
+    def test_scan_reports_progress_at_least_every_five_instruments(self, _detect):
+        for index in range(11):
+            instrument = RadarInstrument.objects.create(
+                security_id=f"progress-{index}", segment="NSE_EQ", symbol=f"PROGRESS{index}",
+                kind="EQUITY", refreshed_at=NOW,
+            )
+            RadarBar.objects.create(
+                instrument=instrument, timestamp=NOW-timedelta(minutes=2),
+                open=100, high=101, low=99, close=100, volume=100,
+                complete=True, source="IMPORTED_OHLC",
+            )
+        progress_calls = []
+
+        scan(NOW, progress=lambda: progress_calls.append(True))
+
+        self.assertGreaterEqual(len(progress_calls), 3)
+
     @patch("options_tracker.radar.detect_setups")
     def test_scan_persists_unique_strategy_event_and_replay_does_not_duplicate(self, detect):
         for minute in range(5):

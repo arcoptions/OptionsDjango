@@ -555,7 +555,7 @@ def scan(
     for group_index, (instrument_id, instrument_rows) in enumerate(
         groupby(bar_rows, key=lambda row: row.instrument_id)
     ):
-        if progress and group_index % 25 == 0:
+        if progress and group_index % 5 == 0:
             progress()
         instrument = instruments[instrument_id]
         rows = list(instrument_rows)

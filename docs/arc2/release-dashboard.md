@@ -38,7 +38,7 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 574 passed across the full suite; 560 non-browser tests passed in production CI |
+| Django application tests | 575 passed across the full suite; 561 non-browser tests passed in production CI |
 | Test files | 35 |
 | Test classes ending in `Tests` | 73 |
 | Django system check | Passed with no issues |
@@ -63,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented | 574 application tests, staging smoke, and production activation passed | Production deployed | Complete |
+| 1 | Foundation and safety | Implemented | 575 application tests, staging smoke, and production activation passed | Production deployed | Complete |
 | 2 | Command Centre | Partial | Passed for implemented scope | Production deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented scope | Production deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented scope | Production deployed | In progress |
@@ -241,7 +241,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed | 560 non-browser tests passed in production CI; 574 tests are tracked across the full suite |
+| G-01 | Complete automated suite | Passed | 561 non-browser tests passed in production CI; 575 tests are tracked across the full suite |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |

@@ -45,12 +45,16 @@ class Command(BaseCommand):
                     )
 
                 result = scan(now, assistant=True, progress=report_progress)
+                report_progress()
                 captured_at = timezone.now()
                 persist_shortlist(captured_at)
+                report_progress()
                 capture_observations(protocol, captured_at)
+                report_progress()
                 if research_at is None or captured_at >= research_at:
                     update_observations(protocol, captured_at)
                     research_at = timezone.now()+timezone.timedelta(minutes=1)
+                    report_progress()
                 heartbeat(owner, "IDLE", json.dumps(result), timezone.now(), name="radar-evaluator")
                 if options["once"]:
                     self.stdout.write(json.dumps(result))

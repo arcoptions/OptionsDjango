@@ -9,7 +9,7 @@ The application currently has:
 
 * 35 `test*.py` files.
 * 73 test classes ending in `Tests`.
-* 574 discovered `test_` methods.
+* 575 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -209,7 +209,7 @@ Release 0 requires no application test run because it changes documentation only
 
 The deployed Release 1 execution slice has:
 
-* 574 tests across the full suite and 560 non-browser tests passing in production CI.
+* 575 tests across the full suite and 561 non-browser tests passing in production CI.
 * A clean Django system check and migration drift check.
 * ARC 2.0 migrations `0024`-`0039` applied to test SQLite and a restored production PostgreSQL backup.
 * Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication passed system checks.
@@ -222,7 +222,7 @@ The deployed Release 1 execution slice has:
 * No high-confidence exploitable findings in the focused ARC security review.
 * Guarded Kudu deployment completed successfully after the workflow was hardened against stale deployment IDs, blocking CLI status tracking, and old-container warm-up responses.
 * App Service and the static-IP VM synchronized at the deployed commit; manual execution, Dhan token validity, NIFTY service, collector, delivery, and evaluator progress heartbeats were verified.
-* The live evaluator produced a new assistant snapshot under immutable research protocol `stock-trap-forward-v21` while retaining its lease through a production-sized scan.
+* The live evaluator produced assistant snapshots under immutable research protocols through `stock-trap-forward-v22` while retaining its lease through production-sized scans.
 * Approved global, macro, flow, sector, and Azure OpenAI providers remain unavailable rather than fabricating evidence.
 
 The [release dashboard](./release-dashboard.md) tracks the remaining provider,
