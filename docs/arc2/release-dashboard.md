@@ -38,9 +38,9 @@ Last evidence refresh: 2026-11-09.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 567 passed |
-| Test files | 34 |
-| Test classes | 75 |
+| Django application tests | 570 passed |
+| Test files | 35 |
+| Test classes ending in `Tests` | 73 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
@@ -63,7 +63,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Release | Scope | Implementation | Testing | Deployment | Overall |
 |---|---|---|---|---|---|
 | 0 | Audit and architecture baseline | Verified baseline | Documentation checks passed | Not applicable | Complete |
-| 1 | Foundation and safety | Implemented locally | 567 application tests passed; browser and deployment gates remain | Not deployed | In progress |
+| 1 | Foundation and safety | Implemented locally | 570 application tests passed; browser and deployment gates remain | Not deployed | In progress |
 | 2 | Command Centre | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 3 | Opportunity Inbox | Partial | Passed for implemented local scope | Not deployed | In progress |
 | 4 | Stock Intelligence | Partial | Passed for implemented local scope | Not deployed | In progress |
@@ -96,6 +96,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R1-17 | Worker and provider health dashboard | Implemented locally | Passed | Not deployed | Staff-only consolidated execution, deployment, provider, worker, and engine health page |
 | R1-18 | Request and query budgets | Implemented locally | Passed | Not deployed | Action List, Options, and Operations Health have explicit regression-tested query ceilings |
 | R1-19 | Post-deployment activation smoke | Implemented locally | Passed | Not deployed | `arc_activation_smoke --require-healthy` checks routes, assets, policy, commits, workers, and providers |
+| R1-20 | In-app ARC 2.0 Release Dashboard | Implemented locally | Passed | Not deployed | Staff-only dashboard separates implementation, testing, deployment, blockers, and production gates |
 
 ## Release 2 Command Centre
 
@@ -240,7 +241,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | 567 tests passed locally | Retain green CI at the release commit |
+| G-01 | Complete automated suite | 570 tests passed locally | Retain green CI at the release commit |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed locally | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |

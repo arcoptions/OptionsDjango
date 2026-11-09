@@ -7,9 +7,9 @@ description: Test strategy, current coverage, release gates, and validation requ
 
 The application currently has:
 
-* 28 `test*.py` files.
-* 68 discovered test classes.
-* 567 discovered `test_` methods.
+* 35 `test*.py` files.
+* 73 test classes ending in `Tests`.
+* 570 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -24,6 +24,8 @@ Existing focused coverage includes:
 * POST-only legacy synchronization and archive controls.
 * Session authentication for browser routes and enforced-CSRF rejection.
 * Consolidated operations health without credential disclosure.
+* Staff-only in-app release status with separate implementation, testing,
+  deployment, blocker, and production-gate evidence.
 * Critical-page query budgets and activation smoke behavior.
 * Command Centre regime, scenarios, freshness, breadth, access, and rendering.
 * Canonical instrument uniqueness, alias resolution, and idempotent reconciliation.
@@ -207,7 +209,7 @@ Release 0 requires no application test run because it changes documentation only
 
 The current local Release 1 execution slice has:
 
-* 567 passing `options_tracker` tests.
+* 570 passing `options_tracker` tests.
 * A clean Django system check.
 * ARC 2.0 migrations `0024`-`0037` applied to the test SQLite database.
 * Populated SQLite rollback from `0037` to `0033` preserved pre-existing core signal data, and reapplication through `0037` passed system checks.

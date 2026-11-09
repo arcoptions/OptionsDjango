@@ -1,0 +1,143 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}ARC 2.0 Release Dashboard | ARC Trading Journal{% endblock %}
+
+{% block extra_head %}
+<style>
+  .release-summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .release-summary .value { font-size: 24px; }
+  .status-pill {
+    display: inline-block;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .status-complete { background: #ecfdf5; color: #166534; border: 1px solid #bbf7d0; }
+  .status-progress { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+  .status-open { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .status-blocked { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .release-table { overflow-x: auto; }
+  .release-table td:nth-child(2),
+  .release-table td:last-child { white-space: normal; min-width: 190px; }
+  .release-list { margin: 0; padding-left: 20px; }
+  .release-list li { margin-bottom: 8px; line-height: 1.45; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="msg warning">
+  Local implementation and passing tests do not mean production is updated.
+  ARC 2.0 remains undeployed until the release gates below are complete.
+</div>
+
+<section class="grid release-summary" aria-label="Release summary">
+  <div class="stat">
+    <div class="label">Automated tests</div>
+    <div class="value">{{ release_dashboard.automated_tests }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Releases complete</div>
+    <div class="value">{{ release_dashboard.release_counts.complete }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Releases in progress</div>
+    <div class="value">{{ release_dashboard.release_counts.in_progress }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Gates remaining</div>
+    <div class="value">{{ release_dashboard.gate_counts.remaining }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Execution default</div>
+    <div class="value">{{ release_dashboard.execution_default }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Deployment</div>
+    <div class="value">{{ release_dashboard.deployment_state }}</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="row">
+    <h2 style="margin:0;">Release roll-up</h2>
+    <span class="muted">Evidence refreshed {{ release_dashboard.evidence_date }}</span>
+  </div>
+  <div class="release-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Release</th>
+          <th>Scope</th>
+          <th>Implementation</th>
+          <th>Testing</th>
+          <th>Deployment</th>
+          <th>Overall</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for release in release_dashboard.releases %}
+        <tr>
+          <td>R{{ release.number }}</td>
+          <td>{{ release.name }}</td>
+          <td>{{ release.implementation }}</td>
+          <td>{{ release.testing }}</td>
+          <td>{{ release.deployment }}</td>
+          <td><span class="status-pill status-{{ release.status_key }}">{{ release.overall }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Implemented and verified locally</h2>
+    <ul class="release-list">
+    {% for item in release_dashboard.implemented_highlights %}
+      <li>{{ item }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>Current blockers</h2>
+    <ul class="release-list">
+    {% for item in release_dashboard.blockers %}
+      <li>{{ item }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Production release gates</h2>
+  <p class="muted">
+    {{ release_dashboard.gate_counts.passed }} gates passed locally;
+    {{ release_dashboard.gate_counts.remaining }} gates still require evidence.
+  </p>
+  <div class="release-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Gate</th>
+          <th>Requirement</th>
+          <th>State</th>
+          <th>Required next evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for gate in release_dashboard.gates %}
+        <tr>
+          <td>{{ gate.id }}</td>
+          <td>{{ gate.name }}</td>
+          <td><span class="status-pill status-{{ gate.status_key }}">{{ gate.state }}</span></td>
+          <td>{{ gate.next_step }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

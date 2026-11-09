@@ -60,6 +60,7 @@ def layout_shell(request):
         {"area": "Performance & AI", "label": "Performance", "url": reverse("performance_dashboard"), "active": request.path.startswith(reverse("performance_dashboard"))},
         {"area": "Performance & AI", "label": "Research Assistant", "url": reverse("research_assistant"), "active": request.path.startswith(reverse("research_assistant"))},
         {"area": "Opportunity Inbox", "label": "Signal Archive", "url": reverse("archive"), "active": request.path.startswith(reverse("archive"))},
+        {"area": "System & Admin", "label": "Release Dashboard", "url": reverse("release_dashboard"), "active": request.path.startswith(reverse("release_dashboard"))},
         {"area": "System & Admin", "label": "Operations Health", "url": reverse("operations_health"), "active": request.path.startswith(reverse("operations_health"))},
         {"area": "System & Admin", "label": "Admin", "url": reverse("admin:index"), "active": request.path.startswith(reverse("admin:index"))},
     ]

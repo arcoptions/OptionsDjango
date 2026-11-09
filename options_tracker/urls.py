@@ -62,6 +62,7 @@ urlpatterns = [
     path("breakeven/", authenticated(stock_views.breakeven), name="breakeven"),
     path("research/", authenticated(research_views.research_report), name="research_report"),
     path("operations/", authenticated(operations_views.operations_health), name="operations_health"),
+    path("release-status/", authenticated(operations_views.release_dashboard), name="release_dashboard"),
     path("opportunities/", authenticated(opportunity_views.opportunity_inbox), name="opportunity_inbox"),
     path("scanner-builder/", authenticated(scanner_views.scanner_builder), name="scanner_builder"),
     path(

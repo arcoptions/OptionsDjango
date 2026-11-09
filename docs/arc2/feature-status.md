@@ -57,6 +57,7 @@ checklist.
 * [x] Add request query performance budgets.
 * [x] Consolidate provider and worker health.
 * [x] Add post-deployment activation smoke checks.
+* [x] Add a staff-only in-app release dashboard with explicit production gates.
 
 ## Release 2 pending
 
