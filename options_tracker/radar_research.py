@@ -16,7 +16,7 @@ from .models import (
 from .radar import Policy, VERSION, fresh
 
 
-PROTOCOL = "stock-trap-forward-v19"
+PROTOCOL = "stock-trap-forward-v20"
 PRIMARY = "S1"
 HORIZONS = [15, 30, 60]
 
