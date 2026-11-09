@@ -88,10 +88,11 @@ class StreamTimingTests(RadarTestCase):
             self.clock[0] += timedelta(seconds=31)
             return b"packet"
 
-        connect, beat = self.run_stream(receive, Mock(return_value={}))
+        connect, beat = self.run_stream(receive, Mock(return_value={}), collect_only=True)
         self.assertEqual(connect.call_count, 2)
         self.assertEqual(beat.call_args_list[0].args[1], "RECONNECTING")
         self.assertIn("No fresh market packets", beat.call_args_list[0].args[2])
+        self.assertIn("COLLECT_ONLY", beat.call_args_list[0].args[2])
 
 
 class RadarHistoryTests(RadarTestCase):

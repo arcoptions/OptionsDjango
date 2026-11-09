@@ -127,7 +127,8 @@ class Command(BaseCommand):
                 for secret in (token, client_id):
                     if secret:
                         detail = detail.replace(secret, "[redacted]")
-                message = f"Feed interrupted ({type(error).__name__}): {detail[:500]}. Reconnecting; fresh quotes required."
+                mode = " Mode=COLLECT_ONLY." if collect_only else ""
+                message = f"Feed interrupted ({type(error).__name__}): {detail[:500]}. Reconnecting; fresh quotes required.{mode}"
                 LOGGER.warning(message)
                 heartbeat(owner, "RECONNECTING", message, timezone.now())
                 time.sleep(delay)
