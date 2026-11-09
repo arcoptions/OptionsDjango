@@ -24,6 +24,29 @@ staging App Service and staging PostgreSQL database.
 | Last verified protocol | `stock-trap-forward-v22` |
 | Live orders from activation work | None |
 
+## Production backup evidence
+
+The production PostgreSQL Flexible Server was inspected read-only on 9
+November 2026.
+
+| Check | Verified state |
+|---|---|
+| Server | `pg-options-2fa45de1` |
+| Service state | Ready |
+| PostgreSQL version | 16 |
+| Backup retention | 14 days |
+| Earliest restore point | 30 October 2026 at 01:18 IST |
+| Visible automatic full backups | 11 |
+| Latest completed full backup | 9 November 2026 at 01:25 IST |
+| Geo-redundant backup | Disabled |
+| Immutable backup | Disabled |
+| Restore rehearsal | Pending approval for a temporary billable server |
+
+Point-in-time backup evidence is present. The release gate remains open until
+one restore is completed and validated at the release commit. Creating the
+temporary restore server requires explicit cost-bearing infrastructure
+approval.
+
 ## Activation staging
 
 | Check | Result |
@@ -46,7 +69,7 @@ staging App Service and staging PostgreSQL database.
 
 Before activation deployment:
 
-1. Create and verify a restorable PostgreSQL backup.
+1. Restore and verify the current PostgreSQL point-in-time backup.
 2. Record current App Service and VM commits.
 3. Preserve manual execution mode.
 4. Preserve VM-only Dhan token ownership.

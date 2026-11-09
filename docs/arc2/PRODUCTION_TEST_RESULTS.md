@@ -26,6 +26,8 @@ approved or deployed to production.
 | Dhan master | Passed with alias fix | 194 direct matches and one verified provider rename |
 | Stock history | Blocked in staging | No trading-capable Dhan token copied into staging |
 | Browser smoke | Passed with fixes | Five authenticated critical routes rendered without console or overflow errors |
+| Production backup | Passed for backup existence | 14-day retention and 11 visible automatic full backups |
+| Restore rehearsal | Not run | Temporary billable server requires explicit approval |
 | Production activation | Not run | Explicit operator approval and backup evidence required |
 
 ## Automated validation
@@ -174,6 +176,7 @@ Workspace to 2.40 seconds.
   credential is approved.
 * Activate and test one scanner from persisted stock bars.
 * Reproduce strategy results from immutable manifests.
-* Complete dependency, route-security, and penetration evidence.
-* Rehearse production backup and restore for the activation release.
+* Complete external penetration evidence.
+* Restore the production point-in-time backup to a temporary server and
+  rehearse the release migrations.
 * Obtain explicit production approval.
