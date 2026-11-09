@@ -4,6 +4,7 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from django.test import Client
 from django.urls import reverse
 
 from django.utils import timezone
@@ -18,6 +19,7 @@ from .models import (
     ScannerDefinition,
     ScannerMatch,
     TipSignal,
+    TradeExecution,
     UnifiedOpportunity,
 )
 from .opportunities import transition_opportunity, upsert_opportunity
@@ -109,6 +111,76 @@ class UnifiedOpportunityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, opportunity.source_ref)
         self.assertContains(response, "Validate levels")
+
+    def test_staff_can_validate_plan_and_approve_without_execution(self):
+        opportunity = upsert_opportunity(
+            source_type="manual",
+            source_ref="manual-lifecycle",
+            strategy="breakout",
+            direction="CE",
+            evidence={"price": 100},
+            rationale="Stored breakout evidence.",
+        )
+        self.client.force_login(self.user)
+        url = reverse("opportunity_transition", args=[opportunity.pk])
+
+        self.client.post(url, {
+            "status": "VALIDATED",
+            "reason": "Evidence verified.",
+        })
+        self.client.post(url, {
+            "status": "PLANNED",
+            "reason": "Risk plan reviewed.",
+            "entry": "100",
+            "stop_loss": "95",
+            "targets": "110, 120",
+            "quantity": "50",
+            "estimated_charges": "75",
+            "risk_amount": "250",
+            "invalidation": "Close below 95.",
+        })
+        self.client.post(url, {
+            "status": "APPROVED",
+            "reason": "Approved for manual execution review.",
+        })
+        self.client.post(url, {
+            "status": "EXECUTED",
+            "reason": "Attempt execution from the inbox.",
+        })
+        opportunity.refresh_from_db()
+
+        self.assertEqual(opportunity.status, OpportunityStatus.APPROVED)
+        self.assertEqual(opportunity.plan["targets"], ["110", "120"])
+        self.assertEqual(
+            list(opportunity.status_events.values_list("to_status", flat=True)),
+            ["APPROVED", "PLANNED", "VALIDATED", "NEW"],
+        )
+        self.assertEqual(TradeExecution.objects.count(), 0)
+
+    def test_transition_requires_staff_post_csrf_and_reason(self):
+        opportunity = upsert_opportunity(
+            source_type="manual",
+            source_ref="protected-lifecycle",
+            strategy="breakout",
+            evidence={"price": 100},
+        )
+        url = reverse("opportunity_transition", args=[opportunity.pk])
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+        self.assertEqual(
+            csrf_client.post(url, {
+                "status": "VALIDATED",
+                "reason": "Evidence verified.",
+            }).status_code,
+            403,
+        )
+
+        self.client.force_login(self.user)
+        self.client.post(url, {"status": "VALIDATED", "reason": ""})
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.status, OpportunityStatus.NEW)
 
     def test_derivative_plan_requires_complete_risk_and_cost_contract(self):
         opportunity = upsert_opportunity(

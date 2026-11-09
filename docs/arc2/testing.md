@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 625 discovered `test_` methods.
+* 627 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -255,6 +255,17 @@ The provider-neutral R14 event slice passed:
 The event-reaction test verifies prior-close selection and exact one-session
 and five-session returns. Missing bracketing bars remain unavailable, and the
 UI does not claim that observed price movement was caused by the event.
+
+The R15 manual opportunity-decision slice passed:
+
+* 11 focused opportunity tests in 2.252 seconds
+* 612 non-browser tests in 45.311 seconds
+* 15 browser-tagged tests in 95.425 seconds
+
+The lifecycle journey validates evidence, records a complete derivative risk
+plan, and approves a manual setup with actor and reason audit. Direct execution
+requests from the inbox remain blocked, and no `TradeExecution` is created.
+Django system checks and migration drift checks also passed.
 
 ## Latest Release 1 validation
 

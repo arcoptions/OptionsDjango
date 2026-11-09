@@ -19,7 +19,7 @@
   </div>
   <div style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Instrument</th><th>Setup</th><th>Status</th><th>Score</th><th>Source</th><th>Evidence</th><th>Next action</th><th>Age</th></tr></thead>
+      <thead><tr><th>Instrument</th><th>Setup</th><th>Status</th><th>Score</th><th>Source</th><th>Evidence</th><th>Plan</th><th>Manual decision</th><th>Age</th></tr></thead>
       <tbody>
       {% for opportunity in opportunities %}
         <tr>
@@ -28,12 +28,64 @@
           <td><span class="active-pill">{{ opportunity.status }}</span></td>
           <td>{{ opportunity.score }}{% if opportunity.confidence is not None %}<br><span class="muted">confidence {{ opportunity.confidence }}</span>{% endif %}</td>
           <td>{{ opportunity.source_name|default:opportunity.source_type }}<br><span class="muted">{{ opportunity.source_ref }}</span></td>
-          <td>{{ opportunity.revisions.count }} revision{{ opportunity.revisions.count|pluralize }}<br><span class="muted">{{ opportunity.rationale|truncatechars:90 }}</span></td>
-          <td>{{ opportunity.next_action|default:"Review evidence" }}</td>
+          <td>
+            {{ opportunity.revisions.count }} revision{{ opportunity.revisions.count|pluralize }}<br>
+            <span class="muted">{{ opportunity.rationale|truncatechars:90 }}</span>
+            {% with revision=opportunity.revisions.first %}
+            {% if revision %}<details><summary>Latest evidence</summary><pre>{{ revision.evidence }}</pre></details>{% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            {{ opportunity.next_action|default:"Review evidence" }}
+            {% if opportunity.plan %}<details><summary>Risk plan</summary><pre>{{ opportunity.plan }}</pre></details>{% endif %}
+          </td>
+          <td>
+            {% if user.is_staff %}
+              {% if opportunity.status == "NEW" %}
+              <form method="post" action="{% url 'opportunity_transition' opportunity.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="VALIDATED">
+                <input name="reason" maxlength="500" required placeholder="Validation evidence">
+                <button class="btn secondary" type="submit">Validate</button>
+              </form>
+              {% elif opportunity.status == "VALIDATED" %}
+              <form method="post" action="{% url 'opportunity_transition' opportunity.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="PLANNED">
+                <input name="entry" required placeholder="Entry">
+                <input name="stop_loss" required placeholder="Stop">
+                <input name="targets" required placeholder="Targets, comma separated">
+                <input name="quantity" required placeholder="Quantity">
+                <input name="estimated_charges" required placeholder="Estimated charges">
+                <input name="risk_amount" required placeholder="Risk amount">
+                <input name="invalidation" required placeholder="Invalidation">
+                <input name="reason" maxlength="500" required placeholder="Planning rationale">
+                <button class="btn secondary" type="submit">Record plan</button>
+              </form>
+              {% elif opportunity.status == "PLANNED" %}
+              <form method="post" action="{% url 'opportunity_transition' opportunity.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="APPROVED">
+                <input name="reason" maxlength="500" required placeholder="Approval reason">
+                <button class="btn secondary" type="submit">Approve manual setup</button>
+              </form>
+              {% endif %}
+              {% if opportunity.status != "CLOSED" and opportunity.status != "REJECTED" and opportunity.status != "EXECUTED" %}
+              <form method="post" action="{% url 'opportunity_transition' opportunity.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="REJECTED">
+                <input name="reason" maxlength="500" required placeholder="Rejection reason">
+                <button class="btn secondary" type="submit">Reject</button>
+              </form>
+              {% endif %}
+            {% else %}
+              <span class="muted">Staff review required.</span>
+            {% endif %}
+          </td>
           <td>{{ opportunity.source_at|timesince|default:"unknown" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="8">No canonical opportunities have been synchronized yet.</td></tr>
+        <tr><td colspan="9">No canonical opportunities have been synchronized yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

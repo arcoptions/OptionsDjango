@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 610 non-browser and 625 total passing tests. A rendered page
+baseline to 612 non-browser and 627 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 610 passing non-browser tests
-* 625 passing tests including browser-tagged journeys
+* 612 passing non-browser tests
+* 627 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -145,8 +145,11 @@ source timestamps, revisions, and attribution.
 
 ### R15 Unified Opportunity and Trade Setup Engine
 
-Extend the existing canonical opportunity lifecycle while preserving separate
-idea, paper-position, broker-order, fill, and journal concepts.
+The Opportunity Inbox now supports staff-only validation, complete derivative
+risk planning, approval, and rejection with CSRF-protected POST actions,
+mandatory reasons, authenticated actor audit, and atomic plan transitions.
+Execution remains outside this workflow, and the endpoint rejects execution
+requests without creating broker or trade-execution records.
 
 ### R16 ARC Intelligence
 
@@ -228,6 +231,8 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 610 non-browser tests in 54.199 seconds. All 15
-browser-tagged tests passed separately in 104.492 seconds, covering 625 tests
-without treating a stalled combined-run teardown as success evidence.
+The current branch passed 612 non-browser tests in 45.311 seconds. All 15
+browser-tagged tests passed separately in 95.425 seconds, covering 627 tests
+without treating a stalled combined-run teardown as success evidence. The R15
+journey proves that validation, complete planning, and approval preserve actor
+and reason audit while direct execution requests remain blocked.

@@ -65,6 +65,11 @@ urlpatterns = [
     path("operations/", authenticated(operations_views.operations_health), name="operations_health"),
     path("release-status/", authenticated(operations_views.release_dashboard), name="release_dashboard"),
     path("opportunities/", authenticated(opportunity_views.opportunity_inbox), name="opportunity_inbox"),
+    path(
+        "opportunities/<int:opportunity_id>/transition/",
+        opportunity_views.opportunity_transition,
+        name="opportunity_transition",
+    ),
     path("scanner-builder/", authenticated(scanner_views.scanner_builder), name="scanner_builder"),
     path(
         "scanner-builder/<int:match_id>/acknowledge/",

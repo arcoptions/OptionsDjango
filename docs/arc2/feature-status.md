@@ -151,7 +151,10 @@ requirements with existing ARC capabilities.
   and five-session observed reactions over normalized stored evidence.
 * [ ] Activate event ingestion and an expected-results calendar after an
   approved provider is available.
-* [ ] Extend unified opportunities into the remaining trade-setup lifecycle.
+* [x] Add staff-only Opportunity Inbox validation, complete derivative risk
+  planning, approval, and rejection with actor and reason audit.
+* [x] Keep execution outside the Opportunity Inbox and reject direct execution
+  requests without creating trade-execution records.
 * [ ] Activate governed ARC Intelligence after Azure OpenAI configuration.
 * [ ] Complete personal-desk broker reconciliation with approved statements.
 * [ ] Complete R18 integration, restore, independent security, and approved

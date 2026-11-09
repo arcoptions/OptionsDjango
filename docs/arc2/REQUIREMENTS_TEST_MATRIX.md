@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 610 non-browser tests. The matrix records
+The current automated baseline is 612 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -45,6 +45,7 @@ feeds.
 | Attributed event timeline and reaction | `StockIntelligenceTests.test_event_timeline_calculates_observed_one_and_five_session_reactions` | Approved announcement and expected-results providers remain open | Passed normalized stored-evidence scope |
 | Market context fails unavailable | `test_market_context.py` | Approved market-context provider remains open | Passed implemented scope |
 | Opportunity identity and revisions | `test_opportunities.py` | 152 tip opportunities plus five canonical scanner opportunities; scanner rerun retained one revision each | Passed |
+| Manual opportunity decisions | `UnifiedOpportunityTests.test_staff_can_validate_plan_and_approve_without_execution`, `test_transition_requires_staff_post_csrf_and_reason` | Live staff acceptance remains open; execution is unavailable from the inbox | Passed automated scope |
 | Canonical instrument reconciliation | `test_instrument_identity.py` | 74,917 staging mappings and zero unmapped radar instruments | Passed |
 | Unparsed Telegram messages require opt-in | `test_opportunities.py` | 2,147 staging messages remain excluded | Passed |
 | Telegram tip parsing | `TelegramTipParserTests` in `tests.py` | Live source monitoring remains required | Passed implemented scope |
