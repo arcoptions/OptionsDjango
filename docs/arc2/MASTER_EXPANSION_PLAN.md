@@ -6,14 +6,14 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 ## Evidence baseline
 
 This plan reconciles the master expansion specification with the verified
-activation branch at commit `a6ac2b2`. The first expansion slice raises the
-branch baseline to 592 non-browser and 607 total passing tests. A rendered page
+activation branch at commit `a6ac2b2`. The current expansion branch raises the
+baseline to 593 non-browser and 608 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 592 passing non-browser tests
-* 607 passing tests including browser-tagged journeys
+* 593 passing non-browser tests
+* 608 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -30,7 +30,7 @@ The current baseline has:
 | Canonical instrument identity | Fully functional in staging | 74,917 mapped instruments and zero unmapped radar rows | Named index-universe membership and exchange trading status need maintained sources |
 | Equity historical ingestion | Partially functional with verified real data | 860 imported 15-minute candles with matching hash and idempotent rerun | Expand intervals and universe through monitored, restartable jobs |
 | Rolling option history | Blocked by provider or entitlement | Twelve official-contract requests returned Dhan `DH-905` while equity history succeeded | Dhan account or backend resolution |
-| Market breadth | Partially functional | Fresh-quote advance, decline, unchanged, and equal-weight change in Command Centre | Configurable universe, EMA breadth, RSI distribution, gaps, volume surge, highs/lows, and sectors |
+| Market breadth | Partially functional | Fresh-quote coverage, advance/decline percentages, equal-weight change, opening gaps, price distribution, and industry ranking in Command Centre | Configurable universe, EMA breadth, RSI distribution, verified volume baseline, and 52-week context |
 | Market session awareness | Backend implemented only as a coarse weekday clock | Existing collectors use weekday and time windows | Exchange-calendar evidence, holidays, and five user-facing session states |
 | Breakout intelligence | Partially functional | Opening-range radar strategies and configurable scanners | Full breakout taxonomy, reproducible ranking, evidence cards, and false-positive analysis |
 | Technical charting | Partially functional | Multi-timeframe candlesticks, RSI, overlays, and deterministic labels | Verified pattern geometry, support/resistance engine, automatic levels, and timeframe agreement |
@@ -195,6 +195,10 @@ Command Centre:
 * A visible warning when only schedule evidence is available
 * No schema change and no provider claim
 
-Advanced breadth follows after this slice passes focused and full regression
-tests. The slice passed 592 non-browser tests in 112.557 seconds and 607 total
-tests in 201.432 seconds.
+The second slice adds fresh-universe coverage, advance/decline percentages,
+opening-gap fill state, price distribution, and verified industry ranking.
+EMA breadth, RSI distribution, volume surge, and 52-week context remain
+explicitly unavailable until their complete baselines are validated.
+
+The current branch passed 593 non-browser tests in 85.683 seconds and 608
+total tests in 173.536 seconds.

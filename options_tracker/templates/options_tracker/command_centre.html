@@ -78,6 +78,15 @@
     <h2>Market breadth</h2>
     <div style="font-size:28px; font-weight:800;">{{ command.breadth.advances }} / {{ command.breadth.declines }}</div>
     <div class="muted">Advances / declines across {{ command.breadth.total }} fresh stocks</div>
+    <div class="muted">
+      Coverage {{ command.breadth.total }} / {{ command.breadth.active_universe }}
+      ({{ command.breadth.coverage_percent|default:"-" }}%)
+    </div>
+    <div class="muted">
+      Advancing {{ command.breadth.advance_percent|default:"-" }}% ·
+      declining {{ command.breadth.decline_percent|default:"-" }}% ·
+      unchanged {{ command.breadth.unchanged_percent|default:"-" }}%
+    </div>
     <div class="muted">Average change {{ command.breadth.average_change_percent|default:"-" }}%</div>
   </section>
   <section class="panel">
@@ -88,6 +97,50 @@
     <a class="btn secondary" href="{% url 'operations_health' %}">Open health dashboard</a>
   </section>
 </div>
+
+<section class="panel">
+  <h2>Fresh-universe breadth detail</h2>
+  <div class="grid">
+    <article class="card">
+      <strong>Gap analysis</strong>
+      <p>
+        Gap ups {{ command.breadth.gaps.up }} ·
+        gap downs {{ command.breadth.gaps.down }}<br>
+        Filled {{ command.breadth.gaps.filled }} ·
+        unfilled {{ command.breadth.gaps.unfilled }}
+      </p>
+      <p class="muted">
+        Absolute opening-gap threshold
+        {{ command.breadth.gaps.threshold_percent }}%.
+      </p>
+    </article>
+    <article class="card">
+      <strong>Price distribution</strong>
+      {% for bucket in command.breadth.price_distribution %}
+      <div class="row"><span>{{ bucket.label }}</span><strong>{{ bucket.count }}</strong></div>
+      {% endfor %}
+    </article>
+    <article class="card">
+      <strong>Industry breadth</strong>
+      {% for sector in command.breadth.sectors %}
+      <p>
+        {{ sector.name }}: {{ sector.average_change_percent }}%<br>
+        <span class="muted">{{ sector.advances }} advancing · {{ sector.declines }} declining · {{ sector.total }} covered</span>
+      </p>
+      {% empty %}
+      <p class="muted">No verified industry mapping overlaps the fresh quote universe.</p>
+      {% endfor %}
+    </article>
+  </div>
+  <div class="grid">
+    {% for item in command.breadth.unavailable %}
+    <article class="card">
+      <strong>{{ item.name }}</strong>
+      <p class="muted">Unavailable: {{ item.reason }}</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
 
 <section class="panel">
   <h2>Global, macro, flow, and sector evidence</h2>

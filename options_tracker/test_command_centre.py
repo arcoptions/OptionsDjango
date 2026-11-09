@@ -17,7 +17,7 @@ from .models import (
     StockFundamentalSnapshot,
     StockScoreSnapshot,
 )
-from .radar_models import RadarInstrument, RadarQuote
+from .radar_models import RadarInstrument, RadarQuote, RadarSector
 
 
 class CommandCentreTests(TestCase):
@@ -130,6 +130,77 @@ class CommandCentreTests(TestCase):
         )
 
         self.assertEqual(command_centre_context(now)["breadth"]["total"], 0)
+
+    def test_breadth_reports_coverage_gaps_distribution_and_industries(self):
+        now = timezone.now()
+        quote_rows = [
+            ("ADVANCE", 103, 100, 102, 99, 104, "Banking"),
+            ("DECLINE", 97, 100, 98, 96, 101, "Technology"),
+            ("FLAT", 100, 100, 100, 100, 100, "Banking"),
+        ]
+        for security_id, (
+            symbol,
+            last,
+            previous_close,
+            day_open,
+            day_low,
+            day_high,
+            industry,
+        ) in enumerate(quote_rows, start=10):
+            instrument = RadarInstrument.objects.create(
+                security_id=str(security_id),
+                segment="NSE_EQ",
+                symbol=symbol,
+                kind="EQUITY",
+            )
+            RadarQuote.objects.create(
+                instrument=instrument,
+                source_at=now,
+                received_at=now,
+                last=last,
+                previous_close=previous_close,
+                day_open=day_open,
+                day_low=day_low,
+                day_high=day_high,
+            )
+            RadarSector.objects.create(
+                instrument=instrument,
+                industry=industry,
+                source_url=f"https://example.test/{symbol}",
+            )
+        RadarInstrument.objects.create(
+            security_id="99",
+            segment="NSE_EQ",
+            symbol="NO_QUOTE",
+            kind="EQUITY",
+        )
+
+        breadth = command_centre_context(now)["breadth"]
+
+        self.assertEqual(breadth["total"], 3)
+        self.assertEqual(breadth["active_universe"], 4)
+        self.assertEqual(breadth["coverage_percent"], 75.0)
+        self.assertEqual(breadth["advance_percent"], 33.3)
+        self.assertEqual(breadth["decline_percent"], 33.3)
+        self.assertEqual(breadth["unchanged_percent"], 33.3)
+        self.assertEqual(breadth["advance_decline_ratio"], 1.0)
+        self.assertEqual(
+            breadth["gaps"],
+            {
+                "threshold_percent": 0.1,
+                "up": 1,
+                "down": 1,
+                "filled": 2,
+                "unfilled": 0,
+            },
+        )
+        self.assertEqual(
+            [row["count"] for row in breadth["price_distribution"]],
+            [1, 0, 0, 1, 0, 1],
+        )
+        self.assertEqual(breadth["sectors"][0]["name"], "Banking")
+        self.assertEqual(breadth["sectors"][0]["total"], 2)
+        self.assertEqual(len(breadth["unavailable"]), 4)
 
     def test_context_ranks_only_current_evidence_backed_investments(self):
         now = timezone.now()

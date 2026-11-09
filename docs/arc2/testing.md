@@ -9,7 +9,7 @@ The application currently has:
 
 * 38 `test*.py` files.
 * 76 test classes ending in `Tests`.
-* 607 discovered `test_` methods.
+* 608 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -211,13 +211,15 @@ The first R11 Market Pulse slice passed:
 
 * 11 focused Command Centre and Release Dashboard tests
 * The critical-page database query budget
-* 592 non-browser tests in 112.557 seconds
-* 607 total tests in 201.432 seconds
+* 593 non-browser tests in 85.683 seconds
+* 608 total tests in 173.536 seconds
 * Django system checks during both complete runs
 
-The session tests cover all five time windows, weekend closure, attributed
-holiday closure, one active session, and fail-honest schedule-only behavior.
-No migration or JSON API change was introduced.
+The tests cover all five time windows, weekend closure, attributed holiday
+closure, one active session, fail-honest schedule-only behavior, fresh-universe
+coverage, advance/decline percentages, opening-gap state, price distribution,
+industry ranking, and unavailable baseline states. No migration or JSON API
+change was introduced.
 
 ## Latest Release 1 validation
 

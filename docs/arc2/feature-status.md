@@ -129,7 +129,10 @@ requirements with existing ARC capabilities.
   activation evidence and explicit provider blockers.
 * [x] Add five evidence-aware Indian market-session states to the Command
   Centre without claiming an unverified exchange holiday calendar.
-* [ ] Add configurable market universes and advanced breadth distributions.
+* [x] Add fresh-universe coverage, advance/decline percentages, opening gaps,
+  price distribution, and industry breadth.
+* [ ] Add configurable market universes, EMA breadth, RSI distribution,
+  verified volume surge, and 52-week context.
 * [ ] Add reproducible breakout taxonomy, validation, ranking, and cards.
 * [ ] Add persisted technical patterns, support/resistance, automatic levels,
   and multi-timeframe agreement.
