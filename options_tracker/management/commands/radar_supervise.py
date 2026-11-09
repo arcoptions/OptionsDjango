@@ -57,6 +57,7 @@ class Command(BaseCommand):
         owner, children, streams = None, {}, {}
         failures, restart_at = {}, {}
         started_at = {}
+        child_launched_at = {}
         launched_at = time.monotonic()
         leases = {"collector": "paper-radar", "evaluator": "radar-evaluator",
                   "delivery": "paper-alerts", "news": "radar-news", "monitor": "radar-monitor"}
@@ -94,7 +95,12 @@ class Command(BaseCommand):
                     process = children.get(name)
                     if process is not None and process.poll() is None and name in leases and time.monotonic()-started_at[name] > 180:
                         worker = RadarWorker.objects.filter(name=leases[name]).first()
-                        if worker is None or now-worker.heartbeat_at > timezone.timedelta(seconds=120):
+                        current_generation = bool(
+                            worker and worker.heartbeat_at >= child_launched_at[name]
+                        )
+                        startup_timed_out = time.monotonic()-started_at[name] > 600
+                        heartbeat_stale = current_generation and now-worker.heartbeat_at > timezone.timedelta(seconds=120)
+                        if startup_timed_out or heartbeat_stale:
                             self.stderr.write(f"{name} stopped heartbeating; terminating only its owned PID {process.pid}.")
                             process.terminate()
                             try:
@@ -116,11 +122,22 @@ class Command(BaseCommand):
                         heartbeat_at__gte=now-timezone.timedelta(seconds=30),
                     ).exists():
                         continue
+                    child_starting = False
+                    for child_name, child in children.items():
+                        if child_name not in leases or child.poll() is not None:
+                            continue
+                        worker = RadarWorker.objects.filter(name=leases[child_name]).first()
+                        if worker is None or worker.heartbeat_at < child_launched_at[child_name]:
+                            child_starting = True
+                            break
+                    if child_starting:
+                        continue
                     children[name] = subprocess.Popen(
                         [sys.executable, str(root/"manage.py"), *command],
                         cwd=root, stdout=streams[name], stderr=subprocess.STDOUT,
                     )
                     started_at[name] = time.monotonic()
+                    child_launched_at[name] = now
                     self.stdout.write(f"Started {name} PID {children[name].pid}.")
                 close_old_connections()
                 time.sleep(10)

@@ -329,7 +329,7 @@ class ReadinessTests(RadarTestCase):
 
                 def sleep(seconds):
                     clock[0] += seconds
-                    if clock[0] >= (320 if hung else 130):
+                    if clock[0] >= (720 if hung else 130):
                         raise KeyboardInterrupt
 
                 with patch(target+".worker_specs", return_value={"delivery": ["radar_deliver", "--loop"]}), patch(
