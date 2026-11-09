@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 613 non-browser and 628 total passing tests. A rendered page
+baseline to 615 non-browser and 630 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 613 passing non-browser tests
-* 628 passing tests including browser-tagged journeys
+* 615 passing non-browser tests
+* 630 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -162,8 +162,11 @@ OpenAI configuration.
 
 ### R17 Personal Trading Desk
 
-Unify manual planning, alerts, journal, performance, and reconciliation
-without changing broker execution behavior.
+A staff-only, read-only Personal Trading Desk now unifies planned and approved
+setups, user-scoped price alerts, open execution records, journal state,
+performance navigation, and imported broker-statement availability. The page
+has an explicit query budget, cannot mutate orders, and labels reconciliation
+unavailable when no approved statement has been imported.
 
 ### R18 Integration and production hardening
 
@@ -235,10 +238,12 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 613 non-browser tests in 47.115 seconds. All 15
-browser-tagged tests passed separately in 93.685 seconds, covering 628 tests
+The current branch passed 615 non-browser tests in 45.766 seconds. All 15
+browser-tagged tests passed separately in 97.461 seconds, covering 630 tests
 without treating a stalled combined-run teardown as success evidence. The R15
 journey proves that validation, complete planning, and approval preserve actor
 and reason audit while direct execution requests remain blocked. R16 coverage
 proves that suggested questions remain provider-neutral and unavailable
-configuration cannot produce or persist substitute analysis.
+configuration cannot produce or persist substitute analysis. R17 coverage
+proves user alert isolation, staff and method controls, read-only broker safety,
+and the Personal Desk query budget.

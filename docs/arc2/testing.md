@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 628 discovered `test_` methods.
+* 630 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -276,6 +276,17 @@ The R16 governed intelligence slice passed:
 The tests verify provider-neutral suggested questions, credential-safe readiness,
 traceable provider-backed responses, staff access, and fail-closed behavior.
 Missing provider configuration produces no substitute snapshot.
+
+The R17 Personal Trading Desk slice passed:
+
+* 2 focused Personal Desk tests in 0.222 seconds
+* 10 access, navigation, and query-budget tests in 2.542 seconds
+* 615 non-browser tests in 45.766 seconds
+* 15 browser-tagged tests in 97.461 seconds
+
+The tests verify staff-only GET access, user-scoped alerts, manual planning
+visibility, explicit unavailable reconciliation, bounded queries, and zero
+broker-order or trade-execution creation from the desk.
 
 ## Latest Release 1 validation
 

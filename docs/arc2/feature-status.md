@@ -159,7 +159,11 @@ requirements with existing ARC capabilities.
   traceable evidence generation, and fail-closed unavailable behavior.
 * [ ] Activate governed ARC Intelligence after approved Azure OpenAI
   configuration.
-* [ ] Complete personal-desk broker reconciliation with approved statements.
+* [x] Add a staff-only, read-only Personal Trading Desk for plans,
+  user-scoped alerts, journal state, performance, and reconciliation evidence.
+* [x] Add the Personal Trading Desk to left navigation with an explicit request
+  query budget and no broker mutation path.
+* [ ] Complete broker reconciliation after approved statements are available.
 * [ ] Complete R18 integration, restore, independent security, and approved
   production gates.
 

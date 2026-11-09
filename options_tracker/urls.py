@@ -9,6 +9,7 @@ from . import (
     operations_views,
     opportunity_views,
     performance_views,
+    personal_views,
     radar_views,
     research_views,
     scanner_views,
@@ -79,6 +80,7 @@ urlpatterns = [
     path("investment-desk/", authenticated(investment_views.investment_desk), name="investment_desk"),
     path("fno-desk/", authenticated(fno_views.fno_desk), name="fno_desk"),
     path("strategy-lab/", authenticated(strategy_views.strategy_lab), name="strategy_lab"),
+    path("personal-desk/", personal_views.personal_desk, name="personal_desk"),
     path("performance/", authenticated(performance_views.performance_dashboard), name="performance_dashboard"),
     path("assistant/", ai_views.research_assistant, name="research_assistant"),
 ]

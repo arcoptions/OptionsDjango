@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 613 non-browser tests. The matrix records
+The current automated baseline is 615 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -63,6 +63,7 @@ feeds.
 | Requirement | Named automated evidence | Non-unit evidence | State |
 |---|---|---|---|
 | Trading Workspace manual controls | `test_manual_execution.py`, `test_radar_workspace.py` | Trading Workspace repeat loads passed at 1.379 to 2.968 seconds | Passed |
+| Personal Trading Desk | `PersonalDeskTests`, `RequestQueryBudgetTests.test_critical_operator_pages_stay_within_query_budgets` | Approved broker statement reconciliation remains open | Passed read-only scope |
 | Radar readiness and quote freshness | `test_radar_readiness.py`, `test_radar.py` | Production market-session monitoring remains required | Passed implemented scope |
 | Immutable radar history | `test_radar_history.py` | Production retention monitoring remains required | Passed |
 | NIFTY live collector safety | `test_cas_nowcast.py` | VM worker lease and market-session freshness remain required | Passed implemented scope |

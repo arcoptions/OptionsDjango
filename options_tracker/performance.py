@@ -5,4 +5,5 @@ REQUEST_QUERY_BUDGETS = {
     "home": 40,
     "operations_health": 28,
     "options_tracker": 24,
+    "personal_desk": 20,
 }
