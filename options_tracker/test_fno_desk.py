@@ -100,6 +100,13 @@ class FnoDeskTests(TestCase):
                 timestamp=now - timedelta(minutes=index),
                 implied_volatility=20 - index,
             )
+            IndexOptionCandle.objects.create(
+                underlying="NIFTY",
+                relative_strike="ATM",
+                option_type="PUT",
+                timestamp=now - timedelta(hours=1, minutes=index),
+                implied_volatility=99,
+            )
 
         with self.assertNumQueries(2):
             first = iv_percentile_rows(["NIFTY"])
@@ -107,3 +114,4 @@ class FnoDeskTests(TestCase):
             second = iv_percentile_rows(["NIFTY"])
 
         self.assertEqual(first, second)
+        self.assertEqual(first[0]["observations"], 20)

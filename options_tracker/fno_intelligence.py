@@ -13,23 +13,39 @@ IV_PERCENTILE_CACHE_SECONDS = 60
 def iv_percentile_rows(underlyings):
     results = []
     for underlying in sorted(set(underlyings)):
-        queryset = IndexOptionCandle.objects.filter(
+        latest = IndexOptionCandle.objects.filter(
             underlying=underlying,
             implied_volatility__gt=0,
-        ).order_by("-timestamp")
-        latest_timestamp = queryset.values_list("timestamp", flat=True).first()
-        if latest_timestamp is None:
+        ).order_by("-timestamp").values(
+            "timestamp",
+            "expiry_flag",
+            "expiry_code",
+            "relative_strike",
+            "option_type",
+            "interval_minutes",
+        ).first()
+        if latest is None:
             continue
         cache_key = (
-            f"arc:iv-percentile:v1:{underlying}:"
-            f"{latest_timestamp.timestamp()}"
+            f"arc:iv-percentile:v2:{underlying}:"
+            f"{latest['expiry_flag']}:{latest['expiry_code']}:"
+            f"{latest['relative_strike']}:{latest['option_type']}:"
+            f"{latest['interval_minutes']}:{latest['timestamp'].timestamp()}"
         )
         cached = cache.get(cache_key)
         if cached is not None:
             results.append(cached)
             continue
         rows = list(
-            queryset.values(
+            IndexOptionCandle.objects.filter(
+                underlying=underlying,
+                expiry_flag=latest["expiry_flag"],
+                expiry_code=latest["expiry_code"],
+                relative_strike=latest["relative_strike"],
+                option_type=latest["option_type"],
+                interval_minutes=latest["interval_minutes"],
+                implied_volatility__gt=0,
+            ).order_by("-timestamp").values(
                 "timestamp",
                 "implied_volatility",
                 "relative_strike",

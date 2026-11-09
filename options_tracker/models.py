@@ -424,7 +424,19 @@ class IndexOptionCandle(models.Model):
                 name="unique_index_option_candle",
             )
         ]
-        indexes = [models.Index(fields=["underlying", "-timestamp"], name="idx_candle_under_time")]
+        indexes = [
+            models.Index(fields=["underlying", "-timestamp"], name="idx_candle_under_time"),
+            models.Index(
+                fields=[
+                    "underlying",
+                    "relative_strike",
+                    "option_type",
+                    "interval_minutes",
+                    "-timestamp",
+                ],
+                name="idx_candle_iv_series_time",
+            ),
+        ]
 
 
 class AppSetting(models.Model):
