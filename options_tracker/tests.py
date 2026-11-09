@@ -2568,6 +2568,26 @@ class ReferenceDataSeedTests(TestCase):
 		self.assertEqual(stock.realised_pnl, Decimal("-4321.05"))
 		self.assertEqual(stock.strike_step, Decimal("12.50"))
 
+	def test_create_missing_preserves_existing_broker_derived_values(self):
+		existing = TrackedStock.objects.create(
+			symbol="RELIANCE",
+			security_id="verified-local-id",
+			contracts_traded=999,
+			realised_pnl=Decimal("1234.56"),
+		)
+
+		call_command(
+			"seed_reference_data",
+			"--create-missing",
+			stdout=StringIO(),
+		)
+		existing.refresh_from_db()
+
+		self.assertEqual(existing.security_id, "verified-local-id")
+		self.assertEqual(existing.contracts_traded, 999)
+		self.assertEqual(existing.realised_pnl, Decimal("1234.56"))
+		self.assertGreater(TrackedStock.objects.count(), 100)
+
 
 class SwingAlertTests(TestCase):
 	"""Strength dips: features match the research, the book moves the way the simulation did."""

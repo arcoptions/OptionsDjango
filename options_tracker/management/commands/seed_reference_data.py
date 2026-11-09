@@ -51,15 +51,22 @@ class Command(BaseCommand):
                             help="Write the fixture from this database instead of reading it.")
         parser.add_argument("--dry-run", action="store_true",
                             help="Report what would change and write nothing.")
+        parser.add_argument(
+            "--create-missing",
+            action="store_true",
+            help="Create missing symbols without overwriting existing broker-derived rows.",
+        )
         parser.add_argument("--fixture", default="",
                             help="Read or write somewhere other than the tracked copy.")
 
     def handle(self, *args, **options):
         path = Path(options["fixture"]) if options["fixture"] else FIXTURE
         if options["dump"]:
+            if options["create_missing"]:
+                raise CommandError("--create-missing cannot be combined with --dump")
             self._dump(path, options["dry_run"])
         else:
-            self._load(path, options["dry_run"])
+            self._load(path, options["dry_run"], options["create_missing"])
 
     # -- out ----------------------------------------------------------------
 
@@ -85,7 +92,7 @@ class Command(BaseCommand):
 
     # -- in -----------------------------------------------------------------
 
-    def _load(self, path, dry_run):
+    def _load(self, path, dry_run, create_missing):
         try:
             rows = json.loads(path.read_text(encoding="utf-8"))
         except OSError as exc:
@@ -97,23 +104,32 @@ class Command(BaseCommand):
         created = [row for row in rows if row["symbol"] not in held]
         changed = [row for row in rows
                    if row["symbol"] in held and self._differs(row, held[row["symbol"]])]
+        if create_missing:
+            changed = []
 
         if dry_run:
-            self.stdout.write("{} to create, {} to update, {} already current".format(
-                len(created), len(changed), len(rows) - len(created) - len(changed)))
+            unchanged = len(rows) - len(created) - len(changed)
+            self.stdout.write("{} to create, {} to update, {} preserved or current".format(
+                len(created), len(changed), unchanged))
             return
 
         with transaction.atomic():
             for row in rows:
                 symbol = row["symbol"]
+                if create_missing and symbol in held:
+                    continue
                 TrackedStock.objects.update_or_create(
                     symbol=symbol,
                     defaults={key: self._as_field(key, value)
                               for key, value in row.items() if key != "symbol"},
                 )
         self.stdout.write(self.style.SUCCESS(
-            "{} stock(s) seeded ({} new, {} updated)".format(
-                len(rows), len(created), len(changed))))
+            "{} stock(s) considered ({} new, {} updated, {} preserved)".format(
+                len(rows),
+                len(created),
+                len(changed),
+                len(rows) - len(created) - len(changed),
+            )))
         # Naming the next steps here because this command is the first thing
         # run on a fresh host, and on its own it leaves /shortlist/ still empty.
         self.stdout.write("")
