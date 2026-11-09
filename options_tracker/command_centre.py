@@ -1,6 +1,6 @@
 """Unified, evidence-aware read model for the ARC home page."""
 
-from datetime import timedelta
+from datetime import time, timedelta
 
 from django.urls import reverse
 from django.utils import timezone
@@ -9,6 +9,7 @@ from .action_workspace import action_list_context
 from .market_context import market_context_evidence
 from .models import (
     AIBriefingSnapshot,
+    EconomicEvent,
     IndexOISnapshot,
     StockFundamentalSnapshot,
     StockScoreSnapshot,
@@ -21,6 +22,86 @@ from .radar_models import RadarQuote
 
 
 INVESTMENT_EVIDENCE_MAX_AGE = timedelta(days=120)
+MARKET_SESSION_WINDOWS = (
+    ("PRE_MARKET", "Pre-Market", "Before 09:15 IST"),
+    ("OPENING_DRIVE", "Opening Drive", "09:15-10:30 IST"),
+    ("MIDDAY", "Midday", "10:30-14:00 IST"),
+    ("POWER_HOUR", "Power Hour", "14:00-15:30 IST"),
+    ("AFTER_HOURS", "After Hours", "After 15:30 IST"),
+)
+
+
+def market_session_context(now=None):
+    now = timezone.localtime(now or timezone.now())
+    local_time = now.time()
+    weekend = now.weekday() >= 5
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    holiday = None
+    if not weekend:
+        holiday = (
+            EconomicEvent.objects.filter(
+                starts_at__gte=day_start,
+                starts_at__lt=day_end,
+                event_type__in=("MARKET_HOLIDAY", "EXCHANGE_HOLIDAY"),
+            )
+            .order_by("starts_at", "pk")
+            .first()
+        )
+
+    if weekend or holiday:
+        active_key = "AFTER_HOURS"
+    elif local_time < time(9, 15):
+        active_key = "PRE_MARKET"
+    elif local_time < time(10, 30):
+        active_key = "OPENING_DRIVE"
+    elif local_time < time(14):
+        active_key = "MIDDAY"
+    elif local_time < time(15, 30):
+        active_key = "POWER_HOUR"
+    else:
+        active_key = "AFTER_HOURS"
+
+    sessions = [
+        {
+            "key": key,
+            "label": label,
+            "window": window,
+            "active": key == active_key,
+        }
+        for key, label, window in MARKET_SESSION_WINDOWS
+    ]
+    active = next(session for session in sessions if session["active"])
+    if weekend:
+        calendar_state = "WEEKEND"
+        calendar_source = "Deterministic weekday rule"
+        warning = ""
+    elif holiday:
+        calendar_state = "VERIFIED_HOLIDAY"
+        calendar_source = f"{holiday.provider}: {holiday.title}"
+        warning = ""
+    else:
+        calendar_state = "SCHEDULE_ONLY"
+        calendar_source = "Indian cash-market clock"
+        warning = (
+            "No attributed exchange-holiday record exists for this date. "
+            "Session timing is schedule evidence, not proof that the exchange is open."
+        )
+    return {
+        "key": active["key"],
+        "label": active["label"],
+        "market_open": active["key"] in {
+            "OPENING_DRIVE",
+            "MIDDAY",
+            "POWER_HOUR",
+        } and not weekend and holiday is None,
+        "sessions": sessions,
+        "calendar_state": calendar_state,
+        "calendar_source": calendar_source,
+        "warning": warning,
+        "trading_date": now.date(),
+        "generated_at": now,
+    }
 
 
 def _index_card(underlying, now):
@@ -209,6 +290,7 @@ def command_centre_context(now=None):
     ).first()
     return {
         "generated_at": now,
+        "market_session": market_session_context(now),
         "indexes": indexes,
         "breadth": breadth,
         "regime": regime,

@@ -7,9 +7,9 @@ description: Test strategy, current coverage, release gates, and validation requ
 
 The application currently has:
 
-* 35 `test*.py` files.
-* 73 test classes ending in `Tests`.
-* 575 discovered `test_` methods.
+* 38 `test*.py` files.
+* 76 test classes ending in `Tests`.
+* 607 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -204,6 +204,20 @@ Release 0 requires no application test run because it changes documentation only
 * Valid relative links.
 * No runtime or migration changes.
 * Git diff limited to `docs/arc2`.
+
+## Latest expansion validation
+
+The first R11 Market Pulse slice passed:
+
+* 11 focused Command Centre and Release Dashboard tests
+* The critical-page database query budget
+* 592 non-browser tests in 112.557 seconds
+* 607 total tests in 201.432 seconds
+* Django system checks during both complete runs
+
+The session tests cover all five time windows, weekend closure, attributed
+holiday closure, one active session, and fail-honest schedule-only behavior.
+No migration or JSON API change was introduced.
 
 ## Latest Release 1 validation
 

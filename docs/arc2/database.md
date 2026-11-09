@@ -102,6 +102,18 @@ Data that influences a decision should preserve:
 * Confirm App Service and VM code compatibility.
 * Advance the deployed commit marker only after migration success.
 
+## R11 Market Pulse database impact
+
+The first session-awareness slice has no migration. It reads attributed
+`EconomicEvent` rows with event type `MARKET_HOLIDAY` or
+`EXCHANGE_HOLIDAY` when available. A weekday without such evidence remains
+explicitly schedule-only rather than being recorded as a verified trading
+day.
+
+Historical breadth, breakout, technical-pattern, and event-reaction models are
+deferred until their write paths, retention, indexes, and query volumes are
+measured.
+
 ## Planned work
 
 No ARC 2.0 schema is approved. The next database activity is read-only identity reconciliation. See [database impact analysis](./04-database-impact-analysis.md).

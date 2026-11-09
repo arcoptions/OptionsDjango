@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 590 non-browser tests. The matrix records
+The current automated baseline is 592 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -36,6 +36,7 @@ feeds.
 | Requirement | Named automated evidence | Non-unit evidence | State |
 |---|---|---|---|
 | Command Centre ranks current evidence | `CommandCentreTests` | Command Centre browser journey remains to be recorded for this commit | Passed automated scope |
+| Five-state market session context | `CommandCentreTests.test_market_session_context_classifies_five_windows`, `test_market_session_context_closes_weekends_and_verified_holidays` | Approved exchange-holiday feed remains open; weekdays without attributed holiday evidence are labeled schedule-only | Passed implemented scope |
 | Market context fails unavailable | `test_market_context.py` | Approved market-context provider remains open | Passed implemented scope |
 | Opportunity identity and revisions | `test_opportunities.py` | 152 tip opportunities plus five canonical scanner opportunities; scanner rerun retained one revision each | Passed |
 | Canonical instrument reconciliation | `test_instrument_identity.py` | 74,917 staging mappings and zero unmapped radar instruments | Passed |

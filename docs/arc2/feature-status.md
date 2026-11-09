@@ -119,6 +119,27 @@ checklist.
 * [ ] Move workers only after ownership and idempotency proof.
 * [ ] Retire duplicate identity fields only after verified backfill.
 
+## Expansion R10-R18
+
+The [master expansion plan](./MASTER_EXPANSION_PLAN.md) reconciles the new
+Market Pulse, breakout, technical, event, intelligence, and personal-desk
+requirements with existing ARC capabilities.
+
+* [x] Reconcile the R10 market-data and universe foundation with verified
+  activation evidence and explicit provider blockers.
+* [x] Add five evidence-aware Indian market-session states to the Command
+  Centre without claiming an unverified exchange holiday calendar.
+* [ ] Add configurable market universes and advanced breadth distributions.
+* [ ] Add reproducible breakout taxonomy, validation, ranking, and cards.
+* [ ] Add persisted technical patterns, support/resistance, automatic levels,
+  and multi-timeframe agreement.
+* [ ] Activate verified event ingestion, timelines, and price reactions.
+* [ ] Extend unified opportunities into the remaining trade-setup lifecycle.
+* [ ] Activate governed ARC Intelligence after Azure OpenAI configuration.
+* [ ] Complete personal-desk broker reconciliation with approved statements.
+* [ ] Complete R18 integration, restore, independent security, and approved
+  production gates.
+
 ## Legacy-gated
 
 * NIFTY automatic live order placement behind explicit `legacy_auto` mode.

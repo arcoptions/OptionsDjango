@@ -4,6 +4,36 @@
 
 {% block content %}
 <section class="panel">
+  <div class="page-head">
+    <div>
+      <h2 style="margin:0 0 6px;">Market session</h2>
+      <p class="muted">
+        {{ command.market_session.trading_date|date:"d M Y" }} ·
+        {{ command.market_session.calendar_source }}
+      </p>
+    </div>
+    <div class="msg {% if command.market_session.market_open %}success{% else %}warning{% endif %}" style="margin:0;">
+      <strong>{{ command.market_session.label }}</strong><br>
+      {% if command.market_session.market_open %}Scheduled cash-market session{% else %}Market entries are not assumed open{% endif %}
+    </div>
+  </div>
+  <div class="grid">
+    {% for session in command.market_session.sessions %}
+    <article class="card" style="{% if session.active %}border-color:#d1a553;{% endif %}">
+      <div class="row">
+        <strong>{{ session.label }}</strong>
+        {% if session.active %}<span class="active-pill">Current</span>{% endif %}
+      </div>
+      <p class="muted">{{ session.window }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  {% if command.market_session.warning %}
+  <div class="msg warning">{{ command.market_session.warning }}</div>
+  {% endif %}
+</section>
+
+<section class="panel">
   <div class="page-head" style="margin-bottom:0;">
     <div>
       <h2 style="margin:0 0 6px;">9 AM Command Centre</h2>
