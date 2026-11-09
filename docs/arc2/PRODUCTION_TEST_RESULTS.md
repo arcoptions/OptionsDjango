@@ -10,8 +10,8 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Application commit | Passed | `c55c9fb3217f1802be9751bc2c49b9a0f24cd093` |
-| GitHub Actions | Passed | Runs `42663557008` and `42663576656` |
+| Application commit | Passed | `09561ac2a05929f62955b89da734d6909263f275` |
+| GitHub Actions | Passed | Reruns `42673171903` and `42673181295` passed on exact commit `09561ac` |
 | Django tests | Passed | 587 non-browser tests in 152.722 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
@@ -19,7 +19,9 @@ approved or deployed to production.
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Deployment `c7a2084f`; commit `c55c9fb` reported through deployment health |
+| Staging deployment | Passed for tested commit | Deployment `a4b8e0bb-443d-4fd6-bdb3-2998217f9dd3`; exact commit `09561ac` reported through deployment health |
+| Strategy Lab activation | Passed in staging | Five immutable manifests reproduced independently from 860 real Dhan-equity candles |
+| Live security probes | Passed bounded scope | Access, CSRF, HTTPS, TRACE, sensitive-path, and response-header checks passed; independent penetration evidence remains open |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
 | Opportunity activation | Passed with identity gap | 152 opportunities and 152 revisions; 40 canonical links |
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
@@ -42,10 +44,11 @@ python manage.py collectstatic --noinput
 python manage.py test --exclude-tag=browser
 ```
 
-Runs `42663557008` and `42663576656` completed successfully against commit
-`c55c9fb`. They audited production requirements with `pip-audit`, scanned
-application source with Bandit at medium-and-higher severity, and repeated the
-complete application validation.
+Reruns `42673171903` and `42673181295` passed against exact commit `09561ac`.
+Their first attempts ended before creating jobs or logs because of a transient
+GitHub workflow-start failure. The successful reruns passed the production
+dependency audit, Bandit medium-and-higher scan, migration check, Django
+checks, static collection, and complete non-browser suite.
 
 The current activation branch passed 587 non-browser tests locally after the
 credential-confined history capture and scanner synchronization workflow was
@@ -198,6 +201,46 @@ Confirmed configurable scanner matches now synchronize into canonical
 opportunities with stable source references. Repeated synchronization remains
 idempotent.
 
+## Strategy Lab activation
+
+Staging now contains one bounded 15-minute momentum definition for each equity
+in the Dhan history pilot. Each immutable manifest used 172 stored candles,
+the realistic configured cost model, and exact package commit
+`09561ac2a05929f62955b89da734d6909263f275`.
+
+| Symbol | Trades | Expectancy | Validation expectancy | Manifest SHA-256 |
+|---|---:|---:|---:|---|
+| HDFCBANK | 32 | 0.0361% | -0.3323% | `d7b01d6acb66bf5689a7ad3f6c9009e7fedef5f645ef66c66c70d9ef32af8d9c` |
+| ICICIBANK | 31 | 0.1280% | 0.0464% | `105c89f68f4cce6457e52a410c86261cf4cc2c05ac07c1c86b6d017fb46d5262` |
+| INFY | 20 | -0.3805% | -0.6469% | `c15c01fe9b658744419921597755d18c3a28a1ddf366a4b893c72e2bd5fb6f32` |
+| RELIANCE | 26 | 0.1221% | -0.3013% | `dcde3751928eff01efeb84734c48e163492371d7469f00f1ef026bcf92c38df2` |
+| TCS | 17 | -0.3056% | -0.6531% | `20943d54a271f179f705852d1bfbfe2a8dcb38f6adb371cdc6f836c57556d8a3` |
+
+For every manifest, an independent query recomputed the candle SHA-256 and
+backtest result. Both matched the stored evidence. Recreating the same manifest
+returned the existing identity rather than inserting a duplicate. All five
+70/30 chronological validations completed. The results are intentionally not
+promoted: only ICICIBANK had positive validation expectancy, and no live or
+paper execution was enabled.
+
+## Live security validation
+
+Bounded unauthenticated probes against staging verified:
+
+* Seven protected application routes redirected to the login page
+* Missing-CSRF login submission returned HTTP 403
+* Public endpoints rejected TRACE with HTTP 405
+* HTTP redirected to HTTPS with HTTP 301
+* `.env`, `.git/config`, `DEPLOYED_SHA`, debug, and server-status paths returned
+  HTTP 404
+* HSTS, `nosniff`, same-origin referrer policy, and frame denial headers were
+  present
+
+Content-Security-Policy and Permissions-Policy headers are not currently set.
+They remain hardening candidates because adding them safely requires an
+inventory of the existing inline scripts and browser regression coverage.
+Independent external penetration evidence remains a separate release gate.
+
 ## Bugs found and fixed
 
 | Defect | Resolution |
@@ -214,6 +257,7 @@ idempotent.
 | Dhan rolling-option history rejected documented payloads | Explicit equity-only fallback; option gate remains open |
 | Scanners could not consume imported stock candles | History-backed scanner source with notifications suppressed |
 | First post-deploy management connection timed out | Verified PostgreSQL `Ready`, retried with bounded connection recovery, and completed synchronization |
+| Strategy manifests trusted a stale App Service commit setting | Exact packaged commit now takes precedence, with stale-setting regression coverage |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
 | Release gates mixed the prior production baseline with current activation | Activation-specific pending states |
 | Stock counts disagreed | Active-only dashboard count |
@@ -222,8 +266,8 @@ idempotent.
 ## Open test gates
 
 * Resolve Dhan rolling-option `DH-905` responses and complete option history.
-* Reproduce strategy results from immutable manifests.
-* Complete external penetration evidence.
+* Complete external penetration evidence, including reviewed CSP and
+  Permissions-Policy rollout.
 * Restore the production point-in-time backup to a temporary server and
   rehearse the release migrations.
 * Obtain explicit production approval.

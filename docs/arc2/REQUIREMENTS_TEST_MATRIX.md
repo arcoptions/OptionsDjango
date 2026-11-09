@@ -20,14 +20,15 @@ feeds.
 |---|---|---|---|
 | Authenticated application routes | `LegacyMutationAccessTests.test_read_only_application_pages_require_an_authenticated_session` | Authenticated staging smoke | Passed |
 | Staff-only mutations | `LegacyMutationAccessTests.test_anonymous_and_non_staff_users_cannot_mutate_legacy_routes` | Staff staging session | Passed |
-| CSRF and POST mutation controls | `LegacyMutationAccessTests.test_staff_mutations_reject_missing_csrf_token`, `test_scanner_sync_requires_post_and_staff`, `test_archive_run_requires_post_and_staff` | External penetration evidence remains open | Passed automated scope |
+| CSRF and POST mutation controls | `LegacyMutationAccessTests.test_staff_mutations_reject_missing_csrf_token`, `test_scanner_sync_requires_post_and_staff`, `test_archive_run_requires_post_and_staff` | Live missing-CSRF probe returned HTTP 403; external penetration evidence remains open | Passed tested scope |
 | Manual-first execution | `test_manual_execution.py` and execution-mode tests in `tests.py` | Production manual mode verified | Passed |
 | Preview blocks broker mutation | `test_manual_execution.py` and `test_activation_smoke.py` | Staging reports preview mode | Passed |
 | Legacy automatic mode requires opt-in | `ActivationSmokeTests.test_legacy_auto_requires_explicit_smoke_override` | No automatic activation performed | Passed |
 | Staging cannot own the token or workers | `test_staging_settings.py` | Staging settings and environment verified | Passed |
 | Versioned polling API contracts | `PollingApiContractTests` | Browser console showed no contract errors on tested routes | Passed |
 | Rate-limited integration intake | `test_rate_limit.py` | Shared-cache distributed limiting remains open | Passed implemented scope |
-| Deployment health reports exact commit | Deployment-health tests in `tests.py` | Exact staging commit verification required after each deployment | Passed implemented scope |
+| Deployment health reports exact commit | Deployment-health tests in `tests.py` | Staging reported exact commit `09561ac` after deployment handoff | Passed |
+| Live HTTP security controls | Access, method, and CSRF tests | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, and baseline security headers probed on staging; CSP, Permissions-Policy, and independent penetration evidence remain open | Passed bounded scope |
 
 ## Research and decision requirements
 
@@ -58,8 +59,8 @@ feeds.
 | NIFTY live collector safety | `test_cas_nowcast.py` | VM worker lease and market-session freshness remain required | Passed implemented scope |
 | Trade journal lifecycle | `test_trade_journal.py` | Trade Journal browser journey remains to be recorded for this commit | Passed automated scope |
 | Broker P&L analytics | `test_performance_analytics.py` | Approved broker statement import remains open | Partial activation |
-| Strategy backtest chronology and costs | `test_strategy_backtest.py`, `test_dynamic_strategy.py` | Immutable production manifests and independent reruns remain open | Partial activation |
-| Strategy Lab storage and access | `test_strategy_lab.py` | Strategy Lab browser journey remains to be recorded for this commit | Passed automated scope |
+| Strategy backtest chronology and costs | `test_strategy_backtest.py`, `test_dynamic_strategy.py` | Five immutable staging manifests used 172 real bars each; independent hashes and results matched, and chronological validation completed | Passed staging scope |
+| Strategy Lab storage and access | `test_strategy_lab.py`, including exact packaged-commit precedence | Five definitions and manifests persisted on exact commit `09561ac`; no strategy was promoted | Passed staging scope |
 | Performance budgets | `test_performance_budgets.py` | Quiet staging timings passed for Release Dashboard, Opportunity Inbox, and Trading Workspace | Passed tested routes |
 
 ## Operations and release requirements
