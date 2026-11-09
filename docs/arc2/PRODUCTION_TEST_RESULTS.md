@@ -12,7 +12,7 @@ approved or deployed to production.
 |---|---|---|
 | Application commit | Passed | `67cfa95eef47f4ada1359311b8a83ef9117761c8` |
 | GitHub Actions | Passed | Run `42621150014` |
-| Django tests | Passed | 571 non-browser tests in 61.388 seconds |
+| Django tests | Passed | 579 non-browser tests in 107.121 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
@@ -25,6 +25,7 @@ approved or deployed to production.
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
 | Dhan master | Passed with alias fix | 194 direct matches and one verified provider rename |
 | Stock history | Blocked in staging | No trading-capable Dhan token copied into staging |
+| Safe history transfer | Passed in tests | Read-only capture and dry-run-first sanitized import |
 | Browser smoke | Passed with fixes | Five authenticated critical routes rendered without console or overflow errors |
 | Production backup | Passed for backup existence | 14-day retention and 11 visible automatic full backups |
 | Restore rehearsal | Not run | Temporary billable server requires explicit approval |
@@ -47,6 +48,9 @@ Security workflow run `42623063766` completed successfully against workflow
 commit `5b9ee3e`. It audited production requirements with `pip-audit`, scanned
 application source with Bandit at medium-and-higher severity, and repeated the
 complete application validation.
+
+The current activation branch passed 579 non-browser tests locally after the
+credential-confined history capture and import workflow was added.
 
 Route regression coverage verifies:
 
@@ -166,7 +170,9 @@ Workspace to 2.40 seconds.
 | Existing stock fixture values could be overwritten | Create-missing mode |
 | Ten-day pilot could not be expressed | Exact `--days` lookback |
 | Dhan provider renamed `ICICIPRULI` | Explicit `ICICILIFE` provider alias |
+| Historical pilot required token exposure in staging | Credential-confined capture and sanitized fixture import |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
+| Release gates mixed the prior production baseline with current activation | Activation-specific pending states |
 | Stock counts disagreed | Active-only dashboard count |
 | Opportunity Inbox repeated its heading | Removed duplicate heading |
 

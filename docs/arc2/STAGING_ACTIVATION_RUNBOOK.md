@@ -112,6 +112,31 @@ Verify:
 
 ## Phase 6: Historical data pilot
 
+Keep the Dhan token on its designated VM. Capture a credential-free fixture:
+
+```text
+python manage.py capture_stock_history_fixture ^
+  C:\arc-transfer\dhan-history-5x10.json ^
+  --days=10 ^
+  --limit=5 ^
+  --interval=15
+```
+
+Validate the transferred fixture in staging without changing the database:
+
+```text
+python manage.py import_stock_history_fixture ^
+  C:\arc-transfer\dhan-history-5x10.json
+```
+
+Apply it only after the hash and row counts are reviewed:
+
+```text
+python manage.py import_stock_history_fixture ^
+  C:\arc-transfer\dhan-history-5x10.json ^
+  --apply
+```
+
 Run a limited pilot before a full backfill:
 
 1. Refresh the Dhan master.
@@ -123,6 +148,9 @@ Run a limited pilot before a full backfill:
 
 Do not derive 3-minute or 30-minute bars unless complete lower-interval source
 bars exist.
+
+Follow [Historical Data Transfer](./HISTORICAL_DATA_TRANSFER.md) for credential
+boundaries, validation rules, idempotency checks, and acceptance evidence.
 
 ## Phase 7: Browser and performance checks
 
@@ -161,4 +189,3 @@ Staging is ready for production review only when:
 * Browser and performance evidence is recorded
 * A production backup is planned
 * The operator grants explicit production approval
-

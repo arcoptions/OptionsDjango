@@ -245,6 +245,19 @@ def _stamp(epoch):
 
 
 def fetch_equity(symbol, security_id, start, end, interval=15):
+    rows, error = get_equity_bars(symbol, security_id, start, end, interval)
+    if error:
+        return 0, error
+    StockEquityCandle.objects.bulk_create(
+        [StockEquityCandle(**row) for row in rows],
+        ignore_conflicts=True,
+        batch_size=2000,
+    )
+    return len(rows), ""
+
+
+def get_equity_bars(symbol, security_id, start, end, interval=15):
+    """Fetch normalized equity bars without writing database rows."""
     payload = {
         "securityId": str(security_id), "exchangeSegment": "NSE_EQ", "instrument": "EQUITY",
         "interval": str(interval), "oi": False,
@@ -255,19 +268,22 @@ def fetch_equity(symbol, security_id, start, end, interval=15):
         return 0, error
     stamps = data.get("timestamp") or []
     if not stamps:
-        return 0, ""
+        return [], ""
     value = lambda name, index: (data.get(name) or [None] * len(stamps))[index]
-    candles = [
-        StockEquityCandle(
-            symbol=symbol, interval_minutes=interval, timestamp=_stamp(epoch),
-            open=value("open", index), high=value("high", index),
-            low=value("low", index), close=value("close", index),
-            volume=int(value("volume", index) or 0),
-        )
+    rows = [
+        {
+            "symbol": symbol,
+            "interval_minutes": interval,
+            "timestamp": _stamp(epoch),
+            "open": value("open", index),
+            "high": value("high", index),
+            "low": value("low", index),
+            "close": value("close", index),
+            "volume": int(value("volume", index) or 0),
+        }
         for index, epoch in enumerate(stamps)
     ]
-    StockEquityCandle.objects.bulk_create(candles, ignore_conflicts=True, batch_size=2000)
-    return len(candles), ""
+    return rows, ""
 
 
 # --------------------------------------------------------------------------
@@ -276,6 +292,37 @@ def fetch_equity(symbol, security_id, start, end, interval=15):
 
 def fetch_rolling(symbol, security_id, relative, option_type, start, end,
                   interval=15, expiry_code=1):
+    rows, error = get_rolling_bars(
+        symbol,
+        security_id,
+        relative,
+        option_type,
+        start,
+        end,
+        interval,
+        expiry_code,
+    )
+    if error:
+        return 0, error
+    StockOptionCandle.objects.bulk_create(
+        [StockOptionCandle(**row) for row in rows],
+        ignore_conflicts=True,
+        batch_size=2000,
+    )
+    return len(rows), ""
+
+
+def get_rolling_bars(
+    symbol,
+    security_id,
+    relative,
+    option_type,
+    start,
+    end,
+    interval=15,
+    expiry_code=1,
+):
+    """Fetch normalized rolling-option bars without writing database rows."""
     payload = {
         "exchangeSegment": "NSE_FNO", "interval": str(interval), "securityId": str(security_id),
         "instrument": "OPTSTK", "expiryFlag": "MONTH", "expiryCode": expiry_code,
@@ -289,28 +336,35 @@ def fetch_rolling(symbol, security_id, relative, option_type, start, end,
     side = (data.get("data") or {}).get("ce" if option_type == "CALL" else "pe") or {}
     stamps = side.get("timestamp") or []
     if not stamps:
-        return 0, ""
+        return [], ""
     fields = {
         name: side.get(name) or []
         for name in ("strike", "spot", "open", "high", "low", "close", "volume", "oi", "iv")
     }
     value = lambda name, index: fields[name][index] if index < len(fields[name]) else None
-    seen, candles = set(), []
+    seen, rows = set(), []
     for index, epoch in enumerate(stamps):
         if epoch in seen:
             continue
         seen.add(epoch)
-        candles.append(StockOptionCandle(
-            symbol=symbol, expiry_code=expiry_code, relative_strike=relative,
-            option_type=option_type, interval_minutes=interval, timestamp=_stamp(epoch),
-            strike=value("strike", index), spot=value("spot", index),
-            open=value("open", index), high=value("high", index),
-            low=value("low", index), close=value("close", index),
-            volume=int(value("volume", index) or 0), oi=int(value("oi", index) or 0),
-            implied_volatility=float(value("iv", index) or 0),
-        ))
-    StockOptionCandle.objects.bulk_create(candles, ignore_conflicts=True, batch_size=2000)
-    return len(candles), ""
+        rows.append({
+            "symbol": symbol,
+            "expiry_code": expiry_code,
+            "relative_strike": relative,
+            "option_type": option_type,
+            "interval_minutes": interval,
+            "timestamp": _stamp(epoch),
+            "strike": value("strike", index),
+            "spot": value("spot", index),
+            "open": value("open", index),
+            "high": value("high", index),
+            "low": value("low", index),
+            "close": value("close", index),
+            "volume": int(value("volume", index) or 0),
+            "oi": int(value("oi", index) or 0),
+            "implied_volatility": float(value("iv", index) or 0),
+        })
+    return rows, ""
 
 
 # --------------------------------------------------------------------------
