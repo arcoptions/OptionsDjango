@@ -10,18 +10,18 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Application commit | Passed | `cd11d4a586d5a5991d47b4eca8567e05c46be546` |
-| GitHub Actions | Passed | Runs `42679900378` and `42679916268` passed on exact commit `cd11d4a` |
-| Django tests | Passed | 589 non-browser tests in 123.847 seconds |
-| Dependency audit | Passed | `pip-audit` in run `42623063766` |
-| Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
+| Application commit | Passed | `1c3abeefd8ab809e6e7607d380c98480e7682928` |
+| GitHub Actions | Passed | Runs `42689607178` and `42689616700` passed on exact commit `1c3abee` |
+| Django tests | Passed | 590 non-browser tests in 83.898 seconds; 605 total tests in 170.236 seconds |
+| Dependency audit | Passed | `pip-audit` in run `42689616700` |
+| Static security scan | Passed | Bandit medium-and-higher gate in run `42689616700` |
 | Django checks | Passed | No issues |
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Deployment `1dccabdc-aff3-4b09-a68c-a8429be357d7`; exact commit `cd11d4a` reported through deployment health |
+| Staging deployment | Passed for tested commit | Deployment `186a7721-b00a-48d0-b65a-94e32eab2b06`; exact commit `1c3abee` reported through deployment health |
 | Strategy Lab activation | Passed in staging | Five immutable manifests reproduced independently from 860 real Dhan-equity candles |
-| Live security probes | Passed bounded scope | Access, CSRF, HTTPS, TRACE, sensitive-path, and response-header checks passed; independent penetration evidence remains open |
+| Live security probes | Passed bounded scope | Access, CSRF, HTTPS, TRACE, sensitive-path, and response-header checks passed; passive ZAP reported zero high or medium findings; independent penetration evidence remains open |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
 | Opportunity activation | Passed with identity gap | 152 opportunities and 152 revisions; 40 canonical links |
 | Stock universe | Passed | 197 reviewed rows and 195 active rows |
@@ -44,14 +44,15 @@ python manage.py collectstatic --noinput
 python manage.py test --exclude-tag=browser
 ```
 
-Runs `42679900378` and `42679916268` passed against exact commit `cd11d4a`.
+Runs `42689607178` and `42689616700` passed against exact commit `1c3abee`.
 They passed the production dependency audit, Bandit medium-and-higher scan,
 migration check, Django checks, static collection, and complete non-browser
 suite.
 
-The current activation branch passed 589 non-browser tests after the
-credential-confined history capture and scanner synchronization workflow was
-added.
+The current activation branch passed 590 non-browser tests in 83.898 seconds.
+The complete 605-test run, including browser-tagged tests, passed in 170.236
+seconds. The strict-CSP browser regression no longer relies on page-side string
+evaluation.
 
 Route regression coverage verifies:
 
@@ -183,8 +184,13 @@ and TCS.
 * Option rows: 0
 
 Dhan accepted the equity-history requests but returned `DH-905` for every
-documented rolling-option payload tested, including index and stock
-instruments. The equity-only fallback preserves real scanner evidence without
+documented rolling-option payload tested. The final read-only VM probe covered
+12 combinations: RELIANCE `OPTSTK` security ID `2885` and NIFTY `OPTIDX`
+security ID `13`, each with `MONTH` and `WEEK` flags and expiry codes `0`, `1`,
+and `2`. Expiry code `0` returned `expiryCode is required`; codes `1` and `2`
+returned missing-field or bad-value errors. The same token continued to serve
+equity history, so account or provider-backend confirmation remains the next
+action. The equity-only fallback preserves real scanner evidence without
 claiming that option history is active.
 
 ## Persisted-bar scanner activation
@@ -238,11 +244,27 @@ Bounded unauthenticated probes against staging verified:
   present
 
 The browser resource inventory found no third-party executable assets.
-Enforced Content-Security-Policy now restricts active content to the
-application origin while temporarily allowing the existing inline scripts and
-styles. Permissions-Policy disables camera, geolocation, microphone, payment,
-and USB access. Independent external penetration evidence remains a separate
-release gate.
+Content-Security-Policy now uses a request-scoped nonce for script and style
+blocks, denies script attributes, and permits only existing presentation-only
+style attributes. Live headers contain no `script-src 'unsafe-inline'` source.
+Permissions-Policy disables camera, geolocation, microphone, payment, and USB
+access.
+
+Passive OWASP ZAP evidence progressed through three bounded stages:
+
+* Initial run `42684507506` reported no high findings and four medium alert
+  categories.
+* Enforced remediation run `42686940715` passed after removing wildcard image
+  and static CORS access, making the CSRF cookie HttpOnly, and adding COEP and
+  CORP. Only inline script and style findings remained temporarily allowed.
+* Exact-commit run `42691024543` passed on deployed commit `1c3abee` with zero
+  high and zero medium findings. The remaining alerts were two Azure ARR
+  cookie lows and informational observations.
+
+The first scan after upload correctly failed because deployment health still
+reported the previous container. The scan was repeated only after public
+handoff reported the exact packaged commit. Independent external penetration
+evidence remains a separate release gate.
 
 ## Bugs found and fixed
 
@@ -262,6 +284,9 @@ release gate.
 | First post-deploy management connection timed out | Verified PostgreSQL `Ready`, retried with bounded connection recovery, and completed synchronization |
 | Strategy manifests trusted a stale App Service commit setting | Exact packaged commit now takes precedence, with stale-setting regression coverage |
 | CSP and Permissions-Policy headers were absent | Origin-restricted CSP and disabled browser capabilities, with response-header regression coverage |
+| CSP still allowed inline script execution | Request-scoped nonces, delegated event listeners, and template-source regression coverage |
+| Passive DAST found wildcard CORS, broad image loading, readable CSRF cookies, and missing cross-origin headers | Restricted static and image policy, HttpOnly CSRF cookie, COEP, and CORP |
+| Kudu status 4 preceded public container handoff | Exact packaged commit is required from deployment health before post-deploy scanning |
 | Scanner match evidence forced page-wide horizontal overflow | Bounded table scrolling and wrapped evidence cells |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
 | Release gates mixed the prior production baseline with current activation | Activation-specific pending states |

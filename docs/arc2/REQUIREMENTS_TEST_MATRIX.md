@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 589 non-browser tests. The matrix records
+The current automated baseline is 590 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -27,8 +27,9 @@ feeds.
 | Staging cannot own the token or workers | `test_staging_settings.py` | Staging settings and environment verified | Passed |
 | Versioned polling API contracts | `PollingApiContractTests` | Browser console showed no contract errors on tested routes | Passed |
 | Rate-limited integration intake | `test_rate_limit.py` | Shared-cache distributed limiting remains open | Passed implemented scope |
-| Deployment health reports exact commit | Deployment-health tests in `tests.py` | Staging reported exact commit `09561ac` after deployment handoff | Passed |
-| Live HTTP security controls | Access, method, CSRF, and `BrowserSecurityHeaderTests` | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, and baseline headers probed on staging; CSP and Permissions-Policy are enforced; independent penetration evidence remains open | Passed bounded scope |
+| Deployment health reports exact commit | Deployment-health tests in `tests.py` | Staging reported exact commit `1c3abee` after deployment handoff | Passed |
+| Live HTTP security controls | Access, method, CSRF, and `BrowserSecurityHeaderTests` | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, nonce-based CSP, Permissions-Policy, COEP, and CORP probed on staging; independent penetration evidence remains open | Passed bounded scope |
+| Passive staging DAST | Immutable official ZAP action and high-or-medium enforcement in `dast-activation.yml` | Exact-commit run `42691024543` reported zero high and zero medium findings | Passed |
 
 ## Research and decision requirements
 
@@ -79,7 +80,8 @@ feeds.
 Authenticated staging evidence covers all 20 left-navigation routes on commit
 `cd11d4a`. Every route returned HTTP 200. No console errors, page errors, CSP
 violations, or horizontal overflow were observed. Action List rendered exactly
-one level-one heading.
+one level-one heading. The complete 605-test local run on nonce-policy commit
+`1c3abee` included all 15 browser-tagged tests and passed.
 
 ## Gate interpretation
 
