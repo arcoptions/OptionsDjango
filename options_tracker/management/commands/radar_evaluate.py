@@ -34,7 +34,17 @@ class Command(BaseCommand):
             while True:
                 now = timezone.now()
                 heartbeat(owner, "EVALUATING", "Evaluating paper opportunities.", now, name="radar-evaluator")
-                result = scan(now, assistant=True)
+
+                def report_progress():
+                    heartbeat(
+                        owner,
+                        "EVALUATING",
+                        "Evaluating paper opportunities.",
+                        timezone.now(),
+                        name="radar-evaluator",
+                    )
+
+                result = scan(now, assistant=True, progress=report_progress)
                 captured_at = timezone.now()
                 persist_shortlist(captured_at)
                 capture_observations(protocol, captured_at)

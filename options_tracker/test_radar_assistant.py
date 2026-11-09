@@ -346,10 +346,16 @@ class AssistantTests(RadarTestCase):
             call_command("radar_run", once=True, collect_only=True, stdout=StringIO())
 
     def test_separate_evaluator_once_persists_protocol_and_snapshot_without_broker(self):
-        with patch("options_tracker.management.commands.radar_evaluate.scan", return_value={"new_setups": 0}) as scan:
+        def evaluate(*_args, **kwargs):
+            kwargs["progress"]()
+            return {"new_setups": 0}
+
+        target = "options_tracker.management.commands.radar_evaluate"
+        with patch(target+".scan", side_effect=evaluate) as scan, patch(target+".heartbeat") as beat:
             call_command("radar_evaluate", once=True, stdout=StringIO())
         scan.assert_called_once()
         self.assertTrue(scan.call_args.kwargs["assistant"])
+        self.assertGreaterEqual(beat.call_count, 3)
         self.assertTrue(RadarAssistantSnapshot.objects.exists())
         self.assertEqual(RadarWorker.objects.get(name="radar-evaluator").state, "STOPPED")
         self.assertEqual(research_report(timezone.now())["status"], "REGISTERED_NOT_STARTED")
@@ -377,7 +383,7 @@ class AssistantTests(RadarTestCase):
 class ResearchTests(RadarTestCase):
     def test_protocol_freezes_rules_policy_and_next_session(self):
         protocol = register_protocol(NOW)
-        self.assertEqual(protocol.name, "stock-trap-forward-v20")
+        self.assertEqual(protocol.name, "stock-trap-forward-v21")
         self.assertEqual(protocol.specification["primary"], "S1")
         self.assertGreater(protocol.starts_at, NOW)
         self.assertEqual(register_protocol(NOW).pk, protocol.pk)

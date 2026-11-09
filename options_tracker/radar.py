@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timedelta
 from hashlib import sha256
@@ -510,7 +511,13 @@ def manage_positions(now: datetime) -> None:
         transition(item, S.EXITED, reason+"; PAPER exit at displayed bid.", now)
 
 
-def scan(now: datetime, policy: Policy | None = None, *, assistant: bool = False) -> dict:
+def scan(
+    now: datetime,
+    policy: Policy | None = None,
+    *,
+    assistant: bool = False,
+    progress: Callable[[], None] | None = None,
+) -> dict:
     policy = policy or Policy()
     manage_positions(now)
     with transaction.atomic():
@@ -545,7 +552,11 @@ def scan(now: datetime, policy: Policy | None = None, *, assistant: bool = False
         instrument_id__in=instruments, complete=True, timestamp__gte=history_start,
         timestamp__lte=now-timedelta(minutes=1),
     ).order_by("instrument_id", "timestamp").iterator(chunk_size=2000)
-    for instrument_id, instrument_rows in groupby(bar_rows, key=lambda row: row.instrument_id):
+    for group_index, (instrument_id, instrument_rows) in enumerate(
+        groupby(bar_rows, key=lambda row: row.instrument_id)
+    ):
+        if progress and group_index % 25 == 0:
+            progress()
         instrument = instruments[instrument_id]
         rows = list(instrument_rows)
         current = [Candle(r.timestamp, r.open, r.high, r.low, r.close, r.volume) for r in rows if timezone.localdate(r.timestamp) == today]
