@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 587 non-browser tests. The matrix records
+The current automated baseline is 589 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -28,7 +28,7 @@ feeds.
 | Versioned polling API contracts | `PollingApiContractTests` | Browser console showed no contract errors on tested routes | Passed |
 | Rate-limited integration intake | `test_rate_limit.py` | Shared-cache distributed limiting remains open | Passed implemented scope |
 | Deployment health reports exact commit | Deployment-health tests in `tests.py` | Staging reported exact commit `09561ac` after deployment handoff | Passed |
-| Live HTTP security controls | Access, method, and CSRF tests | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, and baseline security headers probed on staging; CSP, Permissions-Policy, and independent penetration evidence remain open | Passed bounded scope |
+| Live HTTP security controls | Access, method, CSRF, and `BrowserSecurityHeaderTests` | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, and baseline headers probed on staging; CSP and Permissions-Policy are enforced; independent penetration evidence remains open | Passed bounded scope |
 
 ## Research and decision requirements
 

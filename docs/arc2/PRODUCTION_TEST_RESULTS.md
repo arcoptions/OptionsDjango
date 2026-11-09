@@ -12,7 +12,7 @@ approved or deployed to production.
 |---|---|---|
 | Application commit | Passed | `09561ac2a05929f62955b89da734d6909263f275` |
 | GitHub Actions | Passed | Reruns `42673171903` and `42673181295` passed on exact commit `09561ac` |
-| Django tests | Passed | 587 non-browser tests in 152.722 seconds |
+| Django tests | Passed | 589 non-browser tests in 107.696 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
 | Django checks | Passed | No issues |
@@ -50,7 +50,7 @@ GitHub workflow-start failure. The successful reruns passed the production
 dependency audit, Bandit medium-and-higher scan, migration check, Django
 checks, static collection, and complete non-browser suite.
 
-The current activation branch passed 587 non-browser tests locally after the
+The current activation branch passed 589 non-browser tests after the
 credential-confined history capture and scanner synchronization workflow was
 added.
 
@@ -236,10 +236,12 @@ Bounded unauthenticated probes against staging verified:
 * HSTS, `nosniff`, same-origin referrer policy, and frame denial headers were
   present
 
-Content-Security-Policy and Permissions-Policy headers are not currently set.
-They remain hardening candidates because adding them safely requires an
-inventory of the existing inline scripts and browser regression coverage.
-Independent external penetration evidence remains a separate release gate.
+The browser resource inventory found no third-party executable assets.
+Enforced Content-Security-Policy now restricts active content to the
+application origin while temporarily allowing the existing inline scripts and
+styles. Permissions-Policy disables camera, geolocation, microphone, payment,
+and USB access. Independent external penetration evidence remains a separate
+release gate.
 
 ## Bugs found and fixed
 
@@ -258,6 +260,7 @@ Independent external penetration evidence remains a separate release gate.
 | Scanners could not consume imported stock candles | History-backed scanner source with notifications suppressed |
 | First post-deploy management connection timed out | Verified PostgreSQL `Ready`, retried with bounded connection recovery, and completed synchronization |
 | Strategy manifests trusted a stale App Service commit setting | Exact packaged commit now takes precedence, with stale-setting regression coverage |
+| CSP and Permissions-Policy headers were absent | Origin-restricted CSP and disabled browser capabilities, with response-header regression coverage |
 | Release Dashboard implied empty workflows were complete | Live database activation evidence |
 | Release gates mixed the prior production baseline with current activation | Activation-specific pending states |
 | Stock counts disagreed | Active-only dashboard count |
@@ -266,8 +269,7 @@ Independent external penetration evidence remains a separate release gate.
 ## Open test gates
 
 * Resolve Dhan rolling-option `DH-905` responses and complete option history.
-* Complete external penetration evidence, including reviewed CSP and
-  Permissions-Policy rollout.
+* Complete independent external penetration evidence.
 * Restore the production point-in-time backup to a temporary server and
   rehearse the release migrations.
 * Obtain explicit production approval.
