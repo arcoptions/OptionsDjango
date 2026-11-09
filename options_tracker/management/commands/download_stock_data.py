@@ -8,7 +8,7 @@ Safe to re-run: finished windows are skipped, so a killed job resumes.
 """
 import datetime as dt
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from options_tracker import stock_data
 from options_tracker.models import StockEquityCandle, StockOptionCandle, TrackedStock
@@ -21,6 +21,8 @@ class Command(BaseCommand):
         parser.add_argument("--feed", default="all",
                             choices=["all", "equity", "rolling", "ladder", "master"])
         parser.add_argument("--months", type=int, default=18)
+        parser.add_argument("--days", type=int, default=0,
+                            help="Use an exact bounded lookback instead of --months.")
         parser.add_argument("--limit", type=int, default=0, help="Only the top N stocks by turnover.")
         parser.add_argument("--interval", type=int, default=15)
         parser.add_argument("--relatives", default="", help="Comma list, e.g. ATM,ATM+1,ATM-1")
@@ -31,8 +33,13 @@ class Command(BaseCommand):
         if options["limit"]:
             stocks = stocks[: options["limit"]]
 
+        if options["days"] < 0:
+            raise CommandError("--days cannot be negative")
+        if not options["days"] and options["months"] < 1:
+            raise CommandError("--months must be at least 1")
         end = dt.date.today()
-        start = end - dt.timedelta(days=int(options["months"] * 30.5))
+        lookback_days = options["days"] or int(options["months"] * 30.5)
+        start = end - dt.timedelta(days=lookback_days)
         feed = options["feed"]
 
         if feed in ("all", "master"):
