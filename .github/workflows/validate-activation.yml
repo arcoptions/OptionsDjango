@@ -36,6 +36,15 @@ jobs:
       - name: Check migrations
         run: python manage.py makemigrations --check --dry-run
 
+      - name: Audit production dependencies
+        run: pip-audit --requirement requirements.txt
+
+      - name: Scan application source
+        run: >-
+          bandit --quiet --recursive options_tracker trading_terminal
+          --exclude "options_tracker/test_*.py,options_tracker/tests.py"
+          --severity-level medium
+
       - name: Validate Django application
         run: |
           python manage.py check
