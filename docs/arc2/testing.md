@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 630 discovered `test_` methods.
+* 635 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -287,6 +287,17 @@ The R17 Personal Trading Desk slice passed:
 The tests verify staff-only GET access, user-scoped alerts, manual planning
 visibility, explicit unavailable reconciliation, bounded queries, and zero
 broker-order or trade-execution creation from the desk.
+
+The production-confined daily Dhan token reminder passed:
+
+* 5 focused freshness, delivery, deduplication, and supervisor tests
+* 620 non-browser tests in 48.154 seconds
+* 15 browser-tagged tests in 94.055 seconds
+
+The reminder skips staging and quiet hours, accepts only a current daily Apps UI
+token, sends at most once after successful delivery, retries delivery failures,
+and excludes token values from Telegram content. Its supervised loop activates
+only when production and Telegram delivery configuration are both explicit.
 
 ## Latest Release 1 validation
 

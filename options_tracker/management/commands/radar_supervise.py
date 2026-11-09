@@ -28,6 +28,12 @@ def worker_specs():
         os.getenv("TELEGRAM_SESSION") or os.getenv("TELEGRAM_SESSION_STRING")
     ):
         specs["session-news"] = ["track_telegram"]
+    if (
+        os.getenv("ARC_DEPLOYMENT_ENVIRONMENT", "").strip().lower() == "production"
+        and os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        and os.getenv("TELEGRAM_ALERT_CHAT_ID", "").strip()
+    ):
+        specs["token-reminder"] = ["remind_dhan_token", "--apply", "--loop"]
     return specs
 
 

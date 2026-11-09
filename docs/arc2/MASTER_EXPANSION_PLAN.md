@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 615 non-browser and 630 total passing tests. A rendered page
+baseline to 620 non-browser and 635 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 615 passing non-browser tests
-* 630 passing tests including browser-tagged journeys
+* 620 passing non-browser tests
+* 635 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -170,9 +170,14 @@ unavailable when no approved statement has been imported.
 
 ### R18 Integration and production hardening
 
-Complete end-to-end journeys, measured performance, provider-health
-visibility, restore rehearsal, independent security validation, and approved
-production deployment.
+Automated integration journeys, query budgets, provider-health visibility,
+exact-commit CI, migration drift checks, dependency audit, source scanning,
+passive staging DAST, and deployment smoke gates are implemented. A
+production-only Dhan token reminder now checks the daily Apps UI update,
+respects quiet hours, deduplicates successful Telegram delivery, retries failed
+delivery, and never includes the token value. Restore approval, independent
+human penetration testing, live-session acceptance, and production deployment
+approval remain external gates.
 
 ## Test strategy
 
@@ -238,12 +243,14 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 615 non-browser tests in 45.766 seconds. All 15
-browser-tagged tests passed separately in 97.461 seconds, covering 630 tests
+The current branch passed 620 non-browser tests in 48.154 seconds. All 15
+browser-tagged tests passed separately in 94.055 seconds, covering 635 tests
 without treating a stalled combined-run teardown as success evidence. The R15
 journey proves that validation, complete planning, and approval preserve actor
 and reason audit while direct execution requests remain blocked. R16 coverage
 proves that suggested questions remain provider-neutral and unavailable
 configuration cannot produce or persist substitute analysis. R17 coverage
 proves user alert isolation, staff and method controls, read-only broker safety,
-and the Personal Desk query budget.
+and the Personal Desk query budget. R18 reminder coverage proves production
+confinement, quiet hours, UI-token freshness, successful-delivery deduplication,
+retryable failure, and secret-free Telegram content.

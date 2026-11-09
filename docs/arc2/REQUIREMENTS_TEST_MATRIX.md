@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 615 non-browser tests. The matrix records
+The current automated baseline is 620 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -82,6 +82,7 @@ feeds.
 | Release and gate counts | `ReleaseDashboardTests.test_snapshot_counts_release_and_gate_states` | Dashboard now separates prior production baseline from activation gates | Passed |
 | Persisted activation counts | `ReleaseDashboardTests.test_snapshot_reports_persisted_activation_evidence` | Staging database counts verified | Passed |
 | Activation smoke fails closed | `ActivationSmokeTests.test_unhealthy_activation_report_fails_closed` | Final production smoke remains open | Passed implemented scope |
+| Daily Dhan token reminder | `DhanTokenReminderTests` | Production worker activation and Telegram delivery validation remain open | Passed production-confined implementation |
 | Navigation exposes Options and Equities | `test_options_navigation.py` | Authenticated browser navigation previously verified | Passed |
 
 ## Browser coverage status

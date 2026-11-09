@@ -164,8 +164,13 @@ requirements with existing ARC capabilities.
 * [x] Add the Personal Trading Desk to left navigation with an explicit request
   query budget and no broker mutation path.
 * [ ] Complete broker reconciliation after approved statements are available.
-* [ ] Complete R18 integration, restore, independent security, and approved
-  production gates.
+* [x] Add production-only daily Dhan Apps UI token freshness reminders with
+  quiet hours, successful-delivery deduplication, and retryable failures.
+* [x] Keep reminder content token-free and exclude staging from delivery.
+* [x] Complete automated R18 integration, performance, provider-health,
+  exact-commit CI, migration, dependency, source-scan, DAST, and smoke gates.
+* [ ] Complete restore approval, independent human penetration testing,
+  live-session acceptance, and approved production deployment gates.
 
 ## Legacy-gated
 
