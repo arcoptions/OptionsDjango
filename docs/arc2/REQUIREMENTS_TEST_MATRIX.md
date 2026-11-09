@@ -76,10 +76,10 @@ feeds.
 
 ## Browser coverage status
 
-Authenticated staging evidence covers all 19 left-navigation routes on commit
-`1167fd4`. Every route returned HTTP 200. No console errors, page errors, or
-horizontal overflow were observed. Action List rendered exactly one
-level-one heading.
+Authenticated staging evidence covers all 20 left-navigation routes on commit
+`cd11d4a`. Every route returned HTTP 200. No console errors, page errors, CSP
+violations, or horizontal overflow were observed. Action List rendered exactly
+one level-one heading.
 
 ## Gate interpretation
 

@@ -10,8 +10,8 @@ approved or deployed to production.
 
 | Area | Result | Evidence |
 |---|---|---|
-| Application commit | Passed | `09561ac2a05929f62955b89da734d6909263f275` |
-| GitHub Actions | Passed | Reruns `42673171903` and `42673181295` passed on exact commit `09561ac` |
+| Application commit | Passed | `cd11d4a586d5a5991d47b4eca8567e05c46be546` |
+| GitHub Actions | Passed | Runs `42679900378` and `42679916268` passed on exact commit `cd11d4a` |
 | Django tests | Passed | 589 non-browser tests in 123.847 seconds |
 | Dependency audit | Passed | `pip-audit` in run `42623063766` |
 | Static security scan | Passed | Bandit medium-and-higher gate in run `42623063766` |
@@ -19,7 +19,7 @@ approved or deployed to production.
 | Migration drift | Passed | No changes detected |
 | Static collection | Passed | Production collection completed |
 | Staging safety | Passed | Preview mode, token owner off, background workers off |
-| Staging deployment | Passed for tested commit | Deployment `a4b8e0bb-443d-4fd6-bdb3-2998217f9dd3`; exact commit `09561ac` reported through deployment health |
+| Staging deployment | Passed for tested commit | Deployment `1dccabdc-aff3-4b09-a68c-a8429be357d7`; exact commit `cd11d4a` reported through deployment health |
 | Strategy Lab activation | Passed in staging | Five immutable manifests reproduced independently from 860 real Dhan-equity candles |
 | Live security probes | Passed bounded scope | Access, CSRF, HTTPS, TRACE, sensitive-path, and response-header checks passed; independent penetration evidence remains open |
 | Canonical activation | Passed | 74,917 instruments and 149,834 aliases |
@@ -44,11 +44,10 @@ python manage.py collectstatic --noinput
 python manage.py test --exclude-tag=browser
 ```
 
-Reruns `42673171903` and `42673181295` passed against exact commit `09561ac`.
-Their first attempts ended before creating jobs or logs because of a transient
-GitHub workflow-start failure. The successful reruns passed the production
-dependency audit, Bandit medium-and-higher scan, migration check, Django
-checks, static collection, and complete non-browser suite.
+Runs `42679900378` and `42679916268` passed against exact commit `cd11d4a`.
+They passed the production dependency audit, Bandit medium-and-higher scan,
+migration check, Django checks, static collection, and complete non-browser
+suite.
 
 The current activation branch passed 589 non-browser tests after the
 credential-confined history capture and scanner synchronization workflow was
@@ -145,15 +144,16 @@ preserves the broker-history symbol while refreshing current Dhan metadata.
 
 ## Browser validation
 
-Authenticated staging checks covered all 19 left-navigation routes. Every
-route returned HTTP 200 without JavaScript console errors, page errors, or
-horizontal overflow.
+Authenticated staging checks covered all 20 left-navigation routes on commit
+`cd11d4a`. Every route returned HTTP 200 without JavaScript console errors,
+page errors, CSP violations, or horizontal overflow.
 
 | Route | Result | Observed browser load | Measurement state |
 |---|---|---:|---|
 | Action List | Rendered | One level-one heading | Regression check |
-| Trading Workspace | Rendered | 1.611 seconds | Full sweep |
-| Trading Workspace | Rendered | 2.968, 1.382, and 1.379 seconds | Repeat loads |
+| Trading Workspace | Rendered | 7.817 seconds | First full sweep after container handoff |
+| Trading Workspace | Rendered | 2.399, 1.908, and 1.951 seconds | Warm repeat loads |
+| Scanner Builder | Rendered | 1.003 seconds | Wrapped evidence; no page overflow |
 | F&O Research | Rendered | 1.201 seconds | Full sweep |
 | Command Centre | Rendered | 0.929 seconds | Full sweep |
 
@@ -166,8 +166,9 @@ Three defects were fixed:
 * Action List no longer repeats its level-one heading.
 
 Trading Workspace previously required 2.864 to 6.442 seconds. Reusing the
-Action List and CAS context reduced the tested repeat range to 1.379 to 2.968
-seconds.
+Action List and CAS context kept the current warm repeat range at 1.908 to
+2.399 seconds. The first full sweep immediately after container handoff took
+7.817 seconds and is recorded as a cold-start outlier rather than hidden.
 
 ## Historical-data pilot
 
