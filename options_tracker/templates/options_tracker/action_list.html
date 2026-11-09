@@ -22,6 +22,61 @@
   </p>
 </div>
 
+<div class="panel">
+  <h2>Breakout Intelligence filters</h2>
+  <form method="get" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+    <label>
+      Classification
+      <select name="breakout_classification">
+        <option value="">All action sources</option>
+        {% for option in breakout_classifications %}
+        <option value="{{ option.value }}" {% if breakout_filters.classification == option.value %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Radar state
+      <select name="breakout_state">
+        <option value="">Any active state</option>
+        {% for option in breakout_states %}
+        <option value="{{ option.value }}" {% if breakout_filters.state == option.value %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div style="align-self:end;">
+      <button class="btn" type="submit">Apply filters</button>
+      <a class="btn secondary" href="{% url 'action_list' %}">Clear</a>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Observed breakout outcomes</h2>
+  <p class="muted">
+    Persisted lifecycle evidence from the last {{ breakout_outcome_window_days }} days.
+    Failure rate means rejected, expired, or invalidated after a recorded trigger.
+    Rates remain insufficient until {{ breakout_min_outcome_sample }} triggered observations exist.
+  </p>
+  <div class="grid">
+    {% for outcome in breakout_outcomes %}
+    <article class="card">
+      <strong>{{ outcome.label }}</strong>
+      <p>
+        {{ outcome.observations }} observed · {{ outcome.triggered }} triggered ·
+        {{ outcome.qualified }} qualified
+      </p>
+      <p>
+        Failed after trigger: {{ outcome.failed_after_trigger }}
+        {% if outcome.failure_rate_percent is not None %}({{ outcome.failure_rate_percent }}%){% endif %}
+      </p>
+      <span class="active-pill">{{ outcome.sample_state }}</span>
+    </article>
+    {% empty %}
+    <p class="muted">No persisted breakout lifecycle evidence exists in the current window.</p>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom:16px;">
   <div class="card">
     <div class="muted">Buy-ready candidates</div>

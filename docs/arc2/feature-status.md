@@ -141,8 +141,9 @@ requirements with existing ARC capabilities.
   taxonomy to the unified Action List with transparent rank components.
 * [x] Keep radar setups manual-only with trigger, stop, analytical 2R target,
   validity, and evidence reason.
-* [ ] Add broader breakout families, filters, dedicated evidence cards, and
-  false-positive analysis.
+* [x] Add classification and active-state filters plus measured 30-day
+  lifecycle outcome cards with an explicit 30-trigger sample threshold.
+* [ ] Add broader breakout families and verified-history acceptance.
 * [ ] Add persisted technical patterns, support/resistance, automatic levels,
   and multi-timeframe agreement.
 * [ ] Activate verified event ingestion, timelines, and price reactions.

@@ -3,7 +3,11 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
-from .action_workspace import action_list_context, breakout_action_row
+from .action_workspace import (
+    action_list_context,
+    breakout_action_row,
+    breakout_outcome_summary,
+)
 from .radar_models import RadarInstrument, RadarOpportunity
 
 
@@ -68,3 +72,43 @@ class BreakoutIntelligenceTests(TestCase):
         )
 
         self.assertEqual(row["target"], 94)
+
+    def test_action_list_filters_breakout_classification_and_state(self):
+        matching = self._opportunity()
+        self._opportunity(
+            key="armed-failed-break",
+            strategy="S1",
+            state=RadarOpportunity.State.ARMED,
+            trigger_at=None,
+        )
+
+        context = action_list_context({
+            "breakout_classification": "COMPRESSION_BREAKOUT",
+            "breakout_state": "TRIGGERED",
+        })
+
+        self.assertEqual([row["id"] for row in context["rows"]], [matching.pk])
+        self.assertEqual(
+            context["breakout_filters"],
+            {
+                "classification": "COMPRESSION_BREAKOUT",
+                "state": "TRIGGERED",
+            },
+        )
+
+    def test_outcome_summary_labels_small_samples_without_inference(self):
+        self._opportunity(
+            state=RadarOpportunity.State.INVALIDATED,
+        )
+        self._opportunity(
+            key="qualified",
+            state=RadarOpportunity.State.ELIGIBLE,
+        )
+
+        summary = breakout_outcome_summary(self.now)
+
+        self.assertEqual(summary[0]["triggered"], 2)
+        self.assertEqual(summary[0]["qualified"], 1)
+        self.assertEqual(summary[0]["failed_after_trigger"], 1)
+        self.assertEqual(summary[0]["failure_rate_percent"], 50.0)
+        self.assertEqual(summary[0]["sample_state"], "INSUFFICIENT_SAMPLE")

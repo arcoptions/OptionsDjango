@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import re
 from urllib.parse import urlencode
 
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -49,6 +50,19 @@ BREAKOUT_STATE_POINTS = {
     RadarOpportunity.State.TRIGGERED: 10,
     RadarOpportunity.State.ELIGIBLE: 20,
 }
+BREAKOUT_FAILURE_STATES = (
+    RadarOpportunity.State.REJECTED,
+    RadarOpportunity.State.EXPIRED,
+    RadarOpportunity.State.INVALIDATED,
+)
+BREAKOUT_QUALIFIED_STATES = (
+    RadarOpportunity.State.ELIGIBLE,
+    RadarOpportunity.State.TAKEN,
+    RadarOpportunity.State.EXIT_PENDING,
+    RadarOpportunity.State.EXITED,
+)
+BREAKOUT_OUTCOME_WINDOW_DAYS = 30
+BREAKOUT_MIN_OUTCOME_SAMPLE = 30
 
 
 def tip_action(signal: TipSignal, today) -> tuple[str, bool, str]:
@@ -139,8 +153,72 @@ def breakout_action_row(
     }
 
 
-def action_list_context() -> dict[str, object]:
+def breakout_outcome_summary(now=None) -> list[dict[str, object]]:
+    now = now or timezone.now()
+    rows = (
+        RadarOpportunity.objects.filter(
+            strategy__in=BREAKOUT_TAXONOMY,
+            setup_at__gte=now - timedelta(
+                days=BREAKOUT_OUTCOME_WINDOW_DAYS,
+            ),
+        )
+        .values("strategy")
+        .annotate(
+            observations=Count("pk"),
+            triggered=Count("pk", filter=Q(trigger_at__isnull=False)),
+            qualified=Count(
+                "pk",
+                filter=Q(state__in=BREAKOUT_QUALIFIED_STATES),
+            ),
+            failed_after_trigger=Count(
+                "pk",
+                filter=Q(
+                    trigger_at__isnull=False,
+                    state__in=BREAKOUT_FAILURE_STATES,
+                ),
+            ),
+        )
+        .order_by("strategy")
+    )
+    result = []
+    for row in rows:
+        taxonomy, label = BREAKOUT_TAXONOMY[row["strategy"]]
+        triggered = row["triggered"]
+        result.append({
+            "strategy": row["strategy"],
+            "classification": taxonomy,
+            "label": label,
+            "observations": row["observations"],
+            "triggered": triggered,
+            "qualified": row["qualified"],
+            "failed_after_trigger": row["failed_after_trigger"],
+            "failure_rate_percent": (
+                round(row["failed_after_trigger"] / triggered * 100, 1)
+                if triggered
+                else None
+            ),
+            "sample_state": (
+                "MEASURED"
+                if triggered >= BREAKOUT_MIN_OUTCOME_SAMPLE
+                else "INSUFFICIENT_SAMPLE"
+            ),
+        })
+    return result
+
+
+def action_list_context(filters=None) -> dict[str, object]:
     today = timezone.localdate()
+    filters = filters or {}
+    selected_classification = (
+        filters.get("breakout_classification", "").strip().upper()
+    )
+    if selected_classification not in {
+        taxonomy for taxonomy, _ in BREAKOUT_TAXONOMY.values()
+    }:
+        selected_classification = ""
+    selected_state = filters.get("breakout_state", "").strip().upper()
+    if selected_state not in BREAKOUT_STATE_POINTS:
+        selected_state = ""
     action_rows: list[dict[str, object]] = []
     radar_symbols = set(
         RadarInstrument.objects.filter(kind="EQUITY", active=True).values_list("symbol", flat=True)
@@ -259,6 +337,18 @@ def action_list_context() -> dict[str, object]:
         if existing is None or row["timestamp"] > existing["timestamp"]:
             deduped[key] = row
 
+    if selected_classification or selected_state:
+        deduped = {
+            key: row
+            for key, row in deduped.items()
+            if row["source_key"] == "radar_breakout"
+            and (
+                not selected_classification
+                or row["breakout_classification"] == selected_classification
+            )
+            and (not selected_state or row["status"] == selected_state)
+        }
+
     rows = sorted(
         deduped.values(),
         key=lambda row: (
@@ -280,6 +370,22 @@ def action_list_context() -> dict[str, object]:
             row["source_key"] == "radar_breakout"
             for row in rows
         ),
+        "breakout_filters": {
+            "classification": selected_classification,
+            "state": selected_state,
+        },
+        "breakout_classifications": [
+            {"value": taxonomy, "label": label}
+            for taxonomy, label in BREAKOUT_TAXONOMY.values()
+        ],
+        "breakout_states": [
+            {"value": state, "label": label}
+            for state, label in RadarOpportunity.State.choices
+            if state in BREAKOUT_STATE_POINTS
+        ],
+        "breakout_outcomes": breakout_outcome_summary(),
+        "breakout_outcome_window_days": BREAKOUT_OUTCOME_WINDOW_DAYS,
+        "breakout_min_outcome_sample": BREAKOUT_MIN_OUTCOME_SAMPLE,
     }
 
 
