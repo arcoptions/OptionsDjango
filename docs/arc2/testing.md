@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 624 discovered `test_` methods.
+* 625 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -245,6 +245,16 @@ non-browser phase, so the browser tests were rerun as an isolated tag. Both
 disjoint test sets passed and cover all 624 discovered tests. The new
 assertions verify fail-closed history requirements, bullish and bearish
 analytical levels, fixed 2R geometry, and complete-timeframe agreement.
+
+The provider-neutral R14 event slice passed:
+
+* 10 focused Stock Intelligence tests
+* 610 non-browser tests in 54.199 seconds
+* 15 browser-tagged tests in 104.492 seconds
+
+The event-reaction test verifies prior-close selection and exact one-session
+and five-session returns. Missing bracketing bars remain unavailable, and the
+UI does not claim that observed price movement was caused by the event.
 
 ## Latest Release 1 validation
 

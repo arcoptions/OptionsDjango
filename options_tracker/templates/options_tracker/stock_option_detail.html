@@ -30,6 +30,7 @@
   <a href="#fundamentals">Fundamentals</a>
   <a href="#results">Results</a>
   <a href="#news-actions">News &amp; actions</a>
+  <a href="#event-timeline">Event timeline</a>
   <a href="#scores">Scores</a>
   <a href="#derivatives">Derivatives</a>
 </nav>
@@ -133,6 +134,45 @@
         <p>{{ action.action_type }} · {{ action.ex_date }}{% if action.ratio %} · {{ action.ratio }}{% endif %}<br><span class="muted">{{ action.description }}</span></p>
       {% empty %}<p class="muted">No normalized corporate actions.</p>{% endfor %}
     </div>
+  </div>
+</section>
+
+<section class="panel" id="event-timeline">
+  <strong>Attributed event timeline and price reaction</strong>
+  <p class="muted">
+    Reactions compare the prior stored daily close with the first and fifth
+    stored sessions on or after the event date. They describe observed prices,
+    not causation.
+  </p>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Event</th><th>Provider</th><th>1 session</th><th>5 sessions</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+      {% for event in intelligence.event_timeline %}
+        <tr>
+          <td>{{ event.event_at|date:"d M Y H:i" }}</td>
+          <td>
+            <strong>{{ event.event_type }}</strong><br>
+            {% if event.url %}<a href="{{ event.url }}" rel="noopener noreferrer">{{ event.title }}</a>{% else %}{{ event.title }}{% endif %}
+          </td>
+          <td>{{ event.provider }}<br><span class="muted">{{ event.source_ref }}</span></td>
+          <td>{% if event.reaction.available %}{{ event.reaction.one_session_percent }}%{% else %}-{% endif %}</td>
+          <td>{% if event.reaction.five_session_percent is not None %}{{ event.reaction.five_session_percent }}%{% else %}-{% endif %}</td>
+          <td>
+            {% if event.reaction.available %}
+            Prior close {{ event.reaction.baseline_close }} · {{ event.reaction.observed_sessions }} sessions observed
+            {% else %}
+            {{ event.reaction.reason }}
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No attributed normalized event evidence exists.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 

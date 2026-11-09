@@ -147,7 +147,10 @@ requirements with existing ARC capabilities.
 * [x] Add deterministic stored-bar patterns, prior-structure
   support/resistance, ATR-based analytical levels, and fail-closed
   multi-timeframe agreement.
-* [ ] Activate verified event ingestion, timelines, and price reactions.
+* [x] Add an attributed stock event timeline and deterministic one-session
+  and five-session observed reactions over normalized stored evidence.
+* [ ] Activate event ingestion and an expected-results calendar after an
+  approved provider is available.
 * [ ] Extend unified opportunities into the remaining trade-setup lifecycle.
 * [ ] Activate governed ARC Intelligence after Azure OpenAI configuration.
 * [ ] Complete personal-desk broker reconciliation with approved statements.

@@ -21,6 +21,7 @@ from .stock_intelligence import (
     automatic_trade_levels,
     investment_score,
     pattern_labels,
+    event_timeline,
     stock_intelligence_context,
     stock_personality,
     timeframe_agreement,
@@ -137,6 +138,37 @@ class StockIntelligenceTests(TestCase):
         self.assertContains(response, "Dividend announced")
         self.assertContains(response, "Missing-data penalty")
         self.assertContains(response, "Multi-timeframe candlesticks")
+        self.assertContains(response, "Attributed event timeline")
+
+    def test_event_timeline_calculates_observed_one_and_five_session_reactions(self):
+        start = timezone.now() - timedelta(days=10)
+        for index in range(7):
+            StockEquityCandle.objects.create(
+                symbol="TEST",
+                interval_minutes=1440,
+                timestamp=start + timedelta(days=index),
+                open=100 + index,
+                high=101 + index,
+                low=99 + index,
+                close=100 + index,
+                volume=1000,
+            )
+        event_at = start + timedelta(days=2, hours=12)
+        StockNewsItem.objects.create(
+            symbol="TEST",
+            provider="APPROVED",
+            source_ref="reaction-news",
+            headline="Attributed test event",
+            published_at=event_at,
+        )
+
+        timeline = event_timeline("TEST")
+
+        self.assertEqual(len(timeline), 1)
+        self.assertEqual(timeline[0]["reaction"]["baseline_close"], 101)
+        self.assertEqual(timeline[0]["reaction"]["one_session_percent"], 0.99)
+        self.assertEqual(timeline[0]["reaction"]["five_session_percent"], 4.95)
+        self.assertEqual(timeline[0]["reaction"]["observed_sessions"], 5)
 
     def test_pattern_labels_fail_closed_with_missing_history(self):
         self.assertEqual(

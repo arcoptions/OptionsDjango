@@ -1,5 +1,6 @@
 """Provider-neutral stock intelligence and explainable score previews."""
 
+from datetime import datetime, time
 from statistics import mean, pstdev
 
 from django.utils import timezone
@@ -23,6 +24,7 @@ TIMEFRAMES = (
     (60, "1 hour"),
     (1440, "Daily"),
 )
+EVENT_TIMELINE_LIMIT = 40
 
 
 def _clamp(value, low=0.0, high=100.0):
@@ -325,6 +327,96 @@ def automatic_trade_levels(technical):
     }
 
 
+def _price_reaction(symbol, event_at):
+    rows = list(
+        StockEquityCandle.objects.filter(
+            symbol=symbol,
+            interval_minutes=1440,
+            close__isnull=False,
+        )
+        .order_by("timestamp")
+        .values("timestamp", "close")
+    )
+    event_day = timezone.localdate(event_at)
+    before = [
+        row for row in rows
+        if timezone.localdate(row["timestamp"]) < event_day
+    ]
+    after = [
+        row for row in rows
+        if timezone.localdate(row["timestamp"]) >= event_day
+    ]
+    if not before or not after:
+        return {
+            "available": False,
+            "reason": "Stored daily bars do not bracket this event.",
+        }
+    baseline = float(before[-1]["close"])
+    if baseline <= 0:
+        return {
+            "available": False,
+            "reason": "The pre-event close is invalid.",
+        }
+    return {
+        "available": True,
+        "baseline_at": before[-1]["timestamp"],
+        "baseline_close": baseline,
+        "one_session_percent": round(
+            (float(after[0]["close"]) / baseline - 1) * 100,
+            2,
+        ),
+        "five_session_percent": (
+            round((float(after[4]["close"]) / baseline - 1) * 100, 2)
+            if len(after) >= 5
+            else None
+        ),
+        "observed_sessions": min(len(after), 5),
+    }
+
+
+def event_timeline(symbol):
+    rows = []
+    for item in StockNewsItem.objects.filter(symbol=symbol)[:20]:
+        rows.append({
+            "event_at": item.published_at,
+            "event_type": "NEWS",
+            "title": item.headline,
+            "provider": item.provider,
+            "source_ref": item.source_ref,
+            "url": item.url,
+        })
+    for action in StockCorporateAction.objects.filter(symbol=symbol)[:20]:
+        event_at = timezone.make_aware(
+            datetime.combine(action.ex_date, time.min),
+        )
+        rows.append({
+            "event_at": event_at,
+            "event_type": action.action_type,
+            "title": action.description,
+            "provider": action.provider,
+            "source_ref": action.source_ref,
+            "url": "",
+        })
+    for result in StockFinancialResult.objects.filter(symbol=symbol)[:12]:
+        rows.append({
+            "event_at": result.source_at,
+            "event_type": f"{result.period_type}_RESULT",
+            "title": f"{result.period_type.title()} result for {result.period_end}",
+            "provider": result.provider,
+            "source_ref": (
+                f"{result.provider}:{result.period_type}:{result.period_end}"
+            ),
+            "url": "",
+        })
+    rows.sort(
+        key=lambda row: (row["event_at"], row["event_type"], row["source_ref"]),
+        reverse=True,
+    )
+    for row in rows[:EVENT_TIMELINE_LIMIT]:
+        row["reaction"] = _price_reaction(symbol, row["event_at"])
+    return rows[:EVENT_TIMELINE_LIMIT]
+
+
 def pattern_labels(symbol):
     rows = list(
         StockEquityCandle.objects.filter(symbol=symbol, interval_minutes=1440)
@@ -424,6 +516,7 @@ def stock_intelligence_context(symbol, now=None):
         "results": StockFinancialResult.objects.filter(symbol=symbol)[:12],
         "news": StockNewsItem.objects.filter(symbol=symbol)[:20],
         "corporate_actions": StockCorporateAction.objects.filter(symbol=symbol)[:20],
+        "event_timeline": event_timeline(symbol),
         "technical": technical,
         "personality": stock_personality(technical),
         "timeframes": timeframes,
