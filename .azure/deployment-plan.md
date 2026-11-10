@@ -5,7 +5,7 @@ description: Governed staging validation and production activation plan for the 
 
 ## Status
 
-Validated
+Deployed
 
 Generated: 2026-11-10
 
@@ -109,10 +109,11 @@ reviewed; no quota-consuming provisioning is in scope.
 * [x] Present staging evidence and unresolved external provider gates.
 * [x] Obtain explicit production approval.
 * [x] Confirm backup and restore readiness.
-* [ ] Deploy the exact approved commit through the production environment.
-* [ ] Verify exact-commit health, static assets, authentication, and manual mode.
+* [x] Deploy the exact approved commit through the production environment.
+* [x] Verify exact-commit health, static assets, authentication, and manual mode.
 * [ ] Activate the Dhan reminder only with explicit production and Telegram configuration.
-* [ ] Do not enable automatic ARC 2.0 order execution.
+* [x] Keep the Dhan reminder dormant while production Telegram configuration is absent.
+* [x] Do not enable automatic ARC 2.0 order execution.
 
 ## 8. Rollback
 
@@ -143,27 +144,47 @@ Validation completed against subscription
 | Staging execution safety | Staging `ARC_EXECUTION_MODE` is `preview`; no Dhan token app setting was returned | Passed |
 | Azure Policy | No resource-group policy assignment blocks the code deployment | Passed |
 | Deployment role | Signed-in operator has inherited subscription `Owner` role | Passed |
-| Application validation | GitHub Actions run `42720652052` for commit `298bb469bb90d22360c56cb69f433d65c21c8029` | Passed |
+| Application validation | GitHub Actions run `42769360838` for commit `ddd177a5b7f642546743397ef2e743bb06b9c159` | Passed |
 | Migration drift | Exact-commit CI migration check | Passed |
 | Dependency audit | Exact-commit CI production dependency audit | Passed |
 | Source security scan | Exact-commit CI Bandit scan | Passed |
-| Django build | Exact-commit CI checks, static collection, and 620 non-browser tests | Passed |
-| Staging deployment | Kudu deployment `64a7d530-b6af-4ed0-a7c8-d472f25abfa4` reported status 4 for commit `298bb469bb90d22360c56cb69f433d65c21c8029` | Passed |
+| Django build | Exact-commit CI checks, static collection, and 621 non-browser tests | Passed |
+| Staging deployment | Kudu deployment `c68569bf-a2d6-4df2-b976-22b7477a8721` reported status 4 for commit `ddd177a5b7f642546743397ef2e743bb06b9c159` | Passed |
 | Staging health | `/deployment-health/` returned the exact staging commit and critical static CSS returned HTTP 200 | Passed |
 | Authenticated acceptance | Ten staff routes returned HTTP 200 with correct titles, complete DOMs, no horizontal overflow, page exceptions, or console errors | Passed |
-| Performance | Warm Trading Workspace DOM ready in 2.1 seconds with 1.97-second server response; all other critical routes completed in 0.7 to 2.4 seconds | Passed |
-| Application safety | Trading Workspace reported paper-only behavior, Personal Desk reported manual read-only behavior, and Operations reported `preview` | Passed |
+| Performance | Optimized staging Trading Workspace DOM ready in 2.16 seconds; production warm DOM ready in 4.51 seconds after replacing 41 daily PostgreSQL aggregates with two grouped queries | Passed |
+| Application safety | Trading Workspace reported paper-only behavior, Personal Desk reported manual read-only behavior, and production `ARC_EXECUTION_MODE` is `manual` | Passed |
 | HTTP hardening | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
-| Passive DAST | GitHub Actions run `42757453371` passed for the exact staging commit with the high and medium finding gate enforced | Passed |
+| Passive DAST | GitHub Actions run `42770716026` passed for the exact staging commit with the high and medium finding gate enforced | Passed |
 | Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
 | Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
 | Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
 
-The first post-deployment Trading Workspace request took 18.2 seconds while
-application and query caches warmed. App Service Always On, HTTP/2, and one
-minimum instance are enabled. Repeated acceptance reached a 2.1-second DOM
-ready time without a code or infrastructure change.
+The first optimized production Trading Workspace request took 10.9 seconds
+while PostgreSQL and application caches warmed. Repeated acceptance reached a
+4.51-second DOM-ready time. All other authenticated production routes completed
+in 0.41 to 2.16 seconds.
 
 This is a code-only deployment to existing App Services. There is no Bicep,
 Terraform, Docker image, resource creation, resource deletion, or RBAC change
 to validate.
+
+## 11. Production deployment proof
+
+| Check | Evidence | Result |
+|---|---|---|
+| Exact commit | Production `/deployment-health/` returned `ddd177a5b7f642546743397ef2e743bb06b9c159` | Passed |
+| Artifact integrity | The accepted staging `output.tar.zst` SHA-256 matched the production copy before restart | Passed |
+| Startup and migrations | The accepted artifact ran `startup.sh`; exact-commit health returned HTTP 200 after startup | Passed |
+| Authenticated journeys | Ten staff routes returned HTTP 200 with correct titles, complete DOMs, no horizontal overflow, page exceptions, or console errors | Passed |
+| Static assets | Critical Trading Workspace CSS returned HTTP 200 | Passed |
+| Security headers | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
+| Execution safety | `ARC_EXECUTION_MODE=manual` and `ARC_DEPLOYMENT_ENVIRONMENT=production` | Passed |
+| Temporary-account cleanup | Staging and production acceptance users were deleted and verified absent | Passed |
+| Reminder confinement | Telegram delivery settings are absent, so the production-only Dhan reminder remains dormant and cannot send | Passed |
+
+GitHub deployment run `42760920167` was cancelled after its Oryx build stalled
+while pulling the Python 3.13 SDK and temporarily left production without an
+Oryx manifest. The previous accepted staging artifact restored service, then
+the exact optimized staging artifact was promoted with a verified SHA-256.
+Production recovered on the exact accepted commit and passed all checks above.
