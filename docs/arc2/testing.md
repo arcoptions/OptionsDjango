@@ -373,7 +373,9 @@ underlyings and 76,328 options, created 1,917 temporal identities, retained 288
 inactive historical identities, and left zero duplicate active provider IDs.
 The `TradeExecution` count remained two, so the refresh created no order. The
 VM recovered to 500 MiB available RAM and 1,229 MiB free swap immediately after
-completion.
+completion. Dashboard evidence commit `869f9a9` then passed CI run `42882712461`,
+staging deployment `8c852386-d98d-40c3-9b92-98810baac1b5`, DAST run
+`42884622291`, and production promotion run `42884880244`.
 
 A one-day equity recovery made 218 bounded provider requests. It retained
 78,480 existing bars, preserved 409 conflicts as immutable evidence, and

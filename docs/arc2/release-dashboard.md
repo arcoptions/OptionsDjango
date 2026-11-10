@@ -39,7 +39,7 @@ Last evidence refresh: 2026-11-10.
 | Evidence | Current result |
 |---|---|
 | Current candidate tests | 646 passed: 631 non-browser and 15 browser tests |
-| Exact-commit CI | Run `42875080113` passed for deployed bounded-memory refresh commit `e5f9b2f` |
+| Exact-commit CI | Functional run `42875080113` passed for `e5f9b2f`; dashboard run `42882712461` passed for deployed commit `869f9a9` |
 | Test files | 42 |
 | Test classes ending in `Tests` | 82 |
 | Django system check | Passed with no issues |
@@ -51,8 +51,8 @@ Last evidence refresh: 2026-11-10.
 | Dhan continuity | REST fallback is deployed after 30 seconds of WebSocket silence; market-open freshness proof remains pending |
 | Azure OpenAI | Production managed-identity inference returned `READY` after local authentication was disabled; no API key is stored |
 | Telegram activation | The bot token and alert chat ID are absent, so the daily Dhan reminder remains safely dormant |
-| Latest staging acceptance | Deployment `f35cfe37-4244-43f4-a8e2-52cee5be6c3a`, exact-commit health, static assets, isolation, and DAST run `42877032600` passed |
-| Latest production acceptance | Promotion run `42877271814` attempt 2 passed; exact commit `e5f9b2f`, VM parity, manual mode, and zero new executions were verified |
+| Latest staging acceptance | Deployment `8c852386-d98d-40c3-9b92-98810baac1b5`, exact-commit health, static assets, isolation, and DAST run `42884622291` passed |
+| Latest production acceptance | Promotion run `42884880244` passed; exact commit `869f9a9`, VM parity, manual mode, and zero new executions were verified |
 | Dhan master refresh | Completed in 93 seconds with 218 underlyings, 76,328 active options, 1,917 new temporal identities, and zero active provider-ID duplicates |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
 | Production App Service | Running on Linux Basic in Central India; staging uses a separate Linux Basic plan |

@@ -204,16 +204,16 @@ required.
 
 | Check | Evidence | Result |
 |---|---|---|
-| Exact commit | Production `/deployment-health/` returned `e5f9b2fd7dd98f4041e384e0c1f197adac542607` | Passed |
+| Exact commit | Production `/deployment-health/` returned `869f9a99f65854ac0d6c6899e1797e21b6a4bad3` | Passed |
 | Artifact integrity | The accepted staging `output.tar.zst` SHA-256 matched the production copy before restart | Passed |
-| Deployment workflow | Exact-artifact production run `42877271814` attempt 2 completed after CI and DAST acceptance | Passed |
+| Deployment workflow | Exact-artifact production run `42884880244` completed after CI and DAST acceptance | Passed |
 | Startup and migrations | The 60-second synchronous metrics bound prevented the prior 600-second startup failure; cold health returned in 355 seconds | Passed |
 | Authenticated journeys | Twelve staff routes returned HTTP 200 without horizontal overflow or browser page errors | Passed |
 | Static assets | Critical Trading Workspace CSS returned HTTP 200 | Passed |
 | Security headers | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
 | Execution safety | `ARC_EXECUTION_MODE=manual` and `ARC_DEPLOYMENT_ENVIRONMENT=production`; no live order was placed | Passed |
 | Azure OpenAI | Managed-identity inference returned `READY` after local authentication was disabled; no API key is stored | Passed |
-| Worker parity | The VM checked out `e5f9b2f`; `paper-radar`, `nifty-live`, and the synchronization timer remained active | Passed |
+| Worker parity | The VM checked out `869f9a9`; `paper-radar` and `nifty-live` remained active | Passed |
 | Dhan master refresh | The production VM streamed and synchronized the real master in 93 seconds: 218 underlyings, 76,328 options, and 1,917 new temporal identities | Passed |
 | Registry integrity | 76,546 identities are active, 288 historical identities remain inactive, and no active provider identity is duplicated | Passed |
 | Resource recovery | Available RAM returned to 500 MiB immediately after refresh; 1,229 MiB swap remained free | Passed |
@@ -240,3 +240,8 @@ spooled validated contracts to JSON Lines and processed database identities in
 `f35cfe37-4244-43f4-a8e2-52cee5be6c3a`, DAST run `42877032600`, and production
 promotion run `42877271814` attempt 2 passed. Attempt 1 failed safely on a Kudu
 HTTP 504 while production continued serving the previous accepted commit.
+The permanent dashboard evidence was then deployed at commit `869f9a9` through
+CI run `42882712461`, staging deployment
+`8c852386-d98d-40c3-9b92-98810baac1b5`, DAST run `42884622291`, and production
+promotion run `42884880244`. Production and the VM reported exact commit parity,
+manual execution remained active, and the `TradeExecution` count remained two.

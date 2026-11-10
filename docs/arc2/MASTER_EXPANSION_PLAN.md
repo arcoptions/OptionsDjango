@@ -6,7 +6,7 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 ## Evidence baseline
 
 This plan reconciles the master expansion specification with the verified
-activation branch through deployed commit `e5f9b2f`. The current expansion
+activation branch through deployed commit `869f9a9`. The current expansion
 branch has 631 non-browser and 646 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
