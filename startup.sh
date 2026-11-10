@@ -23,8 +23,9 @@ if [ "${DHAN_TOKEN_OWNER:-0}" = "1" ]; then
 	python -u manage.py renew_dhan_token --daemon > /home/LogFiles/dhan-token.log 2>&1 &
 fi
 if [ "${ARC_BACKGROUND_WORKERS:-1}" = "1" ]; then
-	if ! python manage.py warm_radar_metrics; then
-		echo "WARNING: Initial radar metrics warm-up failed; background refresh will retry." >&2
+	if ! timeout "${ARC_RADAR_METRICS_WARM_TIMEOUT_SECONDS:-60}" \
+	  python manage.py warm_radar_metrics; then
+		echo "WARNING: Initial radar metrics warm-up failed or timed out; background refresh will retry." >&2
 	fi
 	python -u manage.py warm_radar_metrics --loop \
 	  > /home/LogFiles/radar-metrics.log 2>&1 &
