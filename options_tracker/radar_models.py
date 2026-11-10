@@ -27,7 +27,11 @@ class RadarInstrument(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["segment", "security_id"], name="radar_instrument_identity"),
+            models.UniqueConstraint(
+                fields=["segment", "security_id"],
+                condition=models.Q(active=True),
+                name="radar_active_instrument_identity",
+            ),
         ]
 
 

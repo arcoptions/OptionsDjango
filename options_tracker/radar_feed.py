@@ -277,48 +277,41 @@ def sync_instruments(rows: list[dict], now: datetime) -> dict:
     identities = [(r["segment"], r["security_id"]) for r in records]
     if len(identities) != len(set(identities)):
         raise ValueError("Duplicate master identities; registry unchanged.")
-    instances = [RadarInstrument(**record) for record in records]
     with transaction.atomic():
-        # Validate identities in one read, not 70,000 queries under SQLite's write lock.
-        fields = ("symbol", "kind", "expiry", "strike", "side")
-        existing = {(row.segment, row.security_id): row for row in
-                    RadarInstrument.objects.only("segment", "security_id", *fields)}
-        strike_adjustments = {}
+        identity_fields = ("segment", "security_id", "symbol", "kind", "expiry", "strike", "side")
+        existing = {}
+        for instrument in RadarInstrument.objects.only(
+            "pk", *identity_fields, "name", "lot_size", "active", "refreshed_at"
+        ).order_by("pk"):
+            identity = tuple(getattr(instrument, field) for field in identity_fields)
+            existing[identity] = instrument
+
+        RadarInstrument.objects.filter(active=True).update(active=False)
+        to_update = []
+        to_create = []
         for record in records:
-            old = existing.get((record["segment"], record["security_id"]))
-            if old is None:
+            identity = tuple(record[field] for field in identity_fields)
+            instrument = existing.get(identity)
+            if instrument is None:
+                to_create.append(RadarInstrument(**record))
                 continue
-            changed = {field for field in fields if getattr(old, field) != record[field]}
-            if not changed:
-                continue
-            if changed == {"strike"} and old.kind == record["kind"] == "OPTION":
-                strike_adjustments.setdefault(record["symbol"], []).append((old, record))
-                continue
-            raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
-        for symbol, adjustments in strike_adjustments.items():
-            matched = [
-                record for record in records
-                if record["kind"] == "OPTION" and record["symbol"] == symbol
-                and (record["segment"], record["security_id"]) in existing
-            ]
-            deltas = {round(record["strike"] - old.strike, 8) for old, record in adjustments}
-            contract_ids = [old.pk for old, _ in adjustments]
-            coordinated = (
-                len(adjustments) >= 2
-                and len(adjustments) == len(matched)
-                and {record["side"] for _, record in adjustments} == {"CE", "PE"}
-                and len(deltas) == 1
-                and 0 not in deltas
+            instrument.name = record["name"]
+            instrument.lot_size = record["lot_size"]
+            instrument.active = True
+            instrument.refreshed_at = now
+            to_update.append(instrument)
+        if to_update:
+            RadarInstrument.objects.bulk_update(
+                to_update,
+                ["name", "lot_size", "active", "refreshed_at"],
             )
-            if not coordinated or RadarOpportunity.objects.filter(contract_id__in=contract_ids).exists():
-                raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
-        RadarInstrument.objects.all().update(active=False)
-        RadarInstrument.objects.bulk_create(
-            instances, update_conflicts=True,
-            unique_fields=["segment", "security_id"],
-            update_fields=["name", "strike", "lot_size", "active", "refreshed_at"],
-        )
-    return {"underlyings": len(symbols), "options": len(options)}
+        if to_create:
+            RadarInstrument.objects.bulk_create(to_create)
+    return {
+        "underlyings": len(symbols),
+        "options": len(options),
+        "created_identities": len(to_create),
+    }
 
 
 def subscriptions(now: datetime) -> list[RadarInstrument]:
