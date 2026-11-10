@@ -5,7 +5,7 @@ description: Governed staging validation and production activation plan for the 
 
 ## Status
 
-Deployed
+Validated
 
 Generated: 2026-11-10
 
@@ -23,13 +23,14 @@ Path: Modify existing application.
 |---|---|
 | Classification | Production |
 | Scale | Existing small deployment |
-| Budget | Preserve existing resources and SKU |
+| Budget | Preserve existing application resources; add one approved Azure OpenAI S0 resource |
 | Subscription | Visual Studio Enterprise Subscription (`2fa45de1-d44d-440b-8719-56e211524c32`) |
-| Location | Central India |
+| Locations | Central India for the application; South India for Azure OpenAI availability |
 | Execution policy | Manual by default; legacy automatic execution remains disabled |
 
-The subscription and location reuse the current default Azure context and the
-region of both existing App Services. No new Azure resource is proposed.
+The application reuses the current subscription and Central India resources.
+Azure OpenAI S0 was unavailable in Central India, so the approved
+`arc-openai-2fa45de1` resource was provisioned in South India.
 
 ## 3. Components detected
 
@@ -38,7 +39,8 @@ region of both existing App Services. No new Azure resource is proposed.
 | ARC web application | Web and API | Django, Python 3.13 deployment workflow | Repository root |
 | ARC background workers | Worker | Django management commands on the existing VM | `options_tracker/management/commands/` |
 | Production database | Data | Existing Azure PostgreSQL | Existing managed resource |
-| Deployment pipeline | CI/CD | GitHub Actions and Azure CLI zip deployment | `.github/workflows/deploy-azure.yml` |
+| Research inference | AI | Azure OpenAI with managed identity | `arc-openai-2fa45de1` / `arc-research` |
+| Deployment pipeline | CI/CD | GitHub Actions and Azure CLI exact-artifact promotion | `.github/workflows/deploy-azure.yml` |
 
 ## 4. Recipe selection
 
@@ -60,6 +62,13 @@ existing VM-owned market workers.
 | Production web application | Azure App Service | `arc-options-2fa45de1` |
 | Database | Azure Database for PostgreSQL | Existing isolated staging and production databases |
 | Market workers | Existing Azure VM | Production-owned workers only |
+| Research inference | Azure OpenAI | South India S0 resource with `gpt-5-mini` deployment |
+
+Production authenticates to Azure OpenAI through its system-assigned managed
+identity and the resource-scoped `Cognitive Services OpenAI User` role. ARC
+limits itself to four requests per minute, below the deployment's 10-request
+and 10,000-token per-minute quotas. No Azure OpenAI API key is stored in
+production.
 
 Staging must remain token-free, broker-preview-only, and unable to own
 production workers. Production activation must not enable ARC 2.0 automatic
@@ -67,15 +76,16 @@ orders.
 
 ## 6. Provisioning limit checklist
 
-No Azure resources, compute instances, public IP addresses, storage accounts,
-or databases will be provisioned by this deployment.
+No compute instances, public IP addresses, storage accounts, or databases are
+provisioned by this deployment. One approved inference resource was added.
 
-| Resource type | Number to deploy | Total after deployment | Limit or quota | Notes |
+| Resource type | Number deployed | Total after deployment | Limit or quota | Notes |
 |---|---:|---:|---|---|
 | Existing App Service code deployments | 0 new resources | Unchanged | Not applicable | Existing running staging and production apps in Central India |
+| Azure OpenAI S0 resources | 1 | 1 | 10 requests/minute and 10,000 tokens/minute | South India `gpt-5-mini`; ARC enforces four requests/minute |
 
-Status: All resource counts remain unchanged. The Azure quota workflow was
-reviewed; no quota-consuming provisioning is in scope.
+Status: Application resource counts remain unchanged. Azure OpenAI capacity and
+regional availability were verified before provisioning.
 
 ## 7. Execution checklist
 
@@ -124,7 +134,7 @@ and reversible before production activation.
 
 ## 9. External gates
 
-* Approved Azure OpenAI configuration
+* Deployed-application verification of the approved Azure OpenAI managed identity
 * Approved broker statements for reconciliation
 * Dhan rolling-option entitlement resolution for `DH-905`
 * Authoritative index, event, news, global-market, and macro providers
@@ -159,17 +169,32 @@ Validation completed against subscription
 | Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
 | Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
 | Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
+| Current candidate suite | 628 non-browser tests and 15 browser tests | Passed locally; exact-commit CI pending |
+| Dhan continuity | Silent WebSocket activates one full-quote REST snapshot at five-second intervals behind a shared 1.1-second request gate | Passed locally; live deployment proof pending |
+| Azure OpenAI foundation | `arc-research` returned `READY`; production identity has the resource-scoped OpenAI user role | Passed resource test; deployed ARC verification pending |
+| Research evidence version | Modified support files advance prospective evidence to `stock-trap-forward-v23` without rewriting v22 | Passed locally; worker registration pending |
 
 The first optimized production Trading Workspace request took 10.9 seconds
 while PostgreSQL and application caches warmed. Repeated acceptance reached a
 4.51-second DOM-ready time. All other authenticated production routes completed
 in 0.41 to 2.16 seconds.
 
-This is a code-only deployment to existing App Services. There is no Bicep,
-Terraform, Docker image, resource creation, resource deletion, or RBAC change
-to validate.
+This is a code deployment to existing App Services. There is no Bicep,
+Terraform, Docker image, resource deletion, or application-plan change to
+validate. The separately approved Azure OpenAI foundation added one resource
+and one least-privilege role assignment.
 
-## 11. Production deployment proof
+## 11. Role assignment verification
+
+| Identity | Operation | Role and scope | Status |
+|---|---|---|---|
+| Production App Service system identity | Invoke the deployed Azure OpenAI model | `Cognitive Services OpenAI User` scoped to `arc-openai-2fa45de1` | Verified |
+
+The application uses `DefaultAzureCredential` and bearer authentication for
+production inference. No management-plane role or Azure OpenAI API key is
+required.
+
+## 12. Production deployment proof
 
 | Check | Evidence | Result |
 |---|---|---|

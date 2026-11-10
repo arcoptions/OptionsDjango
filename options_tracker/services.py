@@ -28,6 +28,7 @@ DHAN_PROFILE_URL = "https://api.dhan.co/v2/profile"
 DHAN_LTP_STATE_KEY = "dhan_ltp_request_state"
 DHAN_LTP_IN_FLIGHT_SECONDS = 30
 DHAN_LTP_RATE_LIMIT_SECONDS = 120
+DHAN_QUOTE_MIN_INTERVAL_SECONDS = 1.1
 DHAN_SYMBOL_ALIASES = {"NG": "NATURALGAS", "UNITSDSPR": "UNITDSPR"}
 DHAN_SEGMENTS = {
     ("NSE", "D"): "NSE_FNO", ("BSE", "D"): "BSE_FNO", ("MCX", "M"): "MCX_COMM",
@@ -703,9 +704,22 @@ def _acquire_dhan_ltp_slot():
         if in_flight_until and in_flight_until > now:
             return {"acquired": False, "refreshing": True}
 
+        next_allowed_at = _dhan_ltp_state_time(state.get("next_allowed_at"))
+        if next_allowed_at and next_allowed_at > now:
+            return {
+                "acquired": False,
+                "refreshing": True,
+                "retry_after_seconds": max(
+                    0.1, (next_allowed_at - now).total_seconds()
+                ),
+            }
+
         state.pop("cooldown_until", None)
         state["in_flight_until"] = (
             now + timedelta(seconds=DHAN_LTP_IN_FLIGHT_SECONDS)
+        ).isoformat()
+        state["next_allowed_at"] = (
+            now + timedelta(seconds=DHAN_QUOTE_MIN_INTERVAL_SECONDS)
         ).isoformat()
         setting.value = json.dumps(state, separators=(",", ":"))
         setting.save(update_fields=["value", "updated_at"])

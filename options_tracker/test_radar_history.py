@@ -12,7 +12,7 @@ import requests
 from .models import DownloadJob, RadarBar, RadarQuote, RadarWorker, StockEquityCandle
 from .radar import Candle
 from .radar_feed import acquire_worker
-from .radar_feed import CandleCollector, decode_packets
+from .radar_feed import CandleCollector, Tick, decode_packets, fetch_quote_snapshot
 from .radar_history import (
     HistoryClient, credentials, download_instrument, parse_history, reuse_equity_cache,
     store_bars, window_covered,
@@ -31,25 +31,35 @@ def response_data(stamps):
 
 
 class StreamTimingTests(RadarTestCase):
-    def run_stream(self, receive, scan, *, collect_only=False, decoded_ticks=None):
+    def run_stream(
+        self,
+        receive,
+        scan,
+        *,
+        collect_only=False,
+        decoded_ticks=None,
+        fallback_ticks=None,
+    ):
         from .management.commands.radar_run import Command
         module = "options_tracker.management.commands.radar_run"
         socket, collector, beat = Mock(), Mock(), Mock()
+        fallback = Mock(return_value=fallback_ticks)
         socket.recv.side_effect = receive
         with patch.multiple(
             module, credentials=Mock(return_value=("test-token", "test-client")),
             subscriptions=Mock(return_value=[self.equity]), CandleCollector=Mock(return_value=collector),
             scan=scan, heartbeat=beat, decode_packets=Mock(return_value=decoded_ticks or []),
+            fetch_quote_snapshot=fallback,
         ), patch(module+".timezone.now", side_effect=lambda: self.clock[0]), patch(
             module+".websocket.create_connection", return_value=socket,
         ) as connect, patch(module+".time.sleep"):
             Command().stream("test-owner", collect_only=collect_only)
-        return connect, beat
+        return connect, beat, fallback, collector
 
     def test_collection_only_never_scans(self):
         self.clock = [NOW]
         scanner = Mock()
-        connect, beat = self.run_stream([b"packet", KeyboardInterrupt], scanner, collect_only=True)
+        connect, beat, _, _ = self.run_stream([b"packet", KeyboardInterrupt], scanner, collect_only=True)
         scanner.assert_not_called()
         self.assertEqual(connect.call_count, 1)
         self.assertIn("COLLECT_ONLY", beat.call_args.args[2])
@@ -71,7 +81,7 @@ class StreamTimingTests(RadarTestCase):
             return {}
 
         scanner = Mock(side_effect=scan)
-        connect, beat = self.run_stream(receive, scanner)
+        connect, beat, _, _ = self.run_stream(receive, scanner)
         self.assertEqual(scanner.call_count, 2)
         self.assertEqual(connect.call_count, 1)
         self.assertTrue(all(call.args[1] == "WAITING_FOR_DATA" for call in beat.call_args_list))
@@ -85,14 +95,46 @@ class StreamTimingTests(RadarTestCase):
             calls += 1
             if calls > 1:
                 raise KeyboardInterrupt
-            self.clock[0] += timedelta(seconds=31)
+            self.clock[0] += timedelta(seconds=41)
             return b"packet"
 
-        connect, beat = self.run_stream(receive, Mock(return_value={}), collect_only=True)
+        connect, beat, _, _ = self.run_stream(receive, Mock(return_value={}), collect_only=True)
         self.assertEqual(connect.call_count, 2)
         self.assertEqual(beat.call_args_list[0].args[1], "RECONNECTING")
         self.assertIn("No market packets", beat.call_args_list[0].args[2])
         self.assertIn("COLLECT_ONLY", beat.call_args_list[0].args[2])
+
+    def test_silent_socket_uses_rate_safe_rest_quote_fallback(self):
+        self.clock = [NOW]
+        calls = 0
+
+        def receive():
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise KeyboardInterrupt
+            self.clock[0] += timedelta(seconds=31)
+            return b"packet"
+
+        tick = Tick(
+            "NSE_EQ",
+            self.equity.security_id,
+            NOW + timedelta(seconds=31),
+            NOW + timedelta(seconds=31),
+            101,
+            1000,
+        )
+        connect, beat, fallback, collector = self.run_stream(
+            receive,
+            Mock(return_value={}),
+            collect_only=True,
+            fallback_ticks=[tick],
+        )
+
+        self.assertEqual(connect.call_count, 1)
+        fallback.assert_called_once()
+        collector.ingest.assert_called_once()
+        self.assertIn("REST_QUOTE_FALLBACK", beat.call_args.args[2])
 
     def test_stale_quotes_do_not_make_a_receiving_socket_look_stalled(self):
         self.clock = [NOW]
@@ -107,7 +149,7 @@ class StreamTimingTests(RadarTestCase):
             return b"packet"
 
         tick = Mock(source_at=NOW, received_at=NOW, segment="NSE_EQ", security_id=self.equity.security_id)
-        connect, beat = self.run_stream(
+        connect, beat, _, _ = self.run_stream(
             receive,
             Mock(return_value={}),
             collect_only=True,
@@ -118,6 +160,54 @@ class StreamTimingTests(RadarTestCase):
 
 
 class RadarHistoryTests(RadarTestCase):
+    @patch("options_tracker.radar_feed.requests.post")
+    def test_quote_fallback_parses_snapshot_and_obeys_shared_interval(self, post):
+        post.return_value.status_code = 200
+        post.return_value.raise_for_status.return_value = None
+        post.return_value.json.return_value = {
+            "status": "success",
+            "data": {
+                "NSE_EQ": {
+                    self.equity.security_id: {
+                        "last_price": 101.5,
+                        "last_trade_time": NOW.strftime("%d/%m/%Y %H:%M:%S"),
+                        "volume": 1234,
+                        "depth": {
+                            "buy": [{"price": 101.4, "quantity": 20}],
+                            "sell": [{"price": 101.6, "quantity": 25}],
+                        },
+                        "ohlc": {
+                            "open": 100,
+                            "high": 102,
+                            "low": 99,
+                            "close": 100.5,
+                        },
+                    },
+                },
+            },
+        }
+
+        ticks = fetch_quote_snapshot(
+            [self.equity],
+            "test-token",
+            "test-client",
+            NOW,
+        )
+        second = fetch_quote_snapshot(
+            [self.equity],
+            "test-token",
+            "test-client",
+            NOW,
+        )
+
+        self.assertEqual(len(ticks), 1)
+        self.assertEqual(ticks[0].last, 101.5)
+        self.assertEqual(ticks[0].volume, 1234)
+        self.assertEqual(ticks[0].bid, 101.4)
+        self.assertEqual(ticks[0].ask, 101.6)
+        self.assertIsNone(second)
+        self.assertEqual(post.call_count, 1)
+
     def test_parser_excludes_forming_future_and_nonregular_candles(self):
         start = session_start(NOW.date())
         data = response_data([start-timedelta(minutes=1), start, NOW-timedelta(minutes=1), NOW, NOW+timedelta(minutes=1)])

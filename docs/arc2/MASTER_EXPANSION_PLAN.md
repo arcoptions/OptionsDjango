@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 623 non-browser and 638 total passing tests. A rendered page
+baseline to 628 non-browser and 643 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 623 passing non-browser tests
-* 638 passing tests including browser-tagged journeys
+* 628 passing non-browser tests
+* 643 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -26,7 +26,7 @@ The current baseline has:
 | Capability | Current classification | Verified evidence | Genuine gap |
 |---|---|---|---|
 | Dhan REST quotes and option chain | Fully functional in bounded existing workflows | Quote, index OI, option-chain, freshness, and rate-limit tests | Consolidate remaining legacy quote contracts |
-| Dhan WebSocket collection | Fully functional on the production VM | Collector heartbeat, reconnect state, packet liveness, and quote freshness | Browser server push is not justified until polling load requires it |
+| Dhan live quote collection | REST continuity implemented; production WebSocket currently silent | Handshake and subscription succeed without frames; rate-safe full-quote fallback tests pass | Deploy the fallback, verify live freshness, and continue provider investigation |
 | Canonical instrument identity | Fully functional in staging | 74,917 mapped instruments and zero unmapped radar rows | Named index-universe membership and exchange trading status need maintained sources |
 | Equity historical ingestion | Partially functional with verified real data | 860 imported 15-minute candles with matching hash and idempotent rerun | Expand intervals and universe through monitored, restartable jobs |
 | Rolling option history | Blocked by provider or entitlement | Twelve official-contract requests returned Dhan `DH-905` while equity history succeeded | Dhan account or backend resolution |
@@ -36,7 +36,7 @@ The current baseline has:
 | Technical charting | Functional for stored-bar scope | Multi-timeframe candlesticks, deterministic patterns, prior-structure support/resistance, ATR-based analytical levels, and timeframe agreement | Broader live-provider acceptance and additional pattern families |
 | Event intelligence | Functional for normalized stored evidence | Attributed stock timeline and deterministic one-session/five-session observed price reactions over results, news, and corporate actions | Approved announcement ingestion and verified expected-results calendar |
 | Unified opportunities | Fully functional for current sources | Canonical persistence, immutable revisions, state guards, audit, and synchronization | General trade-setup entity and full user-executed lifecycle across all sources |
-| ARC Intelligence | Backend implemented but provider-blocked | Evidence hashes, citations, prompt/model retention, and fail-closed behavior | Approved Azure OpenAI endpoint, key, deployment, and production snapshots |
+| ARC Intelligence | Provider foundation ready; application rollout pending | Azure OpenAI model, managed identity, evidence hashes, citations, and shared request budget | Deploy the managed-identity client and verify production snapshots |
 | Watchlists and alerts | Fully functional in current radar scope | Per-user watches, price alerts, scanner deduplication, browser acknowledgement, and Telegram retries | Generalize to all new opportunity and event sources |
 | Personal trading analytics | Partially functional | Journal, paper performance, broker importers, and evidence-class separation | Approved current statements and broker reconciliation |
 | Release and operations evidence | Fully functional in staging | Release Dashboard, Operations Health, exact-commit deployment health, CI, DAST | Restore rehearsal, independent human penetration test, and production approval |
@@ -69,7 +69,7 @@ work and must not replace the readable application-wide theme.
 | R13 Technical Intelligence | Candles, RSI, overlays, deterministic labels | Pattern geometry, support/resistance, automatic levels, multi-timeframe agreement | Historical depth and quality thresholds |
 | R14 Event Intelligence | Results, actions, news, and economic-event schema | Ingestion adapters, timeline, waiting list, reaction calculations | Exchange or licensed corporate-event source |
 | R15 Unified setups | Canonical opportunities, revisions, status audit, manual decisions | Cross-source setup lifecycle and user-executed trade handoff | None for the internal model; broker reconciliation remains external |
-| R16 ARC Intelligence | Evidence package, prompt/model/hash retention, citations | New analysis workflows and suggested questions | Azure OpenAI configuration |
+| R16 ARC Intelligence | Evidence package, prompt/model/hash retention, citations, managed-identity client | Production activation and bounded acceptance snapshot | Deployed-application verification |
 | R17 Personal Trading Desk | Journal, paper performance, broker imports, alerts | Unified task flow and reconciliation UX | Approved broker statements |
 | R18 Hardening | CI, browser tests, staging, DAST, exact-commit health | End-to-end expansion journeys, performance budgets, rollback rehearsal | Restore approval, human penetration test, production approval |
 
@@ -86,7 +86,7 @@ work and must not replace the readable application-wide theme.
 | FII and DII flow | Authoritative provider | Not selected | Flow evidence unavailable |
 | Corporate announcements and results | Exchange or licensed provider | Not selected | Event workflow unavailable |
 | Company news | Licensed provider | Advisory-only partial sources | Cannot become trade evidence |
-| AI analysis | Azure OpenAI | Not configured | No generated analysis |
+| AI analysis | Azure OpenAI | South India `gpt-5-mini` ready with production managed identity | Remain unavailable until exact-artifact application rollout succeeds |
 | Broker reconciliation | User-approved statements and read-only broker records | Importers implemented, current evidence absent | Performance remains explicitly incomplete |
 
 ## Database impact assessment
@@ -243,8 +243,8 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 623 non-browser tests in 123.148 seconds. All 15
-browser-tagged tests passed separately in 101.023 seconds, covering 638 tests
+The current branch passed 628 non-browser tests in 137.054 seconds. All 15
+browser-tagged tests passed separately in 120.779 seconds, covering 643 tests
 without treating a stalled combined-run teardown as success evidence. The R15
 journey proves that validation, complete planning, and approval preserve actor
 and reason audit while direct execution requests remain blocked. R16 coverage
@@ -253,7 +253,10 @@ configuration cannot produce or persist substitute analysis. R17 coverage
 proves user alert isolation, staff and method controls, read-only broker safety,
 and the Personal Desk query budget. R18 reminder coverage proves production
 confinement, quiet hours, UI-token freshness, successful-delivery deduplication,
-retryable failure, and secret-free Telegram content.
+retryable failure, and secret-free Telegram content. The latest candidate also
+covers silent-WebSocket REST continuity, shared Dhan throttling, Telegram
+monitor stability, managed-identity GPT-5 requests, and a shared ARC request
+budget.
 
 Trading Workspace coverage also verifies that a persisted display-metrics
 snapshot is reusable across application workers after the process-local cache

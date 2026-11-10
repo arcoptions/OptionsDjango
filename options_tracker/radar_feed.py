@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
+import requests
 
 from .models import (
     RadarBar, RadarInstrument, RadarOpportunity, RadarOptionPoint, RadarQuote, RadarWatch, RadarWorker,
@@ -25,6 +26,7 @@ from .radar_sessions import continuous_timestamp
 LOGGER = logging.getLogger(__name__)
 SEGMENTS = {1: "NSE_EQ", 2: "NSE_FNO"}
 IST = ZoneInfo("Asia/Kolkata")
+DHAN_QUOTE_URL = "https://api.dhan.co/v2/marketfeed/quote"
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,119 @@ def decode_packets(data: bytes, received_at: datetime) -> list[Tick]:
                           maximum if isfinite(maximum) and maximum > 0 else None,
                           minimum if isfinite(minimum) and minimum > 0 else None,
                           None))
+    return ticks
+
+
+def fetch_quote_snapshot(
+    instruments: list[RadarInstrument],
+    access_token: str,
+    client_id: str,
+    received_at: datetime,
+) -> list[Tick] | None:
+    """Fetch one rate-coordinated quote snapshot when the socket is silent."""
+    from .services import (
+        DHAN_LTP_RATE_LIMIT_SECONDS,
+        _acquire_dhan_ltp_slot,
+        _finish_dhan_ltp_request,
+    )
+
+    slot = _acquire_dhan_ltp_slot()
+    if not slot["acquired"]:
+        return None
+    payload: dict[str, list[int]] = {}
+    for instrument in instruments:
+        payload.setdefault(instrument.segment, []).append(int(instrument.security_id))
+    try:
+        response = requests.post(
+            DHAN_QUOTE_URL,
+            json=payload,
+            headers={
+                "access-token": access_token,
+                "client-id": client_id,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=20,
+        )
+        if response.status_code == 429:
+            try:
+                retry_after = int(response.headers.get("Retry-After", "0"))
+            except (TypeError, ValueError):
+                retry_after = 0
+            cooldown = max(DHAN_LTP_RATE_LIMIT_SECONDS, retry_after)
+            _finish_dhan_ltp_request(cooldown_seconds=cooldown)
+            raise ConnectionError(
+                f"Dhan quote rate limit active for {cooldown} seconds."
+            )
+        response.raise_for_status()
+        body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Dhan quote fallback returned invalid JSON.")
+    except (requests.RequestException, ValueError) as error:
+        _finish_dhan_ltp_request()
+        raise ConnectionError(
+            "Dhan quote fallback failed without exposing credentials."
+        ) from error
+    _finish_dhan_ltp_request()
+
+    by_identity = {
+        (instrument.segment, instrument.security_id): instrument
+        for instrument in instruments
+    }
+    ticks = []
+    invalid = 0
+    for segment, quotes in body.get("data", {}).items():
+        if not isinstance(quotes, dict):
+            invalid += 1
+            continue
+        for security_id, quote in quotes.items():
+            if (segment, str(security_id)) not in by_identity or not isinstance(quote, dict):
+                invalid += 1
+                continue
+            try:
+                source_at = timezone.make_aware(
+                    datetime.strptime(
+                        str(quote["last_trade_time"]),
+                        "%d/%m/%Y %H:%M:%S",
+                    ),
+                    IST,
+                )
+                depth = quote.get("depth") or {}
+                buys = depth.get("buy") or []
+                sells = depth.get("sell") or []
+                best_bid = next(
+                    (item for item in buys if float(item.get("price") or 0) > 0),
+                    {},
+                )
+                best_ask = next(
+                    (item for item in sells if float(item.get("price") or 0) > 0),
+                    {},
+                )
+                ohlc = quote.get("ohlc") or {}
+                ticks.append(Tick(
+                    segment=segment,
+                    security_id=str(security_id),
+                    source_at=source_at,
+                    received_at=received_at,
+                    last=float(quote["last_price"]),
+                    volume=int(quote.get("volume") or 0),
+                    bid=float(best_bid.get("price") or 0),
+                    ask=float(best_ask.get("price") or 0),
+                    bid_qty=int(best_bid.get("quantity") or 0),
+                    ask_qty=int(best_ask.get("quantity") or 0),
+                    oi=int(quote.get("oi") or 0) if segment == "NSE_FNO" else None,
+                    day_open=float(ohlc.get("open") or 0) or None,
+                    day_high=float(ohlc.get("high") or 0) or None,
+                    day_low=float(ohlc.get("low") or 0) or None,
+                    previous_close=float(ohlc.get("close") or 0) or None,
+                ))
+            except (KeyError, TypeError, ValueError):
+                invalid += 1
+    if invalid:
+        LOGGER.warning(
+            "Dhan quote fallback ignored %s malformed or unexpected records.",
+            invalid,
+        )
     return ticks
 
 

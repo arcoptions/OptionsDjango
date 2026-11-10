@@ -34,19 +34,23 @@ working tree, but production behavior has not changed.
 
 ## Evidence snapshot
 
-Last evidence refresh: 2026-11-09.
+Last evidence refresh: 2026-11-10.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 575 passed across the full suite; 561 non-browser tests passed in production CI |
-| Test files | 35 |
-| Test classes ending in `Tests` | 73 |
+| Current candidate tests | 643 passed: 628 non-browser and 15 browser tests |
+| Exact-commit CI | Pending for the uncommitted Dhan continuity and managed-identity candidate |
+| Test files | 42 |
+| Test classes ending in `Tests` | 82 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
 | Current ARC 2.0 schema changes | Migrations `0024`-`0039` applied to test SQLite and restored production PostgreSQL |
 | Latest Release 1 deployment | Production deployed through guarded Kudu status verification, commit-specific runtime health, and static-IP VM synchronization |
+| Dhan continuity candidate | Silent WebSocket triggers a rate-safe full-quote REST fallback; live deployment and freshness proof remain pending |
+| Azure OpenAI foundation | South India `gpt-5-mini` deployment returned `READY`; production managed identity and role are configured; in-app rollout remains pending |
+| Telegram activation | Bot token is valid; alert chat ID and safe delivery test await the user's `/start` message |
 | Latest staging browser smoke | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow; steady DOM readiness was 220-1,532 ms after F&O optimization |
 | Latest Release 1 production smoke | Login, static, and deployed-commit warm-up passed; App Service and VM synchronized; core services and evaluator progress heartbeats verified |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
@@ -210,10 +214,10 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R8-04 | Strategy, stock, instrument, broker, and provider cuts | Implemented locally | Passed | Production deployed | Broker, underlying, instrument kind, paper strategy, paper symbol, market-provider freshness, and Telegram-provider outcomes are unified |
 | R8-05 | Complete journal fields, search, filters, and export | Implemented locally | Passed | Production deployed | Evidence search, state and date filters, formula-safe CSV export, emotion, and HTTPS screenshot references are implemented |
 | R8-06 | Telegram provider analytics | Implemented locally | Passed | Production deployed | Provider-level resolved coverage, target count, stop count, and hit rate are shown; the dashboard explicitly does not present these as execution-time P&L |
-| R8-07 | General ARC AI assistant | Implemented locally | Passed | Production deployed | Staff-only assistant stores the question, evidence, prompt, hashes, provider, model, and response; it remains unavailable without approved provider configuration |
+| R8-07 | General ARC AI assistant | Managed-identity activation implemented locally | Passed | Prior UI deployed; provider rollout pending | Staff-only assistant stores question, evidence, prompt, hashes, provider, model, and response |
 | R8-08 | Radar assistant | Partial | Partial | Production baseline | Persisted assistant snapshots exist with limited scope |
-| R8-09 | AI market briefing | Implemented locally | Passed | Production deployed | Evidence-only Azure OpenAI workflow is traceable and fails unavailable when provider configuration is absent; production provider coverage remains |
-| R8-10 | AI research and risk explanations | Implemented locally | Passed | Production deployed | Evidence-only responses separate facts, interpretation, risks, and manual verification; tests prove no broker activity |
+| R8-09 | AI market briefing | Managed-identity activation implemented locally | Passed | Prior UI deployed; provider rollout pending | South India `gpt-5-mini` and resource-scoped production identity are ready; exact-artifact application verification remains |
+| R8-10 | AI research and risk explanations | Implemented locally | Passed | Prior UI deployed; provider rollout pending | Evidence-only responses separate facts, interpretation, risks, and manual verification; tests prove no broker activity |
 
 ## Cross-cutting data, operations, security, and experience
 
@@ -231,7 +235,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | X-10 | Audit trail for material actions | Partial | Partial | Production baseline | Order, radar, and settings events exist; actor coverage is incomplete |
 | X-11 | Secret management | Verified baseline | Partial | Production baseline | Azure settings and root-only VM environment are established |
 | X-12 | Input validation and secure errors | Partial | Partial | Production baseline | Django forms and service checks exist; route audit remains |
-| X-13 | Rate limiting | Partial | Passed for implemented scope | Production deployed | Scoped Telegram ingestion now has configurable per-process remote-address throttling; distributed throttling requires shared cache infrastructure |
+| X-13 | Rate limiting | Partial | Passed for implemented scope | Production baseline; candidate pending | Database-shared gates enforce Dhan quote spacing and a four-request-per-minute ARC OpenAI budget; broader provider contracts remain |
 | X-14 | Responsive terminal UX | Partial | Partial | Production baseline | Shared responsive shell exists; target nine-area UX is pending |
 | X-15 | Fast search, filters, and pagination | Partial | Partial | Production baseline | Implemented in selected tracker and radar pages |
 | X-16 | No raw JSON or developer logs in normal flows | Partial | Partial | Production baseline | Most pages comply; operations and legacy views need review |
@@ -241,7 +245,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed | 561 non-browser tests passed in production CI; 575 tests are tracked across the full suite |
+| G-01 | Complete automated suite | Passed locally; CI pending | 628 non-browser and 15 browser tests passed for the current candidate |
 | G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
 | G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
 | G-04 | Dependency vulnerability assessment | Passed | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |

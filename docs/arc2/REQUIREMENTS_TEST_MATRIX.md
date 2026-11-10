@@ -10,7 +10,8 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 623 non-browser tests. The matrix records
+The current automated baseline is 628 non-browser tests and 15 browser tests.
+The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -56,8 +57,10 @@ feeds.
 | Scanner conditions, cooldown, and matches | `test_scanner_engine.py`, including persisted-bar coverage | Two five-symbol staging runs passed with deduplication and historical alerts suppressed | Passed |
 | F&O recommendation evidence | `test_fno_desk.py` | Approved fundamentals, event, and news providers remain open | Partial activation |
 | Investment thesis lifecycle | `test_investment_desk.py` | Investment Desk browser journey remains to be recorded for this commit | Passed automated scope |
-| AI briefing provenance and dry run | `AIBriefingTests` | Approved Azure OpenAI provider remains open | Passed implemented scope |
-| AI research access and traceability | `AIResearchTests.test_staff_can_store_traceable_research_without_broker_activity`, `test_assistant_offers_provider_neutral_evidence_questions`, `test_missing_provider_configuration_is_explicit` | Approved Azure OpenAI provider remains open; unavailable state is visible and cannot save substitute analysis | Passed implemented scope |
+| AI briefing provenance and dry run | `AIBriefingTests` | Azure OpenAI resource and model test passed; deployed ARC activation remains open | Passed implemented scope |
+| AI research access and traceability | `AIResearchTests.test_staff_can_store_traceable_research_without_broker_activity`, `test_assistant_offers_provider_neutral_evidence_questions`, `test_missing_provider_configuration_is_explicit` | Managed-identity production activation remains open; unavailable state cannot save substitute analysis | Passed implemented scope |
+| Managed-identity AI access | `AIResearchTests.test_managed_identity_authenticates_gpt5_requests` | Resource-scoped role and direct `READY` model response verified | Passed foundation; deployment proof pending |
+| Shared AI request budget | `AIResearchTests.test_openai_request_budget_is_shared_in_the_database` | ARC limit is four requests/minute against the provider's 10-request/minute quota | Passed implementation; production telemetry pending |
 
 ## Trading and performance requirements
 
@@ -67,6 +70,8 @@ feeds.
 | Cross-worker Trading Workspace metrics cache | `WorkspaceTests.test_shared_table_metrics_avoid_repeating_bar_aggregates`, `test_warm_radar_metrics_command_reports_refresh` | Production workers refresh a shared snapshot every 45 seconds with a 90-second maximum age | Passed implementation; deployment proof pending |
 | Personal Trading Desk | `PersonalDeskTests`, `RequestQueryBudgetTests.test_critical_operator_pages_stay_within_query_budgets` | Approved broker statement reconciliation remains open | Passed read-only scope |
 | Radar readiness and quote freshness | `test_radar_readiness.py`, `test_radar.py` | Production market-session monitoring remains required | Passed implemented scope |
+| Silent-WebSocket quote continuity | `StreamTimingTests.test_silent_socket_uses_rate_safe_rest_quote_fallback`, `RadarHistoryTests.test_quote_fallback_parses_snapshot_and_obeys_shared_interval` | Live worker must report `REST_QUOTE_FALLBACK` while the provider socket remains silent | Passed implementation; deployment proof pending |
+| Shared Dhan quote throttling | `RadarHistoryTests.test_quote_fallback_parses_snapshot_and_obeys_shared_interval`, quote throttle tests in `test_cas_nowcast.py` | Database state enforces at least 1.1 seconds between quote and LTP calls | Passed implementation; live telemetry pending |
 | Immutable radar history | `test_radar_history.py` | Production retention monitoring remains required | Passed |
 | NIFTY live collector safety | `test_cas_nowcast.py` | VM worker lease and market-session freshness remain required | Passed implemented scope |
 | Trade journal lifecycle | `test_trade_journal.py` | Trade Journal browser journey remains to be recorded for this commit | Passed automated scope |
@@ -85,6 +90,7 @@ feeds.
 | Persisted activation counts | `ReleaseDashboardTests.test_snapshot_reports_persisted_activation_evidence` | Staging database counts verified | Passed |
 | Activation smoke fails closed | `ActivationSmokeTests.test_unhealthy_activation_report_fails_closed` | Final production smoke remains open | Passed implemented scope |
 | Daily Dhan token reminder | `DhanTokenReminderTests` | Production worker activation and Telegram delivery validation remain open | Passed production-confined implementation |
+| Monitor tolerates incomplete Telegram setup | `ReadinessTests.test_credential_expiry_does_not_crash_without_telegram_chat`, `test_monitor_records_failures_without_telegram_when_health_notifications_disabled` | Alert chat ID remains blocked until the user sends `/start` | Passed implementation; configuration pending |
 | Navigation exposes Options and Equities | `test_options_navigation.py` | Authenticated browser navigation previously verified | Passed |
 
 ## Browser coverage status

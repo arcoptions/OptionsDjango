@@ -7,9 +7,9 @@ description: Test strategy, current coverage, release gates, and validation requ
 
 The application currently has:
 
-* 40 `test*.py` files.
-* 80 test classes ending in `Tests`.
-* 636 discovered `test_` methods.
+* 42 `test*.py` files.
+* 82 test classes ending in `Tests`.
+* 643 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -309,6 +309,25 @@ The exact-artifact promotion script passed Bash syntax validation. The
 production workflow requires staging to report the target commit, copies the
 accepted Oryx files, verifies the production artifact SHA-256, and only then
 restarts the production App Service.
+
+The Dhan continuity and managed-identity research candidate passed:
+
+* 628 non-browser tests in 137.054 seconds
+* 15 browser-tagged tests in 120.779 seconds
+* Django system checks, migration drift checks, and Python compilation
+* Diff whitespace validation
+
+The new coverage verifies silent-WebSocket detection, rate-safe full-quote REST
+fallback, provider timestamp validation, a database-shared 1.1-second Dhan
+quote interval, provider cooldown handling, Telegram-monitor stability without
+a chat ID, Azure managed identity bearer authentication, GPT-5 completion-token
+payloads, and a database-shared four-request-per-minute ARC budget. Modified
+research support files explicitly start `stock-trap-forward-v23`; prior v22
+evidence remains immutable.
+
+Local `pip-audit` and Bandit executables were unavailable. The existing
+exact-commit CI dependency audit and source scan remain mandatory before
+staging promotion.
 
 ## Latest Release 1 validation
 

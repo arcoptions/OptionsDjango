@@ -13,7 +13,8 @@ import websocket
 from options_tracker.models import RadarWorker
 from options_tracker.radar import scan
 from options_tracker.radar_feed import (
-    CandleCollector, TickBuffer, acquire_worker, decode_packets, heartbeat, subscriptions,
+    CandleCollector, TickBuffer, acquire_worker, decode_packets,
+    fetch_quote_snapshot, heartbeat, subscriptions,
 )
 from options_tracker.radar_history import credentials
 
@@ -80,6 +81,8 @@ class Command(BaseCommand):
                 connected_at = timezone.now()
                 last_fresh_at = None
                 last_packet_at = None
+                last_fallback_at = None
+                fallback_at = connected_at + timedelta(seconds=30)
                 refresh_at = connected_at
                 scan_at = timezone.now()
                 while True:
@@ -101,24 +104,61 @@ class Command(BaseCommand):
                         raise ConnectionError("Feed connection closed.")
                     if data is not None and not isinstance(data, bytes):
                         raise ValueError("Unexpected text response from market feed; verify account data entitlement.")
-                    ticks = decode_packets(data, timezone.now()) if isinstance(data, bytes) else []
+                    received_at = timezone.now()
+                    ticks = decode_packets(data, received_at) if isinstance(data, bytes) else []
                     if ticks:
-                        last_packet_at = timezone.now()
-                    for tick in ticks_waiting.ready(ticks, timezone.now()):
+                        last_packet_at = received_at
+                    ready_ticks = ticks_waiting.ready(ticks, received_at)
+                    now = timezone.now()
+                    local = timezone.localtime(now)
+                    market_open = (
+                        local.weekday() < 5
+                        and clock_time(9, 15) <= local.time() < clock_time(15, 30)
+                    )
+                    stalled_for = now - (last_packet_at or connected_at)
+                    if market_open and stalled_for >= timedelta(seconds=30):
+                        if now >= fallback_at:
+                            fallback = fetch_quote_snapshot(
+                                list(active.values()), token, client_id, now
+                            )
+                            fallback_at = now + timedelta(seconds=5)
+                            if fallback is not None:
+                                last_fallback_at = now
+                                ready_ticks.extend(ticks_waiting.ready(fallback, now))
+                        if (
+                            last_fallback_at is None
+                            and stalled_for >= timedelta(seconds=40)
+                        ):
+                            raise ConnectionError(
+                                "No market packets and no REST quote fallback for 40 seconds."
+                            )
+                    for tick in ready_ticks:
                         instrument = active.get((tick.segment, tick.security_id))
                         if instrument:
                             accepted_at = timezone.now()
                             collector.ingest(instrument, tick, accepted_at=accepted_at)
-                            if all(0 <= (accepted_at-stamp).total_seconds() <= 15 for stamp in (tick.source_at, tick.received_at)):
-                                last_fresh_at = max(last_fresh_at or tick.source_at, tick.source_at)
-                    now = timezone.now()
-                    collector.flush(now)
-                    local = timezone.localtime(now)
-                    if (local.weekday() < 5 and clock_time(9, 15) <= local.time() < clock_time(15, 30)
-                            and now-(last_packet_at or connected_at) >= timedelta(seconds=30)):
-                        raise ConnectionError("No market packets for 30 seconds; discarding stalled connection.")
+                            if all(
+                                0 <= (accepted_at-stamp).total_seconds() <= 15
+                                for stamp in (tick.source_at, tick.received_at)
+                            ):
+                                last_fresh_at = max(
+                                    last_fresh_at or tick.source_at,
+                                    tick.source_at,
+                                )
+                    collector.flush(timezone.now())
                     if now >= scan_at:
-                        result = {"mode": "COLLECT_ONLY"} if collect_only else scan(now)
+                        feed = (
+                            "WEBSOCKET"
+                            if last_packet_at and now-last_packet_at < timedelta(seconds=15)
+                            else "REST_QUOTE_FALLBACK"
+                            if last_fallback_at and now-last_fallback_at < timedelta(seconds=15)
+                            else "WAITING"
+                        )
+                        result = (
+                            {"mode": "COLLECT_ONLY", "feed": feed}
+                            if collect_only
+                            else {**scan(now), "feed": feed}
+                        )
                         finished_at = timezone.now()
                         state = "STREAMING" if last_fresh_at and finished_at-last_fresh_at <= timedelta(seconds=15) else "WAITING_FOR_DATA"
                         heartbeat(owner, state, json.dumps(result), finished_at, len(active))

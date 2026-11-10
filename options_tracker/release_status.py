@@ -114,7 +114,7 @@ RELEASE_GATES = (
         "name": "Complete automated suite",
         "state": "Passed in CI",
         "status_key": "complete",
-        "next_step": "623 non-browser tests and 15 browser tests passed on the expansion branch.",
+        "next_step": "628 non-browser tests and 15 browser tests passed on the expansion branch.",
     },
     {
         "id": "G-02",
@@ -205,7 +205,8 @@ IMPLEMENTED_HIGHLIGHTS = (
 )
 
 CURRENT_BLOCKERS = (
-    "Approved global, macro, flow, sector, and Azure OpenAI providers remain incomplete and fail unavailable.",
+    "Approved global, macro, flow, and sector providers remain incomplete and fail unavailable.",
+    "Azure OpenAI is provisioned with managed identity; exact-artifact production rollout and in-app verification remain.",
     "A credential-free history capture and import path is implemented; approved execution and scanner activation remain.",
     "Strategy, broker P&L, market context, economic event, and AI evidence require activation.",
     "The activation release restore rehearsal remains pending and geo-redundant PostgreSQL backup is disabled.",
