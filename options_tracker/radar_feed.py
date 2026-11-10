@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone as dt_timezone
 import heapq
 import logging
 from math import isfinite
+import pickle
 import struct
+import tempfile
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 import requests
 
@@ -235,21 +239,26 @@ class TickBuffer:
         return ready
 
 
-def sync_instruments(rows: list[dict], now: datetime) -> dict:
+def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
     """Derive the stock F&O universe from active NSE OPTSTK master rows."""
     today = timezone.localdate(now)
     equities = {}
-    options = []
-    for row in rows:
-        if row.get("EXCH_ID") != "NSE":
-            continue
-        symbol = (row.get("UNDERLYING_SYMBOL") or "").strip().upper()
-        security_id = (row.get("SECURITY_ID") or "").strip()
-        if not symbol or not security_id:
-            continue
-        if row.get("INSTRUMENT") == "EQUITY" and row.get("SEGMENT") == "E":
-            equities[symbol] = row
-        if row.get("INSTRUMENT") == "OPTSTK":
+    symbols = set()
+    identities = set()
+    option_count = 0
+
+    with tempfile.TemporaryFile() as records:
+        for row in rows:
+            if row.get("EXCH_ID") != "NSE":
+                continue
+            symbol = (row.get("UNDERLYING_SYMBOL") or "").strip().upper()
+            security_id = (row.get("SECURITY_ID") or "").strip()
+            if not symbol or not security_id:
+                continue
+            if row.get("INSTRUMENT") == "EQUITY" and row.get("SEGMENT") == "E":
+                equities[symbol] = row
+            if row.get("INSTRUMENT") != "OPTSTK":
+                continue
             try:
                 expiry = datetime.fromisoformat((row.get("SM_EXPIRY_DATE") or "").strip()).date()
                 strike, lot = float(row["STRIKE_PRICE"]), float(row["LOT_SIZE"])
@@ -259,58 +268,91 @@ def sync_instruments(rows: list[dict], now: datetime) -> dict:
                 continue
             if not isfinite(strike) or strike <= 0 or not isfinite(lot) or lot < 1 or not lot.is_integer() or row.get("OPTION_TYPE") not in ["CE", "PE"]:
                 raise ValueError(f"Invalid option contract metadata for {symbol}.")
-            options.append({
+            identity = ("NSE_FNO", security_id)
+            if identity in identities:
+                raise ValueError("Duplicate master identities; registry unchanged.")
+            identities.add(identity)
+            symbols.add(symbol)
+            option_count += 1
+            pickle.dump({
                 "security_id": security_id, "segment": "NSE_FNO", "symbol": symbol,
                 "name": row.get("DISPLAY_NAME", ""), "kind": "OPTION",
                 "expiry": expiry, "strike": strike, "side": row["OPTION_TYPE"],
                 "lot_size": int(lot), "active": True, "refreshed_at": now,
-            })
-    symbols = {row["symbol"] for row in options}
-    if not symbols or not symbols <= equities.keys():
-        raise ValueError("Master has no active stock options or is missing corresponding NSE equities; registry unchanged.")
-    records = options + [{
-        "security_id": equities[symbol]["SECURITY_ID"].strip(), "segment": "NSE_EQ",
-        "symbol": symbol, "name": equities[symbol].get("DISPLAY_NAME", symbol),
-        "kind": "EQUITY", "expiry": None, "strike": None, "side": "",
-        "lot_size": 1, "active": True, "refreshed_at": now,
-    } for symbol in sorted(symbols)]
-    identities = [(r["segment"], r["security_id"]) for r in records]
-    if len(identities) != len(set(identities)):
-        raise ValueError("Duplicate master identities; registry unchanged.")
-    with transaction.atomic():
-        identity_fields = ("segment", "security_id", "symbol", "kind", "expiry", "strike", "side")
-        existing = {}
-        for instrument in RadarInstrument.objects.only(
-            "pk", *identity_fields, "name", "lot_size", "active", "refreshed_at"
-        ).order_by("pk"):
-            identity = tuple(getattr(instrument, field) for field in identity_fields)
-            existing[identity] = instrument
+            }, records)
 
-        RadarInstrument.objects.filter(active=True).update(active=False)
-        to_update = []
-        to_create = []
-        for record in records:
-            identity = tuple(record[field] for field in identity_fields)
-            instrument = existing.get(identity)
-            if instrument is None:
-                to_create.append(RadarInstrument(**record))
-                continue
-            instrument.name = record["name"]
-            instrument.lot_size = record["lot_size"]
-            instrument.active = True
-            instrument.refreshed_at = now
-            to_update.append(instrument)
-        if to_update:
-            RadarInstrument.objects.bulk_update(
-                to_update,
-                ["name", "lot_size", "active", "refreshed_at"],
-            )
-        if to_create:
-            RadarInstrument.objects.bulk_create(to_create)
+        if not symbols or not symbols <= equities.keys():
+            raise ValueError("Master has no active stock options or is missing corresponding NSE equities; registry unchanged.")
+        for symbol in sorted(symbols):
+            equity = equities[symbol]
+            security_id = equity["SECURITY_ID"].strip()
+            identity = ("NSE_EQ", security_id)
+            if identity in identities:
+                raise ValueError("Duplicate master identities; registry unchanged.")
+            identities.add(identity)
+            pickle.dump({
+                "security_id": security_id, "segment": "NSE_EQ", "symbol": symbol,
+                "name": equity.get("DISPLAY_NAME", symbol), "kind": "EQUITY",
+                "expiry": None, "strike": None, "side": "", "lot_size": 1,
+                "active": True, "refreshed_at": now,
+            }, records)
+
+        records.seek(0)
+        created_identities = 0
+        identity_fields = ("segment", "security_id", "symbol", "kind", "expiry", "strike", "side")
+        with transaction.atomic():
+            RadarInstrument.objects.filter(active=True).update(active=False)
+            while True:
+                batch = []
+                try:
+                    for _ in range(500):
+                        batch.append(pickle.load(records))
+                except EOFError:
+                    pass
+                if not batch:
+                    break
+
+                query = Q()
+                for segment in ("NSE_EQ", "NSE_FNO"):
+                    security_ids = [record["security_id"] for record in batch if record["segment"] == segment]
+                    if security_ids:
+                        query |= Q(segment=segment, security_id__in=security_ids)
+                existing = {}
+                for instrument in RadarInstrument.objects.filter(query).only(
+                    "pk", *identity_fields, "name", "lot_size", "active", "refreshed_at"
+                ).order_by("pk"):
+                    identity = tuple(getattr(instrument, field) for field in identity_fields)
+                    existing[identity] = instrument
+
+                to_update = []
+                to_create = []
+                for record in batch:
+                    identity = tuple(record[field] for field in identity_fields)
+                    instrument = existing.get(identity)
+                    if instrument is None:
+                        to_create.append(RadarInstrument(**record))
+                        continue
+                    instrument.name = record["name"]
+                    instrument.lot_size = record["lot_size"]
+                    instrument.active = True
+                    instrument.refreshed_at = now
+                    to_update.append(instrument)
+                if to_update:
+                    RadarInstrument.objects.bulk_update(
+                        to_update,
+                        ["name", "lot_size", "active", "refreshed_at"],
+                        batch_size=500,
+                    )
+                if to_create:
+                    RadarInstrument.objects.bulk_create(to_create, batch_size=500)
+                    created_identities += len(to_create)
+                if len(batch) < 500:
+                    break
+
     return {
         "underlyings": len(symbols),
-        "options": len(options),
-        "created_identities": len(to_create),
+        "options": option_count,
+        "created_identities": created_identities,
     }
 
 

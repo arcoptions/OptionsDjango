@@ -183,6 +183,22 @@ class RegistryTests(RadarTestCase):
         self.equity.refresh_from_db()
         self.assertTrue(self.equity.active)
 
+    def test_large_master_is_processed_across_bounded_batches(self):
+        equity, template = master_rows()[:2]
+
+        def rows():
+            yield equity
+            for index in range(501):
+                option = template.copy()
+                option.update(SECURITY_ID=str(10_000+index), STRIKE_PRICE=str(100+index))
+                yield option
+
+        result = sync_instruments(rows(), NOW)
+
+        self.assertEqual(result["options"], 501)
+        self.assertEqual(result["created_identities"], 501)
+        self.assertEqual(RadarInstrument.objects.filter(kind="OPTION", active=True).count(), 501)
+
     def test_reused_security_id_archives_contract_history(self):
         rows = master_rows()
         rows[1]["STRIKE_PRICE"] = "110"
