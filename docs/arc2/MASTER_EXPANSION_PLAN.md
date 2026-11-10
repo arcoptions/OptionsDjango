@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 620 non-browser and 635 total passing tests. A rendered page
+baseline to 621 non-browser and 636 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 620 passing non-browser tests
-* 635 passing tests including browser-tagged journeys
+* 621 passing non-browser tests
+* 636 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -243,8 +243,8 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 620 non-browser tests in 48.154 seconds. All 15
-browser-tagged tests passed separately in 94.055 seconds, covering 635 tests
+The current branch passed 621 non-browser tests in 145.574 seconds. All 15
+browser-tagged tests passed separately in 94.055 seconds, covering 636 tests
 without treating a stalled combined-run teardown as success evidence. The R15
 journey proves that validation, complete planning, and approval preserve actor
 and reason audit while direct execution requests remain blocked. R16 coverage

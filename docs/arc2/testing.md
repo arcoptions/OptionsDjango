@@ -9,7 +9,7 @@ The application currently has:
 
 * 40 `test*.py` files.
 * 80 test classes ending in `Tests`.
-* 635 discovered `test_` methods.
+* 636 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -291,7 +291,7 @@ broker-order or trade-execution creation from the desk.
 The production-confined daily Dhan token reminder passed:
 
 * 5 focused freshness, delivery, deduplication, and supervisor tests
-* 620 non-browser tests in 48.154 seconds
+* 621 non-browser tests in 145.574 seconds
 * 15 browser-tagged tests in 94.055 seconds
 
 The reminder skips staging and quiet hours, accepts only a current daily Apps UI

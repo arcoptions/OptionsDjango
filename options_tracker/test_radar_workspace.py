@@ -145,6 +145,17 @@ class WorkspaceTests(RadarTestCase):
         if connection.vendor == "sqlite":
             self.assertFalse(any("django_datetime_cast" in query["sql"] for query in queries))
 
+    def test_postgres_table_metrics_collapses_daily_aggregates(self):
+        self.history()
+        expected = table_metrics([self.equity], {self.equity.pk: self.underlying}, NOW)["TEST"]
+
+        with patch.object(connection, "vendor", "postgresql"):
+            with CaptureQueriesContext(connection) as queries:
+                result = table_metrics([self.equity], {self.equity.pk: self.underlying}, NOW)["TEST"]
+
+        self.assertEqual(result, expected)
+        self.assertLessEqual(len(queries), 4)
+
     def test_buffered_quotes_preserve_latest_depth_baseline_and_all_candle_ticks(self):
         collector = CandleCollector(buffer_quotes=True)
         for seconds, last, volume in [(0, 100, 1000), (1, 105, 1010), (2, 98, 1020), (3, 102, 1030)]:

@@ -12,7 +12,9 @@ from statistics import mean
 
 from django.utils import timezone
 from django.core.cache import cache
+from django.db import connection
 from django.db.models import Count, Min, Max, Q, Sum
+from django.db.models.functions import TruncDate
 
 from .capital_pnl import estimate_option_charges
 from .models import (
@@ -323,25 +325,69 @@ def table_metrics(instruments: list[RadarInstrument], quotes: dict, now: datetim
         f"{today}:{elapsed}:{','.join(str(i.pk) for i in instruments)}".encode()
     ).hexdigest()
     saved = cache.get(key) if cached else None
-    for offset in ([] if saved is not None else range(40, -1, -1)):
-        day = today-timedelta(days=offset)
-        start = session_start(day)
-        prefix = Q(timestamp__lt=start+timedelta(minutes=elapsed))
-        rows = RadarBar.objects.filter(
-            instrument__in=instruments, timestamp__gte=start,
-            timestamp__lt=start+timedelta(minutes=session_minutes(day)), timestamp__lte=now-timedelta(minutes=1),
-        ).values("instrument_id").annotate(
-            count=Count("id"), first=Min("timestamp"), last=Max("timestamp"),
-            complete_count=Count("id", filter=Q(complete=True)),
-            prefix_count=Count("id", filter=prefix),
-            prefix_complete=Count("id", filter=prefix & Q(complete=True)),
-            prefix_volume=Sum("volume", filter=prefix),
-        ).order_by()
-        for row in rows:
-            row["day"] = day
-            summaries.append(row)
-            if elapsed and row["prefix_count"] == row["prefix_complete"] == elapsed:
-                prefixes[row["instrument_id"]][day] = row["prefix_volume"]
+    if saved is None and connection.vendor == "postgresql":
+        start = session_start(today-timedelta(days=40))
+        end = session_start(today)+timedelta(minutes=session_minutes(today))
+        rows = (
+            RadarBar.objects.filter(
+                instrument__in=instruments,
+                timestamp__gte=start,
+                timestamp__lt=end,
+                timestamp__lte=now-timedelta(minutes=1),
+            )
+            .annotate(day=TruncDate("timestamp", tzinfo=timezone.get_current_timezone()))
+            .values("instrument_id", "day")
+            .annotate(
+                count=Count("id"),
+                first=Min("timestamp"),
+                last=Max("timestamp"),
+                complete_count=Count("id", filter=Q(complete=True)),
+            )
+            .order_by()
+        )
+        summaries.extend(rows)
+        if elapsed:
+            cutoff = (session_start(today)+timedelta(minutes=elapsed)).time()
+            prefix_rows = (
+                RadarBar.objects.filter(
+                    instrument__in=instruments,
+                    timestamp__gte=start,
+                    timestamp__lt=end,
+                    timestamp__lte=now-timedelta(minutes=1),
+                    timestamp__time__lt=cutoff,
+                )
+                .annotate(day=TruncDate("timestamp", tzinfo=timezone.get_current_timezone()))
+                .values("instrument_id", "day")
+                .annotate(
+                    prefix_count=Count("id"),
+                    prefix_complete=Count("id", filter=Q(complete=True)),
+                    prefix_volume=Sum("volume"),
+                )
+                .order_by()
+            )
+            for row in prefix_rows:
+                if row["prefix_count"] == row["prefix_complete"] == elapsed:
+                    prefixes[row["instrument_id"]][row["day"]] = row["prefix_volume"]
+    else:
+        for offset in ([] if saved is not None else range(40, -1, -1)):
+            day = today-timedelta(days=offset)
+            start = session_start(day)
+            prefix = Q(timestamp__lt=start+timedelta(minutes=elapsed))
+            rows = RadarBar.objects.filter(
+                instrument__in=instruments, timestamp__gte=start,
+                timestamp__lt=start+timedelta(minutes=session_minutes(day)), timestamp__lte=now-timedelta(minutes=1),
+            ).values("instrument_id").annotate(
+                count=Count("id"), first=Min("timestamp"), last=Max("timestamp"),
+                complete_count=Count("id", filter=Q(complete=True)),
+                prefix_count=Count("id", filter=prefix),
+                prefix_complete=Count("id", filter=prefix & Q(complete=True)),
+                prefix_volume=Sum("volume", filter=prefix),
+            ).order_by()
+            for row in rows:
+                row["day"] = day
+                summaries.append(row)
+                if elapsed and row["prefix_count"] == row["prefix_complete"] == elapsed:
+                    prefixes[row["instrument_id"]][day] = row["prefix_volume"]
     if saved is not None:
         summaries, prefixes, closes, recorded_closes = saved
     prior = {}
