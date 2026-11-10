@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 621 non-browser and 636 total passing tests. A rendered page
+baseline to 623 non-browser and 638 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 621 passing non-browser tests
-* 636 passing tests including browser-tagged journeys
+* 623 passing non-browser tests
+* 638 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -243,8 +243,8 @@ one-session and five-session returns from the prior close. The UI explicitly
 states that temporal reaction is not causation and fails unavailable when bars
 do not bracket the event.
 
-The current branch passed 621 non-browser tests in 145.574 seconds. All 15
-browser-tagged tests passed separately in 94.055 seconds, covering 636 tests
+The current branch passed 623 non-browser tests in 123.148 seconds. All 15
+browser-tagged tests passed separately in 101.023 seconds, covering 638 tests
 without treating a stalled combined-run teardown as success evidence. The R15
 journey proves that validation, complete planning, and approval preserve actor
 and reason audit while direct execution requests remain blocked. R16 coverage
@@ -254,3 +254,9 @@ proves user alert isolation, staff and method controls, read-only broker safety,
 and the Personal Desk query budget. R18 reminder coverage proves production
 confinement, quiet hours, UI-token freshness, successful-delivery deduplication,
 retryable failure, and secret-free Telegram content.
+
+Trading Workspace coverage also verifies that a persisted display-metrics
+snapshot is reusable across application workers after the process-local cache
+is cleared. The production deployment workflow now promotes the exact Oryx
+artifact accepted in staging instead of rebuilding it during production
+promotion.

@@ -291,13 +291,24 @@ broker-order or trade-execution creation from the desk.
 The production-confined daily Dhan token reminder passed:
 
 * 5 focused freshness, delivery, deduplication, and supervisor tests
-* 621 non-browser tests in 145.574 seconds
-* 15 browser-tagged tests in 94.055 seconds
+* 623 non-browser tests in 123.148 seconds
+* 15 browser-tagged tests in 101.023 seconds
 
 The reminder skips staging and quiet hours, accepts only a current daily Apps UI
 token, sends at most once after successful delivery, retries delivery failures,
 and excludes token values from Telegram content. Its supervised loop activates
 only when production and Telegram delivery configuration are both explicit.
+
+The shared Trading Workspace metrics cache passed:
+
+* Cross-worker reuse after clearing the process-local Django cache
+* A bounded one-query read of the persisted snapshot
+* Management-command refresh output
+
+The exact-artifact promotion script passed Bash syntax validation. The
+production workflow requires staging to report the target commit, copies the
+accepted Oryx files, verifies the production artifact SHA-256, and only then
+restarts the production App Service.
 
 ## Latest Release 1 validation
 

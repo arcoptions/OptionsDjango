@@ -10,7 +10,7 @@ Every implemented requirement maps to named automated coverage. Workflows that
 depend on provider data, market-session behavior, or browser interaction also
 identify the required non-unit evidence.
 
-The current automated baseline is 621 non-browser tests. The matrix records
+The current automated baseline is 623 non-browser tests. The matrix records
 coverage for implemented behavior, not completion of unavailable provider
 feeds.
 
@@ -28,6 +28,7 @@ feeds.
 | Versioned polling API contracts | `PollingApiContractTests` | Browser console showed no contract errors on tested routes | Passed |
 | Rate-limited integration intake | `test_rate_limit.py` | Shared-cache distributed limiting remains open | Passed implemented scope |
 | Deployment health reports exact commit | Deployment-health tests in `tests.py` | Staging reported exact commit `1c3abee` after deployment handoff | Passed |
+| Exact staging artifact promotion | Workflow tests, Bash syntax validation, and exact-commit health checks | Production promotion requires staging acceptance and verifies the copied `output.tar.zst` SHA-256 before restart | Passed implementation; deployment proof pending |
 | Live HTTP security controls | Access, method, CSRF, and `BrowserSecurityHeaderTests` | Protected routes, HTTPS redirect, sensitive paths, TRACE, CSRF, nonce-based CSP, Permissions-Policy, COEP, and CORP probed on staging; independent penetration evidence remains open | Passed bounded scope |
 | Passive staging DAST | Immutable official ZAP action and high-or-medium enforcement in `dast-activation.yml` | Exact-commit run `42691024543` reported zero high and zero medium findings | Passed |
 
@@ -63,6 +64,7 @@ feeds.
 | Requirement | Named automated evidence | Non-unit evidence | State |
 |---|---|---|---|
 | Trading Workspace manual controls | `test_manual_execution.py`, `test_radar_workspace.py` | Trading Workspace repeat loads passed at 1.379 to 2.968 seconds | Passed |
+| Cross-worker Trading Workspace metrics cache | `WorkspaceTests.test_shared_table_metrics_avoid_repeating_bar_aggregates`, `test_warm_radar_metrics_command_reports_refresh` | Production workers refresh a shared snapshot every 45 seconds with a 90-second maximum age | Passed implementation; deployment proof pending |
 | Personal Trading Desk | `PersonalDeskTests`, `RequestQueryBudgetTests.test_critical_operator_pages_stay_within_query_budgets` | Approved broker statement reconciliation remains open | Passed read-only scope |
 | Radar readiness and quote freshness | `test_radar_readiness.py`, `test_radar.py` | Production market-session monitoring remains required | Passed implemented scope |
 | Immutable radar history | `test_radar_history.py` | Production retention monitoring remains required | Passed |

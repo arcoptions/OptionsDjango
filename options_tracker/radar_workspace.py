@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from hashlib import sha256
 import json
+import logging
 from math import isfinite
 from statistics import mean
 
@@ -28,6 +29,11 @@ from .radar import (
     option_priority,
 )
 from .radar_sessions import CAS_EFFECTIVE, continuous_close, continuous_timestamp, session_minutes
+
+
+logger = logging.getLogger(__name__)
+SHARED_METRICS_KEY = "radar_display_metrics_cache_v3"
+SHARED_METRICS_MAX_AGE = timedelta(seconds=90)
 
 
 DEFAULTS = {
@@ -313,6 +319,56 @@ def stock_rows(instrument_ids: list[int], now: datetime) -> dict[int, list[Radar
     return result
 
 
+def _shared_metrics_signature(instruments: list[RadarInstrument], now: datetime) -> str:
+    instrument_ids = ",".join(str(instrument.pk) for instrument in instruments)
+    return sha256(
+        f"{timezone.localdate(now)}:{instrument_ids}".encode()
+    ).hexdigest()
+
+
+def _load_shared_metrics(
+    instruments: list[RadarInstrument],
+    now: datetime,
+) -> dict | None:
+    row = (
+        AppSetting.objects.filter(key=SHARED_METRICS_KEY)
+        .values("value", "updated_at")
+        .first()
+    )
+    if row is None:
+        return None
+    age = now-row["updated_at"]
+    if age < timedelta(seconds=-5) or age > SHARED_METRICS_MAX_AGE:
+        return None
+    try:
+        payload = json.loads(row["value"])
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid shared radar metrics JSON.")
+        return None
+    if (
+        payload.get("signature") != _shared_metrics_signature(instruments, now)
+        or not isinstance(payload.get("metrics"), dict)
+    ):
+        return None
+    return payload["metrics"]
+
+
+def _store_shared_metrics(
+    instruments: list[RadarInstrument],
+    now: datetime,
+    metrics: dict,
+) -> None:
+    payload = {
+        "signature": _shared_metrics_signature(instruments, now),
+        "generated_at": now.isoformat(),
+        "metrics": metrics,
+    }
+    AppSetting.objects.update_or_create(
+        key=SHARED_METRICS_KEY,
+        defaults={"value": json.dumps(payload, separators=(",", ":"))},
+    )
+
+
 def table_metrics(instruments: list[RadarInstrument], quotes: dict, now: datetime, cached=False) -> dict:
     """Aggregate same-clock prefixes in SQL, not millions of Python bar objects."""
     today = timezone.localdate(now)
@@ -325,6 +381,10 @@ def table_metrics(instruments: list[RadarInstrument], quotes: dict, now: datetim
         f"{today}:{elapsed}:{','.join(str(i.pk) for i in instruments)}".encode()
     ).hexdigest()
     saved = cache.get(key) if cached else None
+    if cached and saved is None:
+        shared = _load_shared_metrics(instruments, now)
+        if shared is not None:
+            return shared
     if saved is None and connection.vendor == "postgresql":
         start = session_start(today-timedelta(days=40))
         end = session_start(today)+timedelta(minutes=session_minutes(today))
@@ -432,7 +492,27 @@ def table_metrics(instruments: list[RadarInstrument], quotes: dict, now: datetim
                             "Fewer than five complete same-time baseline sessions." if len(baseline) < 5 else
                             "Baseline volume is zero." if not average else "Available: complete same-time prefixes."),
         }
+    if cached and saved is None:
+        _store_shared_metrics(instruments, now, result)
     return result
+
+
+def refresh_table_metrics_cache(now: datetime | None = None) -> dict:
+    now = now or timezone.now()
+    instruments = list(
+        RadarInstrument.objects.filter(kind="EQUITY", active=True).order_by("symbol")
+    )
+    quotes = {
+        quote.instrument_id: quote
+        for quote in RadarQuote.objects.filter(instrument__in=instruments)
+    }
+    metrics = table_metrics(instruments, quotes, now, cached=False)
+    _store_shared_metrics(instruments, now, metrics)
+    return {
+        "state": "REFRESHED",
+        "instruments": len(instruments),
+        "generated_at": now.isoformat(),
+    }
 
 
 def quote_payload(quote: RadarQuote | None, now: datetime) -> dict:

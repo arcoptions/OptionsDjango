@@ -2,11 +2,14 @@
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone as dt_timezone
+from io import StringIO
 import json
 import struct
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core.management import call_command
 from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
@@ -22,7 +25,7 @@ from .radar import S, acknowledge
 from .radar_feed import CandleCollector, Tick, decode_packets, subscriptions
 from .radar_workspace import (
     StockData, aggregate_chart, indicator_chart, historical_chart, market_context, opportunity_payload, option_candidates,
-    portfolio, preferences, review_session, session_start, table_metrics, workspace_payload,
+    _store_shared_metrics, portfolio, preferences, review_session, session_start, table_metrics, workspace_payload,
 )
 from .test_radar import NOW, RadarTestCase
 
@@ -155,6 +158,41 @@ class WorkspaceTests(RadarTestCase):
 
         self.assertEqual(result, expected)
         self.assertLessEqual(len(queries), 4)
+
+    def test_shared_table_metrics_avoid_repeating_bar_aggregates(self):
+        self.history()
+        instruments = [self.equity]
+        quotes = {self.equity.pk: self.underlying}
+        expected = table_metrics(instruments, quotes, NOW)
+        _store_shared_metrics(instruments, NOW, expected)
+        AppSetting.objects.filter(key="radar_display_metrics_cache_v3").update(
+            updated_at=NOW,
+        )
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as queries:
+            result = table_metrics(instruments, quotes, NOW, cached=True)
+
+        self.assertEqual(result, expected)
+        self.assertEqual(len(queries), 1)
+        self.assertIn("options_tracker_appsetting", queries[0]["sql"])
+
+    @patch(
+        "options_tracker.management.commands.warm_radar_metrics."
+        "refresh_table_metrics_cache",
+        return_value={
+            "state": "REFRESHED",
+            "instruments": 1,
+            "generated_at": NOW.isoformat(),
+        },
+    )
+    def test_warm_radar_metrics_command_reports_refresh(self, refresh):
+        output = StringIO()
+
+        call_command("warm_radar_metrics", stdout=output)
+
+        refresh.assert_called_once_with()
+        self.assertEqual(json.loads(output.getvalue())["state"], "REFRESHED")
 
     def test_buffered_quotes_preserve_latest_depth_baseline_and_all_candle_ticks(self):
         collector = CandleCollector(buffer_quotes=True)
