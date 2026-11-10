@@ -151,6 +151,7 @@ Validation completed against subscription
 | Check | Evidence | Result |
 |---|---|---|
 | Azure authentication | `az account show` returned the approved enabled subscription | Passed |
+| Supervisor-fix predeployment validation | Exact-commit CI run `42826935105`, both running App Services, and staging preview, worker, and credential isolation | Passed |
 | Existing resources | `az webapp list` returned both running Central India apps | Passed |
 | Staging execution safety | Staging `ARC_EXECUTION_MODE` is `preview`; no Dhan token app setting was returned | Passed |
 | Azure Policy | No resource-group policy assignment blocks the code deployment | Passed |
@@ -170,7 +171,7 @@ Validation completed against subscription
 | Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
 | Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
 | Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
-| Current candidate suite | 629 non-browser tests and 15 browser tests | Passed locally; exact-commit CI pending for the supervisor fix |
+| Current candidate suite | 629 non-browser tests and 15 browser tests | Passed locally and in exact-commit CI run `42826935105` |
 | Dhan continuity | Silent WebSocket activates a full-quote REST snapshot after 30 seconds behind a shared 1.1-second request gate and provider cooldown | Deployed; market-open freshness proof pending |
 | Azure OpenAI foundation | Deployed ARC returned `READY` through managed identity after local authentication was disabled | Passed in production |
 | Research evidence version | Prospective evidence advanced to `stock-trap-forward-v23` without rewriting v22 | Registered on the production VM |
@@ -200,16 +201,16 @@ required.
 
 | Check | Evidence | Result |
 |---|---|---|
-| Exact commit | Production `/deployment-health/` returned `ae4babd78bb4a328896652f68f5aada35b2ea22a` | Passed |
+| Exact commit | Production `/deployment-health/` returned `b65f2119e2375c423110385d7d006c25f2e5a444` | Passed |
 | Artifact integrity | The accepted staging `output.tar.zst` SHA-256 matched the production copy before restart | Passed |
-| Deployment workflow | Exact-artifact production run `42810846771` completed after staging and DAST acceptance | Passed |
+| Deployment workflow | Exact-artifact production run `42829673287` completed after CI and DAST acceptance | Passed |
 | Startup and migrations | The 60-second synchronous metrics bound prevented the prior 600-second startup failure; cold health returned in 355 seconds | Passed |
 | Authenticated journeys | Twelve staff routes returned HTTP 200 without horizontal overflow or browser page errors | Passed |
 | Static assets | Critical Trading Workspace CSS returned HTTP 200 | Passed |
 | Security headers | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
 | Execution safety | `ARC_EXECUTION_MODE=manual` and `ARC_DEPLOYMENT_ENVIRONMENT=production`; no live order was placed | Passed |
 | Azure OpenAI | Managed-identity inference returned `READY` after local authentication was disabled; no API key is stored | Passed |
-| Worker parity | The VM checked out `ae4babd`; supervised services are active and protocol v23 is registered | Passed |
+| Worker parity | The VM checked out `b65f211`; all six supervised workers remained healthy beyond the prior 600-second recycle threshold | Passed |
 | Temporary-account cleanup | Staging and production acceptance users were deleted and verified absent | Passed |
 | Reminder confinement | Telegram delivery settings are absent, so the production-only Dhan reminder remains dormant and cannot send | Passed |
 
@@ -218,5 +219,9 @@ OIDC identity lacked staging Kudu access. A least-scope staging App Service role
 assignment fixed the permission without broadening production access. The
 promotion then copied the exact accepted artifact. A separate cold-start issue
 was traced to synchronous metrics warming, fixed in `ae4babd`, and promoted by
-run `42810846771` after CI run `42809422114`, staging deployment
-`683e76ad-01cb-49f0-9db2-b3717e5771ed`, and DAST run `42810486241` passed.
+run `42810846771`. Post-deployment inspection then found that the supervisor
+applied its 600-second startup timeout even after healthy child heartbeats. Commit
+`b65f211` limited that timeout to pre-heartbeat startup. CI run `42826935105`,
+staging deployment `958ec84e-8d8f-4757-a4d9-db5d5b7cf0f0`, DAST run
+`42829442685`, and production promotion run `42829673287` passed. All supervised
+workers retained fresh heartbeats beyond the former recycle threshold.

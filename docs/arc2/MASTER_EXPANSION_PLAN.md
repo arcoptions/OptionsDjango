@@ -6,7 +6,7 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 ## Evidence baseline
 
 This plan reconciles the master expansion specification with the verified
-activation branch through deployed commit `ae4babd`. The current expansion
+activation branch through deployed commit `b65f211`. The current expansion
 branch has 629 non-browser and 644 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
@@ -266,9 +266,9 @@ promotion.
 
 ## Production activation record
 
-Commits `9f2edb1` and `ae4babd` are active in staging, production, and the worker
-VM. Exact-commit CI runs `42801318087` and `42809422114`, DAST run
-`42810486241`, and production promotion run `42810846771` passed. A forced cold
+Commits `9f2edb1`, `ae4babd`, and `b65f211` are active in staging, production,
+and the worker VM. The latest exact-commit CI run `42826935105`, DAST run
+`42829442685`, and production promotion run `42829673287` passed. A forced cold
 start returned exact-commit health in 355 seconds after the synchronous metrics
 warm-up was bounded to 60 seconds. Production browser acceptance covered twelve
 authenticated routes, while current Trading Workspace warm checks completed in
@@ -276,8 +276,10 @@ authenticated routes, while current Trading Workspace warm checks completed in
 
 Azure OpenAI returned `READY` through the App Service managed identity after
 local authentication was disabled. The VM registered prospective protocol
-`stock-trap-forward-v23` without changing v22 evidence. Manual execution
-remains mandatory, and no live broker order was placed.
+`stock-trap-forward-v23` without changing v22 evidence. The supervisor fix
+prevented healthy workers from being recycled after 600 seconds; all six child
+heartbeats remained fresh beyond that boundary. Manual execution remains
+mandatory, and no live broker order was placed.
 
 The remaining release gates require external or time-bound evidence:
 

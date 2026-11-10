@@ -342,6 +342,17 @@ Production activation then passed:
 * VM checkout of `ae4babd`, active supervised workers, and v23 protocol registration
 * No live broker order or `TradeExecution`
 
+Runtime inspection found that the supervisor's startup timeout remained active
+after children had published healthy heartbeats, so it recycled every owned
+worker after 600 seconds. Commit `b65f211` limits that timeout to workers that
+have not produced their first heartbeat. The focused 25-test supervisor and
+release-dashboard run passed, followed by 629 non-browser tests in 122.149
+seconds. Exact-commit CI run `42826935105`, staging deployment
+`958ec84e-8d8f-4757-a4d9-db5d5b7cf0f0`, DAST run `42829442685`, and production
+promotion run `42829673287` passed. All six supervised workers retained fresh
+heartbeats beyond 600 seconds, and no `TradeExecution` was created after
+promotion.
+
 A one-day equity recovery made 218 bounded provider requests. It retained
 78,480 existing bars, preserved 409 conflicts as immutable evidence, and
 inserted or overwrote zero bars. After-hours Dhan full-quote and LTP probes
