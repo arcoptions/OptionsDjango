@@ -6,9 +6,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone as dt_timezone
 import heapq
+import json
 import logging
 from math import isfinite
-import pickle
 import struct
 import tempfile
 from uuid import uuid4
@@ -247,7 +247,22 @@ def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
     identities = set()
     option_count = 0
 
-    with tempfile.TemporaryFile() as records:
+    def write_record(stream, record):
+        document = record.copy()
+        document["expiry"] = record["expiry"].isoformat() if record["expiry"] else None
+        document["refreshed_at"] = record["refreshed_at"].isoformat()
+        stream.write(json.dumps(document, separators=(",", ":")) + "\n")
+
+    def read_record(stream):
+        line = stream.readline()
+        if not line:
+            return None
+        record = json.loads(line)
+        record["expiry"] = datetime.fromisoformat(record["expiry"]).date() if record["expiry"] else None
+        record["refreshed_at"] = datetime.fromisoformat(record["refreshed_at"])
+        return record
+
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", newline="\n") as records:
         for row in rows:
             if row.get("EXCH_ID") != "NSE":
                 continue
@@ -274,12 +289,12 @@ def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
             identities.add(identity)
             symbols.add(symbol)
             option_count += 1
-            pickle.dump({
+            write_record(records, {
                 "security_id": security_id, "segment": "NSE_FNO", "symbol": symbol,
                 "name": row.get("DISPLAY_NAME", ""), "kind": "OPTION",
                 "expiry": expiry, "strike": strike, "side": row["OPTION_TYPE"],
                 "lot_size": int(lot), "active": True, "refreshed_at": now,
-            }, records)
+            })
 
         if not symbols or not symbols <= equities.keys():
             raise ValueError("Master has no active stock options or is missing corresponding NSE equities; registry unchanged.")
@@ -290,12 +305,12 @@ def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
             if identity in identities:
                 raise ValueError("Duplicate master identities; registry unchanged.")
             identities.add(identity)
-            pickle.dump({
+            write_record(records, {
                 "security_id": security_id, "segment": "NSE_EQ", "symbol": symbol,
                 "name": equity.get("DISPLAY_NAME", symbol), "kind": "EQUITY",
                 "expiry": None, "strike": None, "side": "", "lot_size": 1,
                 "active": True, "refreshed_at": now,
-            }, records)
+            })
 
         records.seek(0)
         created_identities = 0
@@ -304,11 +319,11 @@ def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
             RadarInstrument.objects.filter(active=True).update(active=False)
             while True:
                 batch = []
-                try:
-                    for _ in range(500):
-                        batch.append(pickle.load(records))
-                except EOFError:
-                    pass
+                for _ in range(500):
+                    record = read_record(records)
+                    if record is None:
+                        break
+                    batch.append(record)
                 if not batch:
                     break
 
