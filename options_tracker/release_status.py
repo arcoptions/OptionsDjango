@@ -114,7 +114,7 @@ RELEASE_GATES = (
         "name": "Complete automated suite",
         "state": "Passed in CI",
         "status_key": "complete",
-        "next_step": "628 non-browser tests and 15 browser tests passed on the expansion branch.",
+        "next_step": "629 non-browser tests and 15 browser tests passed on the expansion branch.",
     },
     {
         "id": "G-02",
@@ -147,9 +147,9 @@ RELEASE_GATES = (
     {
         "id": "G-06",
         "name": "Migration rehearsal",
-        "state": "Pending for activation commit",
-        "status_key": "progress",
-        "next_step": "Restore a current production backup and apply the final activation migrations.",
+        "state": "Passed for activation commit",
+        "status_key": "complete",
+        "next_step": "Activation migrations passed in CI and against the restored production-sized database.",
     },
     {
         "id": "G-07",
@@ -161,9 +161,9 @@ RELEASE_GATES = (
     {
         "id": "G-08",
         "name": "Performance budgets",
-        "state": "Passed in staging",
+        "state": "Passed with production monitoring",
         "status_key": "complete",
-        "next_step": "Retain production monitoring after activation.",
+        "next_step": "Trading Workspace warm requests measured 2.0 to 3.2 seconds; continue production monitoring.",
     },
     {
         "id": "G-09",
@@ -177,21 +177,21 @@ RELEASE_GATES = (
         "name": "Staging workflow smoke",
         "state": "Passed for critical routes",
         "status_key": "complete",
-        "next_step": "Five authenticated critical routes rendered without console errors or horizontal overflow.",
+        "next_step": "Authenticated staging routes, exact-commit health, static assets, isolation, and passive DAST passed.",
     },
     {
         "id": "G-11",
         "name": "Production approval",
-        "state": "Pending",
-        "status_key": "progress",
-        "next_step": "Obtain explicit approval for the activation branch after all accepted gates are recorded.",
+        "state": "Approved",
+        "status_key": "complete",
+        "next_step": "The operator approved production activation; manual execution remains mandatory.",
     },
     {
         "id": "G-12",
         "name": "Production deployment report",
-        "state": "Pending",
-        "status_key": "progress",
-        "next_step": "Deploy only after approval, then record Kudu, migrations, VM parity, safety mode, and workers.",
+        "state": "Passed",
+        "status_key": "complete",
+        "next_step": "Exact-artifact promotion, health, browser journeys, VM parity, manual mode, and workers are verified.",
     },
 )
 
@@ -205,12 +205,12 @@ IMPLEMENTED_HIGHLIGHTS = (
 )
 
 CURRENT_BLOCKERS = (
-    "Approved global, macro, flow, and sector providers remain incomplete and fail unavailable.",
-    "Azure OpenAI is provisioned with managed identity; exact-artifact production rollout and in-app verification remain.",
-    "A credential-free history capture and import path is implemented; approved execution and scanner activation remain.",
-    "Strategy, broker P&L, market context, economic event, and AI evidence require activation.",
-    "The activation release restore rehearsal remains pending and geo-redundant PostgreSQL backup is disabled.",
-    "Full production route penetration evidence remains partial.",
+    "Telegram delivery remains dormant until the bot token and alert chat ID are configured.",
+    "Dhan market-open REST fallback freshness and rolling-option history entitlement still need provider evidence.",
+    "Dhan reuses option security IDs across contracts; temporal provider identities must protect historical evidence.",
+    "Approved global, macro, event, news, flow, and sector providers remain incomplete and fail unavailable.",
+    "Broker statement reconciliation, an independent restore drill, and human penetration testing remain external gates.",
+    "Automatic ARC execution remains intentionally disabled; manual execution is the production policy.",
 )
 
 
@@ -263,7 +263,7 @@ def release_dashboard_snapshot() -> dict[str, object]:
     }
     return {
         "evidence_date": "10 November 2026",
-        "automated_tests": 623,
+        "automated_tests": 644,
         "execution_default": "Manual",
         "deployment_state": "Production deployed and runtime verified",
         "releases": RELEASES,

@@ -9,7 +9,7 @@ The application currently has:
 
 * 42 `test*.py` files.
 * 82 test classes ending in `Tests`.
-* 643 discovered `test_` methods.
+* 644 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 
@@ -325,9 +325,28 @@ payloads, and a database-shared four-request-per-minute ARC budget. Modified
 research support files explicitly start `stock-trap-forward-v23`; prior v22
 evidence remains immutable.
 
-Local `pip-audit` and Bandit executables were unavailable. The existing
-exact-commit CI dependency audit and source scan remain mandatory before
-staging promotion.
+Exact-commit CI run `42801318087` passed the application suite, dependency
+audit, source scan, system checks, migration drift, and compilation for commit
+`9f2edb1`. The startup hotfix at `ae4babd` passed exact-commit CI run
+`42809422114`.
+
+Production activation then passed:
+
+* Staging deployment `683e76ad-01cb-49f0-9db2-b3717e5771ed`
+* Passive DAST run `42810486241`
+* Exact-artifact production promotion run `42810846771`
+* A forced cold start that returned exact-commit health in 355 seconds
+* Twelve authenticated routes with HTTP 200, no page errors, and no horizontal overflow
+* Trading Workspace warm checks of 2.0 to 3.2 seconds
+* Managed-identity inference returning `READY` after local authentication was disabled
+* VM checkout of `ae4babd`, active supervised workers, and v23 protocol registration
+* No live broker order or `TradeExecution`
+
+A one-day equity recovery made 218 bounded provider requests. It retained
+78,480 existing bars, preserved 409 conflicts as immutable evidence, and
+inserted or overwrote zero bars. After-hours Dhan full-quote and LTP probes
+returned HTTP 200 with empty `NSE_EQ` data, so market-open fallback freshness
+remains an explicit acceptance gate.
 
 ## Latest Release 1 validation
 

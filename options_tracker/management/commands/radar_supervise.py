@@ -42,6 +42,13 @@ def daily_preflight_window(local):
     return local.weekday() < 5 and 8*60+40 <= minute < 9*60+15
 
 
+def child_heartbeat_timed_out(worker, launched_at, elapsed, now):
+    current_generation = bool(worker and worker.heartbeat_at >= launched_at)
+    if not current_generation:
+        return elapsed > 600
+    return now-worker.heartbeat_at > timezone.timedelta(seconds=120)
+
+
 class Command(BaseCommand):
     help = "Supervise local paper workers. Install with your OS scheduler for logon/restart; not a cloud deployment."
 
@@ -101,12 +108,12 @@ class Command(BaseCommand):
                     process = children.get(name)
                     if process is not None and process.poll() is None and name in leases and time.monotonic()-started_at[name] > 180:
                         worker = RadarWorker.objects.filter(name=leases[name]).first()
-                        current_generation = bool(
-                            worker and worker.heartbeat_at >= child_launched_at[name]
-                        )
-                        startup_timed_out = time.monotonic()-started_at[name] > 600
-                        heartbeat_stale = current_generation and now-worker.heartbeat_at > timezone.timedelta(seconds=120)
-                        if startup_timed_out or heartbeat_stale:
+                        if child_heartbeat_timed_out(
+                            worker,
+                            child_launched_at[name],
+                            time.monotonic()-started_at[name],
+                            now,
+                        ):
                             self.stderr.write(f"{name} stopped heartbeating; terminating only its owned PID {process.pid}.")
                             process.terminate()
                             try:

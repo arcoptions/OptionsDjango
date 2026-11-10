@@ -5,7 +5,7 @@ description: Governed staging validation and production activation plan for the 
 
 ## Status
 
-Validated
+Deployed
 
 Generated: 2026-11-10
 
@@ -134,12 +134,13 @@ and reversible before production activation.
 
 ## 9. External gates
 
-* Deployed-application verification of the approved Azure OpenAI managed identity
+* Telegram bot token and alert chat ID configuration
 * Approved broker statements for reconciliation
 * Dhan rolling-option entitlement resolution for `DH-905`
+* Dhan market-open REST fallback freshness evidence
+* Temporal identity design for provider-reused option security IDs
 * Authoritative index, event, news, global-market, and macro providers
-* Live-session acceptance samples
-* Restore approval and independent human penetration testing
+* Independent restore drill and human penetration testing
 
 ## 10. Validation proof
 
@@ -169,15 +170,16 @@ Validation completed against subscription
 | Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
 | Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
 | Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
-| Current candidate suite | 628 non-browser tests and 15 browser tests | Passed locally; exact-commit CI pending |
-| Dhan continuity | Silent WebSocket activates one full-quote REST snapshot at five-second intervals behind a shared 1.1-second request gate | Passed locally; live deployment proof pending |
-| Azure OpenAI foundation | `arc-research` returned `READY`; production identity has the resource-scoped OpenAI user role | Passed resource test; deployed ARC verification pending |
-| Research evidence version | Modified support files advance prospective evidence to `stock-trap-forward-v23` without rewriting v22 | Passed locally; worker registration pending |
+| Current candidate suite | 629 non-browser tests and 15 browser tests | Passed locally; exact-commit CI pending for the supervisor fix |
+| Dhan continuity | Silent WebSocket activates a full-quote REST snapshot after 30 seconds behind a shared 1.1-second request gate and provider cooldown | Deployed; market-open freshness proof pending |
+| Azure OpenAI foundation | Deployed ARC returned `READY` through managed identity after local authentication was disabled | Passed in production |
+| Research evidence version | Prospective evidence advanced to `stock-trap-forward-v23` without rewriting v22 | Registered on the production VM |
 
 The first optimized production Trading Workspace request took 10.9 seconds
-while PostgreSQL and application caches warmed. Repeated acceptance reached a
-4.51-second DOM-ready time. All other authenticated production routes completed
-in 0.41 to 2.16 seconds.
+while PostgreSQL and application caches warmed. Current warm checks completed
+in 2.0 to 3.2 seconds while the background metrics cache refreshed all 218
+instruments every 46 seconds. Other authenticated production routes completed
+in approximately 0.67 to 1.38 seconds.
 
 This is a code deployment to existing App Services. There is no Bicep,
 Terraform, Docker image, resource deletion, or application-plan change to
@@ -198,18 +200,23 @@ required.
 
 | Check | Evidence | Result |
 |---|---|---|
-| Exact commit | Production `/deployment-health/` returned `ddd177a5b7f642546743397ef2e743bb06b9c159` | Passed |
+| Exact commit | Production `/deployment-health/` returned `ae4babd78bb4a328896652f68f5aada35b2ea22a` | Passed |
 | Artifact integrity | The accepted staging `output.tar.zst` SHA-256 matched the production copy before restart | Passed |
-| Startup and migrations | The accepted artifact ran `startup.sh`; exact-commit health returned HTTP 200 after startup | Passed |
-| Authenticated journeys | Ten staff routes returned HTTP 200 with correct titles, complete DOMs, no horizontal overflow, page exceptions, or console errors | Passed |
+| Deployment workflow | Exact-artifact production run `42810846771` completed after staging and DAST acceptance | Passed |
+| Startup and migrations | The 60-second synchronous metrics bound prevented the prior 600-second startup failure; cold health returned in 355 seconds | Passed |
+| Authenticated journeys | Twelve staff routes returned HTTP 200 without horizontal overflow or browser page errors | Passed |
 | Static assets | Critical Trading Workspace CSS returned HTTP 200 | Passed |
 | Security headers | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
-| Execution safety | `ARC_EXECUTION_MODE=manual` and `ARC_DEPLOYMENT_ENVIRONMENT=production` | Passed |
+| Execution safety | `ARC_EXECUTION_MODE=manual` and `ARC_DEPLOYMENT_ENVIRONMENT=production`; no live order was placed | Passed |
+| Azure OpenAI | Managed-identity inference returned `READY` after local authentication was disabled; no API key is stored | Passed |
+| Worker parity | The VM checked out `ae4babd`; supervised services are active and protocol v23 is registered | Passed |
 | Temporary-account cleanup | Staging and production acceptance users were deleted and verified absent | Passed |
 | Reminder confinement | Telegram delivery settings are absent, so the production-only Dhan reminder remains dormant and cannot send | Passed |
 
-GitHub deployment run `42760920167` was cancelled after its Oryx build stalled
-while pulling the Python 3.13 SDK and temporarily left production without an
-Oryx manifest. The previous accepted staging artifact restored service, then
-the exact optimized staging artifact was promoted with a verified SHA-256.
-Production recovered on the exact accepted commit and passed all checks above.
+Production promotion run `42803299403` first failed safely because the GitHub
+OIDC identity lacked staging Kudu access. A least-scope staging App Service role
+assignment fixed the permission without broadening production access. The
+promotion then copied the exact accepted artifact. A separate cold-start issue
+was traced to synchronous metrics warming, fixed in `ae4babd`, and promoted by
+run `42810846771` after CI run `42809422114`, staging deployment
+`683e76ad-01cb-49f0-9db2-b3717e5771ed`, and DAST run `42810486241` passed.

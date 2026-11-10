@@ -301,6 +301,15 @@ class ReadinessTests(RadarTestCase):
         self.assertTrue(daily_preflight_window(before_open))
         self.assertFalse(daily_preflight_window(mid_session))
 
+    def test_supervisor_does_not_apply_startup_timeout_after_first_heartbeat(self):
+        from options_tracker.management.commands.radar_supervise import child_heartbeat_timed_out
+
+        worker = Mock(heartbeat_at=NOW+timedelta(seconds=30))
+
+        self.assertFalse(child_heartbeat_timed_out(worker, NOW, 601, NOW+timedelta(seconds=60)))
+        self.assertTrue(child_heartbeat_timed_out(None, NOW, 601, NOW+timedelta(seconds=60)))
+        self.assertTrue(child_heartbeat_timed_out(worker, NOW, 601, NOW+timedelta(seconds=151)))
+
     def test_reconcile_loop_does_not_backfill_during_market_hours(self):
         target = "options_tracker.management.commands.radar_reconcile"
         mid_session = timezone.make_aware(datetime(2026, 11, 5, 12, 45))

@@ -6,14 +6,14 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 ## Evidence baseline
 
 This plan reconciles the master expansion specification with the verified
-activation branch at commit `a6ac2b2`. The current expansion branch raises the
-baseline to 628 non-browser and 643 total passing tests. A rendered page
+activation branch through deployed commit `ae4babd`. The current expansion
+branch has 629 non-browser and 644 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 628 passing non-browser tests
-* 643 passing tests including browser-tagged journeys
+* 629 passing non-browser tests
+* 644 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
@@ -26,8 +26,8 @@ The current baseline has:
 | Capability | Current classification | Verified evidence | Genuine gap |
 |---|---|---|---|
 | Dhan REST quotes and option chain | Fully functional in bounded existing workflows | Quote, index OI, option-chain, freshness, and rate-limit tests | Consolidate remaining legacy quote contracts |
-| Dhan live quote collection | REST continuity implemented; production WebSocket currently silent | Handshake and subscription succeed without frames; rate-safe full-quote fallback tests pass | Deploy the fallback, verify live freshness, and continue provider investigation |
-| Canonical instrument identity | Fully functional in staging | 74,917 mapped instruments and zero unmapped radar rows | Named index-universe membership and exchange trading status need maintained sources |
+| Dhan live quote collection | REST continuity deployed; production WebSocket currently silent | Handshake and subscription succeed without frames; rate-safe full-quote fallback is active | Verify market-open freshness and continue provider investigation |
+| Canonical instrument identity | Functional for the retained registry | Historical mappings remain immutable and sync fails closed on identity conflict | Add temporal identities for provider-reused option security IDs |
 | Equity historical ingestion | Partially functional with verified real data | 860 imported 15-minute candles with matching hash and idempotent rerun | Expand intervals and universe through monitored, restartable jobs |
 | Rolling option history | Blocked by provider or entitlement | Twelve official-contract requests returned Dhan `DH-905` while equity history succeeded | Dhan account or backend resolution |
 | Market breadth | Partially functional | Fresh-quote metrics plus idempotent offline EMA, RSI, volume-surge, and 52-week snapshots with 80% coverage gates | Authoritative named-universe membership and enough complete history to qualify each metric |
@@ -36,10 +36,10 @@ The current baseline has:
 | Technical charting | Functional for stored-bar scope | Multi-timeframe candlesticks, deterministic patterns, prior-structure support/resistance, ATR-based analytical levels, and timeframe agreement | Broader live-provider acceptance and additional pattern families |
 | Event intelligence | Functional for normalized stored evidence | Attributed stock timeline and deterministic one-session/five-session observed price reactions over results, news, and corporate actions | Approved announcement ingestion and verified expected-results calendar |
 | Unified opportunities | Fully functional for current sources | Canonical persistence, immutable revisions, state guards, audit, and synchronization | General trade-setup entity and full user-executed lifecycle across all sources |
-| ARC Intelligence | Provider foundation ready; application rollout pending | Azure OpenAI model, managed identity, evidence hashes, citations, and shared request budget | Deploy the managed-identity client and verify production snapshots |
+| ARC Intelligence | Production foundation active | Managed-identity inference returned `READY`; evidence hashes, citations, and shared request budget are deployed | Activate evidence only when approved provider inputs exist |
 | Watchlists and alerts | Fully functional in current radar scope | Per-user watches, price alerts, scanner deduplication, browser acknowledgement, and Telegram retries | Generalize to all new opportunity and event sources |
 | Personal trading analytics | Partially functional | Journal, paper performance, broker importers, and evidence-class separation | Approved current statements and broker reconciliation |
-| Release and operations evidence | Fully functional in staging | Release Dashboard, Operations Health, exact-commit deployment health, CI, DAST | Restore rehearsal, independent human penetration test, and production approval |
+| Release and operations evidence | Production deployed | Release Dashboard, Operations Health, exact-commit deployment health, CI, DAST, browser acceptance, and VM parity | Independent restore drill and human penetration test |
 
 ## Reference UI feature mapping
 
@@ -86,7 +86,7 @@ work and must not replace the readable application-wide theme.
 | FII and DII flow | Authoritative provider | Not selected | Flow evidence unavailable |
 | Corporate announcements and results | Exchange or licensed provider | Not selected | Event workflow unavailable |
 | Company news | Licensed provider | Advisory-only partial sources | Cannot become trade evidence |
-| AI analysis | Azure OpenAI | South India `gpt-5-mini` ready with production managed identity | Remain unavailable until exact-artifact application rollout succeeds |
+| AI analysis | Azure OpenAI | Production managed-identity inference passed; local authentication is disabled | Remain unavailable when approved evidence inputs are absent |
 | Broker reconciliation | User-approved statements and read-only broker records | Importers implemented, current evidence absent | Performance remains explicitly incomplete |
 
 ## Database impact assessment
@@ -263,3 +263,27 @@ snapshot is reusable across application workers after the process-local cache
 is cleared. The production deployment workflow now promotes the exact Oryx
 artifact accepted in staging instead of rebuilding it during production
 promotion.
+
+## Production activation record
+
+Commits `9f2edb1` and `ae4babd` are active in staging, production, and the worker
+VM. Exact-commit CI runs `42801318087` and `42809422114`, DAST run
+`42810486241`, and production promotion run `42810846771` passed. A forced cold
+start returned exact-commit health in 355 seconds after the synchronous metrics
+warm-up was bounded to 60 seconds. Production browser acceptance covered twelve
+authenticated routes, while current Trading Workspace warm checks completed in
+2.0 to 3.2 seconds.
+
+Azure OpenAI returned `READY` through the App Service managed identity after
+local authentication was disabled. The VM registered prospective protocol
+`stock-trap-forward-v23` without changing v22 evidence. Manual execution
+remains mandatory, and no live broker order was placed.
+
+The remaining release gates require external or time-bound evidence:
+
+* Configure the Telegram bot token and alert chat ID, then verify one safe delivery.
+* Verify the Dhan REST fallback and fresh persisted timestamps during market hours.
+* Resolve Dhan `DH-905` for rolling-option history.
+* Add temporal provider identities before accepting reused option security IDs.
+* Supply approved market-data feeds and broker statements.
+* Complete an independent restore drill and human penetration test.
