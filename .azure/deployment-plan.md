@@ -5,16 +5,15 @@ description: Governed staging validation and production activation plan for the 
 
 ## Status
 
-Planning
+Validated
 
 Generated: 2026-11-10
 
 ## 1. Project overview
 
-Deploy the existing Django ARC 2.0 application commit
-`de5df02c1a19b9fa8d4c2c70a536ad496c14ada5` to the existing staging App
-Service, validate it, and request separate approval before production
-activation.
+Deploy the reviewed Django ARC 2.0 expansion head to the existing staging
+App Service, validate the exact commit, and promote that accepted commit to
+production after explicit approval.
 
 Path: Modify existing application.
 
@@ -87,23 +86,29 @@ reviewed; no quota-consuming provisioning is in scope.
 * [x] Confirm that no new resources or quota are required.
 * [x] Preserve the existing Azure CLI deployment recipe.
 * [x] Preserve manual execution and staging isolation.
-* [ ] Obtain owner approval for this plan.
+* [x] Obtain owner approval for this plan.
 
 ### Phase 2: Staging validation
 
-* [ ] Deploy the exact commit to the existing staging App Service.
-* [ ] Verify deployment health reports the exact commit.
-* [ ] Run authenticated critical-page acceptance.
-* [ ] Verify provider-health and query-performance budgets.
-* [ ] Run passive OWASP ZAP and enforce zero unapproved high or medium findings.
-* [ ] Verify staging remains token-free, preview-only, and worker-disabled.
-* [ ] Record Telegram Dhan-reminder delivery as unavailable in staging.
+* [x] All validation checks pass.
+  * [x] Azure CLI is installed and authenticated to the approved subscription.
+  * [x] Existing resource group and App Services are present and running.
+  * [x] The Django build, system checks, migrations, dependency audit, and source scan pass.
+  * [x] The deployment changes only application code and settings, with no resource deletion.
+  * [x] Existing Azure Policy assignments do not deny code deployment.
+* [x] Deploy the exact commit to the existing staging App Service.
+* [x] Verify deployment health reports the exact commit.
+* [x] Run authenticated critical-page acceptance.
+* [x] Verify provider-health and query-performance budgets.
+* [x] Run passive OWASP ZAP and enforce zero unapproved high or medium findings.
+* [x] Verify staging remains token-free, preview-only, and worker-disabled.
+* [x] Record Telegram Dhan-reminder delivery as unavailable in staging.
 
 ### Phase 3: Production approval and activation
 
-* [ ] Present staging evidence and unresolved external provider gates.
-* [ ] Obtain explicit production approval.
-* [ ] Confirm backup and restore readiness.
+* [x] Present staging evidence and unresolved external provider gates.
+* [x] Obtain explicit production approval.
+* [x] Confirm backup and restore readiness.
 * [ ] Deploy the exact approved commit through the production environment.
 * [ ] Verify exact-commit health, static assets, authentication, and manual mode.
 * [ ] Activate the Dhan reminder only with explicit production and Telegram configuration.
@@ -124,3 +129,41 @@ and reversible before production activation.
 * Authoritative index, event, news, global-market, and macro providers
 * Live-session acceptance samples
 * Restore approval and independent human penetration testing
+
+## 10. Validation proof
+
+Validation completed against subscription
+`2fa45de1-d44d-440b-8719-56e211524c32` and resource group
+`rg-optionsdjango-centralindia`.
+
+| Check | Evidence | Result |
+|---|---|---|
+| Azure authentication | `az account show` returned the approved enabled subscription | Passed |
+| Existing resources | `az webapp list` returned both running Central India apps | Passed |
+| Staging execution safety | Staging `ARC_EXECUTION_MODE` is `preview`; no Dhan token app setting was returned | Passed |
+| Azure Policy | No resource-group policy assignment blocks the code deployment | Passed |
+| Deployment role | Signed-in operator has inherited subscription `Owner` role | Passed |
+| Application validation | GitHub Actions run `42720652052` for commit `298bb469bb90d22360c56cb69f433d65c21c8029` | Passed |
+| Migration drift | Exact-commit CI migration check | Passed |
+| Dependency audit | Exact-commit CI production dependency audit | Passed |
+| Source security scan | Exact-commit CI Bandit scan | Passed |
+| Django build | Exact-commit CI checks, static collection, and 620 non-browser tests | Passed |
+| Staging deployment | Kudu deployment `64a7d530-b6af-4ed0-a7c8-d472f25abfa4` reported status 4 for commit `298bb469bb90d22360c56cb69f433d65c21c8029` | Passed |
+| Staging health | `/deployment-health/` returned the exact staging commit and critical static CSS returned HTTP 200 | Passed |
+| Authenticated acceptance | Ten staff routes returned HTTP 200 with correct titles, complete DOMs, no horizontal overflow, page exceptions, or console errors | Passed |
+| Performance | Warm Trading Workspace DOM ready in 2.1 seconds with 1.97-second server response; all other critical routes completed in 0.7 to 2.4 seconds | Passed |
+| Application safety | Trading Workspace reported paper-only behavior, Personal Desk reported manual read-only behavior, and Operations reported `preview` | Passed |
+| HTTP hardening | CSP, HSTS, Permissions-Policy, COEP, and CORP were present; TRACE returned HTTP 405 | Passed |
+| Passive DAST | GitHub Actions run `42757453371` passed for the exact staging commit with the high and medium finding gate enforced | Passed |
+| Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
+| Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
+| Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
+
+The first post-deployment Trading Workspace request took 18.2 seconds while
+application and query caches warmed. App Service Always On, HTTP/2, and one
+minimum instance are enabled. Repeated acceptance reached a 2.1-second DOM
+ready time without a code or infrastructure change.
+
+This is a code-only deployment to existing App Services. There is no Bicep,
+Terraform, Docker image, resource creation, resource deletion, or RBAC change
+to validate.
