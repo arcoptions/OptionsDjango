@@ -1,6 +1,6 @@
 import json
 from io import StringIO
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -141,7 +141,9 @@ class StockIntelligenceTests(TestCase):
         self.assertContains(response, "Attributed event timeline")
 
     def test_event_timeline_calculates_observed_one_and_five_session_reactions(self):
-        start = timezone.now() - timedelta(days=10)
+        start = timezone.make_aware(
+            datetime.combine(timezone.localdate()-timedelta(days=10), time(9)),
+        )
         for index in range(7):
             StockEquityCandle.objects.create(
                 symbol="TEST",
