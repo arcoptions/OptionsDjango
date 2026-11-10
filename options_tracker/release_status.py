@@ -207,7 +207,6 @@ IMPLEMENTED_HIGHLIGHTS = (
 CURRENT_BLOCKERS = (
     "Telegram delivery remains dormant until the bot token and alert chat ID are configured.",
     "Dhan market-open REST fallback freshness and rolling-option history entitlement still need provider evidence.",
-    "Dhan reuses option security IDs across contracts; temporal provider identities must protect historical evidence.",
     "Approved global, macro, event, news, flow, and sector providers remain incomplete and fail unavailable.",
     "Broker statement reconciliation, an independent restore drill, and human penetration testing remain external gates.",
     "Automatic ARC execution remains intentionally disabled; manual execution is the production policy.",

@@ -6,7 +6,7 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 ## Evidence baseline
 
 This plan reconciles the master expansion specification with the verified
-activation branch through deployed commit `b65f211`. The current expansion
+activation branch through deployed commit `e5f9b2f`. The current expansion
 branch has 631 non-browser and 646 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
@@ -14,7 +14,7 @@ The current baseline has:
 
 * 631 passing non-browser tests
 * 646 passing tests including browser-tagged journeys
-* 74,917 canonical instruments and 149,834 provider aliases in staging
+* 76,834 Dhan instrument identities: 76,546 active and 288 retained historical identities
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot
 * Five persisted-bar scanner matches and five immutable strategy manifests
@@ -27,7 +27,7 @@ The current baseline has:
 |---|---|---|---|
 | Dhan REST quotes and option chain | Fully functional in bounded existing workflows | Quote, index OI, option-chain, freshness, and rate-limit tests | Consolidate remaining legacy quote contracts |
 | Dhan live quote collection | REST continuity deployed; production WebSocket currently silent | Handshake and subscription succeed without frames; rate-safe full-quote fallback is active | Verify market-open freshness and continue provider investigation |
-| Canonical instrument identity | Functional for the retained registry | Historical mappings remain immutable and sync fails closed on identity conflict | Add temporal identities for provider-reused option security IDs |
+| Canonical instrument identity | Production deployed with temporal Dhan identities | A real master refresh created 1,917 identities, retained 288 inactive contracts, and produced zero duplicate active provider IDs | Complete provider-alias reconciliation beyond Dhan |
 | Equity historical ingestion | Partially functional with verified real data | 860 imported 15-minute candles with matching hash and idempotent rerun | Expand intervals and universe through monitored, restartable jobs |
 | Rolling option history | Blocked by provider or entitlement | Twelve official-contract requests returned Dhan `DH-905` while equity history succeeded | Dhan account or backend resolution |
 | Market breadth | Partially functional | Fresh-quote metrics plus idempotent offline EMA, RSI, volume-surge, and 52-week snapshots with 80% coverage gates | Authoritative named-universe membership and enough complete history to qualify each metric |

@@ -39,20 +39,21 @@ Last evidence refresh: 2026-11-10.
 | Evidence | Current result |
 |---|---|
 | Current candidate tests | 646 passed: 631 non-browser and 15 browser tests |
-| Exact-commit CI | Run `42826935105` passed for deployed supervisor fix `b65f211` |
+| Exact-commit CI | Run `42875080113` passed for deployed bounded-memory refresh commit `e5f9b2f` |
 | Test files | 42 |
 | Test classes ending in `Tests` | 82 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
-| Current ARC 2.0 schema changes | Migrations `0024`-`0039` applied to test SQLite and restored production PostgreSQL |
+| Current ARC 2.0 schema changes | Migrations `0024`-`0041` applied; active-only provider identity uniqueness is live in production |
 | Latest Release 1 deployment | Production deployed through guarded Kudu status verification, commit-specific runtime health, and static-IP VM synchronization |
 | Dhan continuity | REST fallback is deployed after 30 seconds of WebSocket silence; market-open freshness proof remains pending |
 | Azure OpenAI | Production managed-identity inference returned `READY` after local authentication was disabled; no API key is stored |
 | Telegram activation | The bot token and alert chat ID are absent, so the daily Dhan reminder remains safely dormant |
-| Latest staging acceptance | Deployment `958ec84e-8d8f-4757-a4d9-db5d5b7cf0f0`, exact-commit health, static assets, isolation, and DAST run `42829442685` passed |
-| Latest production acceptance | Promotion run `42829673287` passed; exact commit `b65f211`, VM parity, manual mode, and zero new executions were verified |
+| Latest staging acceptance | Deployment `f35cfe37-4244-43f4-a8e2-52cee5be6c3a`, exact-commit health, static assets, isolation, and DAST run `42877032600` passed |
+| Latest production acceptance | Promotion run `42877271814` attempt 2 passed; exact commit `e5f9b2f`, VM parity, manual mode, and zero new executions were verified |
+| Dhan master refresh | Completed in 93 seconds with 218 underlyings, 76,328 active options, 1,917 new temporal identities, and zero active provider-ID duplicates |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
 | Production App Service | Running on Linux Basic in Central India; staging uses a separate Linux Basic plan |
 | Production PostgreSQL | Version 16, Standard B1ms, 32 GB, 14-day backup retention, geo-redundant backup disabled |
@@ -230,7 +231,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | X-05 | Central operations dashboard | Implemented locally | Passed | Production deployed | Staff-only Operations Health consolidates execution policy, deployment, provider, worker, engine, token, and data-health evidence |
 | X-06 | Worker heartbeats and singleton ownership | Implemented for radar | Passed | Production deployed | Six supervised workers retained fresh leases beyond the former 600-second recycle threshold |
 | X-07 | Job locks and duplicate protection | Partial | Partial | Production baseline | Implemented in selected workers, not standardized |
-| X-08 | Canonical instrument and aliases | Partial | Passed for retained registry | Production deployed | Dhan security-ID reuse requires temporal identities before the registry can safely refresh |
+| X-08 | Canonical instrument and aliases | Implemented for Dhan registry | Passed | Production deployed | Temporal identities preserve 288 inactive contracts while 76,546 current identities remain active without provider-ID duplication |
 | X-09 | Additive migration and backfill framework | Partial | Passed for identity | Production deployed | Nullable identity mappings and dry-run/apply reconciliation exist; production-sized rehearsal remains |
 | X-10 | Audit trail for material actions | Partial | Partial | Production baseline | Order, radar, and settings events exist; actor coverage is incomplete |
 | X-11 | Secret management | Verified baseline | Partial | Production baseline | Azure settings and root-only VM environment are established |
@@ -245,7 +246,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed locally; CI pending | 631 non-browser and 15 browser tests passed; exact-commit CI is required for the bounded-memory registry refresh fix |
+| G-01 | Complete automated suite | Passed | 631 non-browser and 15 browser tests passed; exact-commit CI run `42875080113` passed |
 | G-02 | Requirements-to-tests matrix | Passed for implemented scope | Named automated evidence covers the implemented slice; provider-gated workflows remain explicit |
 | G-03 | Full route security assessment | Partial | Automated scans and route controls pass; independent human penetration testing remains |
 | G-04 | Dependency vulnerability assessment | Passed | Exact-commit dependency audit and Bandit source scan passed |
@@ -282,7 +283,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Production deployment | Completed | Exact-artifact promotion, bounded startup, browser acceptance, managed-identity inference, and VM synchronization passed |
 | Telegram delivery | Configuration pending | Reminder remains dormant until the bot token and alert chat ID are configured |
 | Dhan live acceptance | Market-open evidence pending | REST fallback is deployed, but after-hours full-quote and LTP responses were empty |
-| Dhan option identity | Design decision pending | Reused security IDs require temporal identities; historical contracts must not be mutated in place |
+| Dhan option identity | Resolved and deployed | Reused security IDs create new active temporal identities while historical contracts and related evidence remain immutable |
 | Provider and reconciliation evidence | External inputs pending | Approved market feeds, broker statements, independent restore drill, and human penetration test remain |
 
 ## Dashboard maintenance protocol

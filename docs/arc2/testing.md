@@ -353,6 +353,28 @@ promotion run `42829673287` passed. All six supervised workers retained fresh
 heartbeats beyond 600 seconds, and no `TradeExecution` was created after
 promotion.
 
+Temporal Dhan identity and memory-safe refresh coverage passed:
+
+* Reused provider security IDs create new active rows without changing the old
+  contract or its opportunity relationships.
+* A 501-contract generator fixture crosses the 500-row persistence boundary.
+* The master download streams in 1 MiB chunks and atomically replaces its
+  cache only after success.
+* The validated registry is spooled to JSON Lines, and historical identity
+  queries and writes remain bounded to 500 records.
+* 631 non-browser tests and exact-commit CI run `42875080113` passed.
+* Staging deployment `f35cfe37-4244-43f4-a8e2-52cee5be6c3a` and DAST run
+  `42877032600` passed.
+* Production promotion run `42877271814` attempt 2 passed after attempt 1
+  failed safely on a transient Kudu HTTP 504.
+
+The production master refresh completed in 93 seconds. It activated 218 equity
+underlyings and 76,328 options, created 1,917 temporal identities, retained 288
+inactive historical identities, and left zero duplicate active provider IDs.
+The `TradeExecution` count remained two, so the refresh created no order. The
+VM recovered to 500 MiB available RAM and 1,229 MiB free swap immediately after
+completion.
+
 A one-day equity recovery made 218 bounded provider requests. It retained
 78,480 existing bars, preserved 409 conflicts as immutable evidence, and
 inserted or overwrote zero bars. After-hours Dhan full-quote and LTP probes
