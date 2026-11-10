@@ -34,21 +34,26 @@ working tree, but production behavior has not changed.
 
 ## Evidence snapshot
 
-Last evidence refresh: 2026-11-09.
+Last evidence refresh: 2026-11-10.
 
 | Evidence | Current result |
 |---|---|
-| Django application tests | 575 passed across the full suite; 561 non-browser tests passed in production CI |
-| Test files | 35 |
-| Test classes ending in `Tests` | 73 |
+| Current candidate tests | 646 passed: 631 non-browser and 15 browser tests |
+| Exact-commit CI | Functional run `42875080113` passed for `e5f9b2f`; dashboard run `42882712461` passed for deployed commit `869f9a9` |
+| Test files | 42 |
+| Test classes ending in `Tests` | 82 |
 | Django system check | Passed with no issues |
 | Dependency vulnerability audit | Passed with no known vulnerabilities after Django 5.2.17 upgrade |
 | Secret-pattern scan | Passed with no tracked or workspace matches |
 | Focused security review | No exploitable vulnerabilities found |
-| Current ARC 2.0 schema changes | Migrations `0024`-`0039` applied to test SQLite and restored production PostgreSQL |
+| Current ARC 2.0 schema changes | Migrations `0024`-`0041` applied; active-only provider identity uniqueness is live in production |
 | Latest Release 1 deployment | Production deployed through guarded Kudu status verification, commit-specific runtime health, and static-IP VM synchronization |
-| Latest staging browser smoke | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow; steady DOM readiness was 220-1,532 ms after F&O optimization |
-| Latest Release 1 production smoke | Login, static, and deployed-commit warm-up passed; App Service and VM synchronized; core services and evaluator progress heartbeats verified |
+| Dhan continuity | REST fallback is deployed after 30 seconds of WebSocket silence; market-open freshness proof remains pending |
+| Azure OpenAI | Production managed-identity inference returned `READY` after local authentication was disabled; no API key is stored |
+| Telegram activation | The bot token and alert chat ID are absent, so the daily Dhan reminder remains safely dormant |
+| Latest staging acceptance | Deployment `8c852386-d98d-40c3-9b92-98810baac1b5`, exact-commit health, static assets, isolation, and DAST run `42884622291` passed |
+| Latest production acceptance | Promotion run `42884880244` passed; exact commit `869f9a9`, VM parity, manual mode, and zero new executions were verified |
+| Dhan master refresh | Completed in 93 seconds with 218 underlyings, 76,328 active options, 1,917 new temporal identities, and zero active provider-ID duplicates |
 | Existing runtime topology | App Service, shared PostgreSQL, static-IP VM |
 | Production App Service | Running on Linux Basic in Central India; staging uses a separate Linux Basic plan |
 | Production PostgreSQL | Version 16, Standard B1ms, 32 GB, 14-day backup retention, geo-redundant backup disabled |
@@ -107,7 +112,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R2-03 | Global index and macro board | Implemented locally | Passed | Production deployed | Provider-attributed ingestion and stale-state UI are ready; approved production feeds remain unconfigured |
 | R2-04 | Breadth, sector, and FII/DII context | Implemented locally | Passed | Production deployed | Fresh Dhan breadth and provider-neutral sector and flow evidence retain provenance and freshness |
 | R2-05 | Economic and earnings calendar | Implemented locally | Passed | Production deployed | Seven-day attributed events import idempotently; approved production feed remains unconfigured |
-| R2-06 | Traceable AI daily briefing | Implemented locally | Passed | Production deployed | Provider-gated workflow stores evidence, sources, exact prompt, prompt and evidence hashes, model, response, and timestamp; production Azure OpenAI remains unconfigured |
+| R2-06 | Traceable AI daily briefing | Implemented locally | Passed | Production deployed | Provider-gated workflow stores sources, prompt and evidence hashes, model, response, and timestamp; production Azure OpenAI uses managed identity |
 | R2-07 | Bullish, bearish, and sideways scenarios | Implemented locally | Passed | Production deployed | Deterministic NIFTY and breadth thresholds select one current scenario and response |
 | R2-08 | Market regime and approach | Implemented locally | Passed | Production deployed | Bullish, bearish, sideways, mixed, and insufficient-data states have explicit approaches |
 | R2-09 | Ranked trading opportunities | Implemented locally | Passed | Production deployed | Home reuses the evidence-gated Action List ranking and retains review destinations |
@@ -210,9 +215,9 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | R8-04 | Strategy, stock, instrument, broker, and provider cuts | Implemented locally | Passed | Production deployed | Broker, underlying, instrument kind, paper strategy, paper symbol, market-provider freshness, and Telegram-provider outcomes are unified |
 | R8-05 | Complete journal fields, search, filters, and export | Implemented locally | Passed | Production deployed | Evidence search, state and date filters, formula-safe CSV export, emotion, and HTTPS screenshot references are implemented |
 | R8-06 | Telegram provider analytics | Implemented locally | Passed | Production deployed | Provider-level resolved coverage, target count, stop count, and hit rate are shown; the dashboard explicitly does not present these as execution-time P&L |
-| R8-07 | General ARC AI assistant | Implemented locally | Passed | Production deployed | Staff-only assistant stores the question, evidence, prompt, hashes, provider, model, and response; it remains unavailable without approved provider configuration |
+| R8-07 | General ARC AI assistant | Implemented | Passed | Production deployed | Staff-only assistant uses managed identity and stores question, evidence, prompt, hashes, provider, model, and response |
 | R8-08 | Radar assistant | Partial | Partial | Production baseline | Persisted assistant snapshots exist with limited scope |
-| R8-09 | AI market briefing | Implemented locally | Passed | Production deployed | Evidence-only Azure OpenAI workflow is traceable and fails unavailable when provider configuration is absent; production provider coverage remains |
+| R8-09 | AI market briefing | Implemented | Passed | Production deployed | South India `gpt-5-mini` returned `READY` through the resource-scoped production identity after local authentication was disabled |
 | R8-10 | AI research and risk explanations | Implemented locally | Passed | Production deployed | Evidence-only responses separate facts, interpretation, risks, and manual verification; tests prove no broker activity |
 
 ## Cross-cutting data, operations, security, and experience
@@ -224,14 +229,14 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | X-03 | LIVE, DELAYED, STALE, HISTORICAL, MISSING states | Partial | Partial | Production baseline | Several labels exist without one shared enum and contract |
 | X-04 | Bounded retries, rate limits, and explicit failures | Partial | Partial | Production baseline | Provider-specific behavior exists |
 | X-05 | Central operations dashboard | Implemented locally | Passed | Production deployed | Staff-only Operations Health consolidates execution policy, deployment, provider, worker, engine, token, and data-health evidence |
-| X-06 | Worker heartbeats and singleton ownership | Partial | Partial | Production baseline | Radar leases and selected heartbeats exist |
+| X-06 | Worker heartbeats and singleton ownership | Implemented for radar | Passed | Production deployed | Six supervised workers retained fresh leases beyond the former 600-second recycle threshold |
 | X-07 | Job locks and duplicate protection | Partial | Partial | Production baseline | Implemented in selected workers, not standardized |
-| X-08 | Canonical instrument and aliases | Blocked | None | Not deployed | Requires D-008 decision and reconciliation evidence |
+| X-08 | Canonical instrument and aliases | Implemented for Dhan registry | Passed | Production deployed | Temporal identities preserve 288 inactive contracts while 76,546 current identities remain active without provider-ID duplication |
 | X-09 | Additive migration and backfill framework | Partial | Passed for identity | Production deployed | Nullable identity mappings and dry-run/apply reconciliation exist; production-sized rehearsal remains |
 | X-10 | Audit trail for material actions | Partial | Partial | Production baseline | Order, radar, and settings events exist; actor coverage is incomplete |
 | X-11 | Secret management | Verified baseline | Partial | Production baseline | Azure settings and root-only VM environment are established |
 | X-12 | Input validation and secure errors | Partial | Partial | Production baseline | Django forms and service checks exist; route audit remains |
-| X-13 | Rate limiting | Partial | Passed for implemented scope | Production deployed | Scoped Telegram ingestion now has configurable per-process remote-address throttling; distributed throttling requires shared cache infrastructure |
+| X-13 | Rate limiting | Partial | Passed for implemented scope | Production deployed | Database-shared gates enforce Dhan quote spacing and a four-request-per-minute ARC OpenAI budget; broader provider contracts remain |
 | X-14 | Responsive terminal UX | Partial | Partial | Production baseline | Shared responsive shell exists; target nine-area UX is pending |
 | X-15 | Fast search, filters, and pagination | Partial | Partial | Production baseline | Implemented in selected tracker and radar pages |
 | X-16 | No raw JSON or developer logs in normal flows | Partial | Partial | Production baseline | Most pages comply; operations and legacy views need review |
@@ -241,18 +246,18 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed | 561 non-browser tests passed in production CI; 575 tests are tracked across the full suite |
-| G-02 | Requirements-to-tests matrix | Partial | Link each completed row to named tests and critical browser journeys |
-| G-03 | Full route security assessment | Partial | Focused review found no exploitable vulnerabilities and route tests pass; production penetration evidence remains |
-| G-04 | Dependency vulnerability assessment | Passed | `pip-audit` reports no known vulnerabilities on the patched requirements; secret-pattern scan found no matches |
-| G-05 | Staging isolation | Passed | Separate App Service plan, restored PostgreSQL server, code-forced preview mode, no broker credentials, and `ARC_BACKGROUND_WORKERS=0` verified |
-| G-06 | Migration rehearsal | Passed | `0024`-`0039` applied to a restored production PostgreSQL backup; SQLite rollback to `0033` and forward reapplication preserve core data |
-| G-07 | Production-sized data validation | Passed with monitoring | Restored-data browser and migration evidence passed; live radar scans use one bounded streaming bar query and progress heartbeats |
-| G-08 | Performance budgets | Passed | Fifteen authenticated pages passed; F&O cold-worker requests fell from 8.2 seconds to 0.9-1.5 seconds and steady route readiness was 220-1,532 ms |
-| G-09 | Backup and restore rehearsal | Passed with residual risk | Point-in-time restore succeeded and retention is 14 days; geo-redundant backup remains disabled |
-| G-10 | Staging workflow smoke | Passed | Fifteen authenticated critical routes returned HTTP 200 without horizontal overflow |
-| G-11 | Production approval | Approved | Operator explicitly authorized the production release on 9 November 2026 |
-| G-12 | Production deployment report | Passed | Kudu deployment, migrations, login and static warm-up, App Service and VM commit parity, manual mode, token health, and worker leases verified |
+| G-01 | Complete automated suite | Passed | 631 non-browser and 15 browser tests passed; exact-commit CI run `42875080113` passed |
+| G-02 | Requirements-to-tests matrix | Passed for implemented scope | Named automated evidence covers the implemented slice; provider-gated workflows remain explicit |
+| G-03 | Full route security assessment | Partial | Automated scans and route controls pass; independent human penetration testing remains |
+| G-04 | Dependency vulnerability assessment | Passed | Exact-commit dependency audit and Bandit source scan passed |
+| G-05 | Staging isolation | Passed | Preview mode, disabled workers, no Dhan token, and no OpenAI API key were verified |
+| G-06 | Migration rehearsal | Passed | Activation migrations passed in CI and against the restored production-sized database |
+| G-07 | Production-sized data validation | Passed with monitoring | Backfill preserved 78,480 bars and 409 immutable conflicts; market-open freshness remains pending |
+| G-08 | Performance budgets | Passed with monitoring | Twelve production routes passed; Trading Workspace warm checks were 2.0 to 3.2 seconds |
+| G-09 | Backup and restore rehearsal | Partial | Point-in-time readiness passed; an independent operational restore drill and geo-redundant backup remain |
+| G-10 | Staging workflow smoke | Passed | Exact-commit health, static assets, authenticated routes, isolation, and passive DAST passed |
+| G-11 | Production approval | Approved | The operator authorized production activation while preserving manual execution |
+| G-12 | Production deployment report | Passed | Exact artifact, startup, browser journeys, VM parity, manual mode, worker health, and managed-identity inference passed |
 
 ## Critical workflow acceptance
 
@@ -275,7 +280,11 @@ browser, staging, security, migration, backup, or production smoke evidence.
 | Legacy NIFTY automatic engine | Resolved and deployed | Retained behind explicit `legacy_auto`; manual remains default and preview blocks all broker mutations |
 | Public route policy | Resolved and deployed | Browser application routes require sessions; unsafe controls require staff; scoped integration endpoints retain secret authentication |
 | Worker hosting changes | Verified baseline | Static-IP VM owns Dhan renewal and trading services; App Service owns web and background application workloads |
-| Production deployment | Completed | Guarded Kudu deployment, App Service warm-up, and VM synchronization passed |
+| Production deployment | Completed | Exact-artifact promotion, bounded startup, browser acceptance, managed-identity inference, and VM synchronization passed |
+| Telegram delivery | Configuration pending | Reminder remains dormant until the bot token and alert chat ID are configured |
+| Dhan live acceptance | Market-open evidence pending | REST fallback is deployed, but after-hours full-quote and LTP responses were empty |
+| Dhan option identity | Resolved and deployed | Reused security IDs create new active temporal identities while historical contracts and related evidence remain immutable |
+| Provider and reconciliation evidence | External inputs pending | Approved market feeds, broker statements, independent restore drill, and human penetration test remain |
 
 ## Dashboard maintenance protocol
 

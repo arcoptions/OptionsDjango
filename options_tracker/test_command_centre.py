@@ -1,13 +1,24 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .command_centre import command_centre_context, derive_regime
-from .models import IndexOISnapshot, StockFundamentalSnapshot, StockScoreSnapshot
-from .radar_models import RadarInstrument, RadarQuote
+from .command_centre import (
+    command_centre_context,
+    derive_regime,
+    market_session_context,
+)
+from .models import (
+    EconomicEvent,
+    IndexOISnapshot,
+    MarketBreadthSnapshot,
+    StockFundamentalSnapshot,
+    StockScoreSnapshot,
+)
+from .radar_models import RadarInstrument, RadarQuote, RadarSector
 
 
 class CommandCentreTests(TestCase):
@@ -24,6 +35,54 @@ class CommandCentreTests(TestCase):
         self.assertEqual(derive_regime(0.1, 0.1)["label"], "SIDEWAYS / RANGE")
         self.assertEqual(derive_regime(1.0, -0.5)["label"], "MIXED / DIVERGENT")
         self.assertEqual(derive_regime(None, 0.5)["label"], "INSUFFICIENT DATA")
+
+    def test_market_session_context_classifies_five_windows(self):
+        zone = ZoneInfo("Asia/Kolkata")
+        cases = [
+            ((2026, 11, 9, 8, 30), "PRE_MARKET"),
+            ((2026, 11, 9, 9, 15), "OPENING_DRIVE"),
+            ((2026, 11, 9, 11, 0), "MIDDAY"),
+            ((2026, 11, 9, 14, 30), "POWER_HOUR"),
+            ((2026, 11, 9, 16, 0), "AFTER_HOURS"),
+        ]
+
+        for parts, expected in cases:
+            with self.subTest(expected=expected):
+                context = market_session_context(datetime(*parts, tzinfo=zone))
+                self.assertEqual(context["key"], expected)
+                self.assertEqual(
+                    [row["key"] for row in context["sessions"] if row["active"]],
+                    [expected],
+                )
+
+    def test_market_session_context_closes_weekends_and_verified_holidays(self):
+        zone = ZoneInfo("Asia/Kolkata")
+        weekend = market_session_context(
+            datetime(2026, 11, 8, 11, 0, tzinfo=zone),
+        )
+        self.assertEqual(weekend["key"], "AFTER_HOURS")
+        self.assertEqual(weekend["calendar_state"], "WEEKEND")
+        self.assertFalse(weekend["market_open"])
+
+        holiday_at = datetime(2026, 11, 9, 9, 0, tzinfo=zone)
+        EconomicEvent.objects.create(
+            title="NSE trading holiday",
+            event_type="MARKET_HOLIDAY",
+            starts_at=holiday_at,
+            importance="HIGH",
+            provider="APPROVED_TEST",
+            source_ref="holiday-2026-11-09",
+        )
+        holiday = market_session_context(
+            datetime(2026, 11, 9, 11, 0, tzinfo=zone),
+        )
+        self.assertEqual(holiday["key"], "AFTER_HOURS")
+        self.assertEqual(holiday["calendar_state"], "VERIFIED_HOLIDAY")
+        self.assertEqual(
+            holiday["calendar_source"],
+            "APPROVED_TEST: NSE trading holiday",
+        )
+        self.assertFalse(holiday["market_open"])
 
     def test_context_combines_fresh_index_and_equity_breadth(self):
         now = timezone.now()
@@ -73,6 +132,117 @@ class CommandCentreTests(TestCase):
 
         self.assertEqual(command_centre_context(now)["breadth"]["total"], 0)
 
+    def test_breadth_reports_coverage_gaps_distribution_and_industries(self):
+        now = timezone.now()
+        quote_rows = [
+            ("ADVANCE", 103, 100, 102, 99, 104, "Banking"),
+            ("DECLINE", 97, 100, 98, 96, 101, "Technology"),
+            ("FLAT", 100, 100, 100, 100, 100, "Banking"),
+        ]
+        for security_id, (
+            symbol,
+            last,
+            previous_close,
+            day_open,
+            day_low,
+            day_high,
+            industry,
+        ) in enumerate(quote_rows, start=10):
+            instrument = RadarInstrument.objects.create(
+                security_id=str(security_id),
+                segment="NSE_EQ",
+                symbol=symbol,
+                kind="EQUITY",
+            )
+            RadarQuote.objects.create(
+                instrument=instrument,
+                source_at=now,
+                received_at=now,
+                last=last,
+                previous_close=previous_close,
+                day_open=day_open,
+                day_low=day_low,
+                day_high=day_high,
+            )
+            RadarSector.objects.create(
+                instrument=instrument,
+                industry=industry,
+                source_url=f"https://example.test/{symbol}",
+            )
+        RadarInstrument.objects.create(
+            security_id="99",
+            segment="NSE_EQ",
+            symbol="NO_QUOTE",
+            kind="EQUITY",
+        )
+
+        breadth = command_centre_context(now)["breadth"]
+
+        self.assertEqual(breadth["total"], 3)
+        self.assertEqual(breadth["active_universe"], 4)
+        self.assertEqual(breadth["coverage_percent"], 75.0)
+        self.assertEqual(breadth["advance_percent"], 33.3)
+        self.assertEqual(breadth["decline_percent"], 33.3)
+        self.assertEqual(breadth["unchanged_percent"], 33.3)
+        self.assertEqual(breadth["advance_decline_ratio"], 1.0)
+        self.assertEqual(
+            breadth["gaps"],
+            {
+                "threshold_percent": 0.1,
+                "up": 1,
+                "down": 1,
+                "filled": 2,
+                "unfilled": 0,
+            },
+        )
+        self.assertEqual(
+            [row["count"] for row in breadth["price_distribution"]],
+            [1, 0, 0, 1, 0, 1],
+        )
+        self.assertEqual(breadth["sectors"][0]["name"], "Banking")
+        self.assertEqual(breadth["sectors"][0]["total"], 2)
+        self.assertEqual(len(breadth["unavailable"]), 4)
+
+    def test_breadth_uses_current_qualified_historical_snapshot(self):
+        now = timezone.now()
+        MarketBreadthSnapshot.objects.create(
+            universe="FNO",
+            version="market-breadth-v1",
+            input_hash="b" * 64,
+            source_at=now,
+            active_instruments=10,
+            covered_instruments=10,
+            metrics={
+                "ema": {
+                    "20": {
+                        "covered": 10,
+                        "active": 10,
+                        "percent": 100.0,
+                        "available": True,
+                        "above": 7,
+                        "below_or_equal": 3,
+                    },
+                },
+                "rsi": {
+                    "covered": 10,
+                    "active": 10,
+                    "percent": 100.0,
+                    "available": True,
+                    "oversold": 1,
+                    "neutral": 8,
+                    "overbought": 1,
+                },
+            },
+            unavailable=[],
+        )
+
+        breadth = command_centre_context(now)["breadth"]
+
+        self.assertEqual(breadth["historical"]["ema"]["20"]["above"], 7)
+        self.assertEqual(breadth["historical_universe"], "FNO")
+        self.assertEqual(breadth["historical_source_at"], now)
+        self.assertEqual(breadth["unavailable"], [])
+
     def test_context_ranks_only_current_evidence_backed_investments(self):
         now = timezone.now()
         for symbol, score, confidence, age_days in [
@@ -114,6 +284,7 @@ class CommandCentreTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "9 AM Command Centre")
+        self.assertContains(response, "Market session")
         self.assertContains(response, "Ranked opportunities")
         self.assertContains(response, "Ranked long-term investment research")
         self.assertContains(response, "Personal trading desk")

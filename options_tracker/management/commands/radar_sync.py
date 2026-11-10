@@ -22,10 +22,9 @@ class Command(BaseCommand):
         try:
             if options["master"]:
                 with options["master"].open(encoding="utf-8-sig", newline="") as stream:
-                    rows = list(csv.DictReader(stream))
+                    result = sync_instruments(csv.DictReader(stream), timezone.now())
             else:
-                rows = load_master(refresh=True)
-            result = sync_instruments(rows, timezone.now())
+                result = sync_instruments(load_master(refresh=True), timezone.now())
         except (ValueError, OSError) as error:
             raise CommandError(str(error)) from error
         self.stdout.write(self.style.SUCCESS(f"Paper radar registry updated: {result}"))

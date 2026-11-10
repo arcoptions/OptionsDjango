@@ -4,7 +4,15 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render
 
 from .ai_research import generate_research
+from .azure_openai import provider_readiness
 from .models import AIResearchSnapshot
+
+
+SUGGESTED_RESEARCH_QUESTIONS = (
+    "What current evidence supports the market regime, and what could invalidate it?",
+    "Which stored opportunity has the strongest evidence, and which risks remain unresolved?",
+    "Where is ARC's current evidence missing, stale, invalid, or conflicting?",
+)
 
 
 @staff_member_required(login_url="admin:login")
@@ -27,6 +35,10 @@ def research_assistant(request):
     return render(
         request,
         "options_tracker/research_assistant.html",
-        {"snapshots": snapshots},
+        {
+            "provider_status": provider_readiness(),
+            "snapshots": snapshots,
+            "suggested_questions": SUGGESTED_RESEARCH_QUESTIONS,
+        },
         status=status,
     )

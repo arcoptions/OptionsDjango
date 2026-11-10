@@ -27,7 +27,11 @@ class RadarInstrument(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["segment", "security_id"], name="radar_instrument_identity"),
+            models.UniqueConstraint(
+                fields=["segment", "security_id"],
+                condition=models.Q(active=True),
+                name="radar_active_instrument_identity",
+            ),
         ]
 
 
@@ -142,6 +146,33 @@ class RadarSector(models.Model):
     industry = models.CharField(max_length=100)
     source_url = models.URLField()
     verified_at = models.DateTimeField(default=timezone.now)
+
+
+class MarketBreadthSnapshot(models.Model):
+    universe = models.CharField(max_length=32)
+    version = models.CharField(max_length=32)
+    input_hash = models.CharField(max_length=64)
+    source_at = models.DateTimeField()
+    received_at = models.DateTimeField(default=timezone.now)
+    active_instruments = models.PositiveIntegerField()
+    covered_instruments = models.PositiveIntegerField()
+    metrics = models.JSONField(default=dict)
+    unavailable = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["-source_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["universe", "version", "input_hash"],
+                name="market_breadth_snapshot_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["universe", "version", "-source_at"],
+                name="idx_market_breadth_latest",
+            ),
+        ]
 
 
 class RadarOpportunity(models.Model):

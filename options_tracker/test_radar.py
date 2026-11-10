@@ -183,33 +183,68 @@ class RegistryTests(RadarTestCase):
         self.equity.refresh_from_db()
         self.assertTrue(self.equity.active)
 
-    def test_reused_security_id_cannot_mutate_contract_history(self):
+    def test_large_master_is_processed_across_bounded_batches(self):
+        equity, template = master_rows()[:2]
+
+        def rows():
+            yield equity
+            for index in range(501):
+                option = template.copy()
+                option.update(SECURITY_ID=str(10_000+index), STRIKE_PRICE=str(100+index))
+                yield option
+
+        result = sync_instruments(rows(), NOW)
+
+        self.assertEqual(result["options"], 501)
+        self.assertEqual(result["created_identities"], 501)
+        self.assertEqual(RadarInstrument.objects.filter(kind="OPTION", active=True).count(), 501)
+
+    def test_reused_security_id_archives_contract_history(self):
         rows = master_rows()
         rows[1]["STRIKE_PRICE"] = "110"
-        with self.assertRaisesMessage(ValueError, "identity changed"):
-            sync_instruments(rows, NOW)
+        result = sync_instruments(rows, NOW)
         self.option.refresh_from_db()
         self.assertEqual(self.option.strike, 100)
+        self.assertFalse(self.option.active)
+        replacement = RadarInstrument.objects.get(
+            segment=self.option.segment,
+            security_id=self.option.security_id,
+            active=True,
+        )
+        self.assertEqual(replacement.strike, 110)
+        self.assertNotEqual(replacement.pk, self.option.pk)
+        self.assertEqual(result["created_identities"], 1)
 
-    def test_coordinated_unused_contract_strike_adjustment_is_applied(self):
+    def test_coordinated_contract_strike_adjustment_creates_new_identities(self):
         rows = master_rows()
         for row in rows[1:]:
             row["STRIKE_PRICE"] = "89.75"
         sync_instruments(rows, NOW)
         self.assertEqual(
-            set(RadarInstrument.objects.filter(kind="OPTION").values_list("strike", flat=True)),
+            set(RadarInstrument.objects.filter(kind="OPTION", active=True).values_list("strike", flat=True)),
             {89.75},
         )
+        self.assertEqual(RadarInstrument.objects.filter(kind="OPTION", active=False).count(), 2)
 
-    def test_used_contract_blocks_coordinated_strike_adjustment(self):
-        self.opportunity(contract=self.option)
+    def test_used_contract_remains_linked_when_security_id_is_reused(self):
+        opportunity = self.opportunity(contract=self.option)
         rows = master_rows()
         for row in rows[1:]:
             row["STRIKE_PRICE"] = "89.75"
-        with self.assertRaisesMessage(ValueError, "identity changed"):
-            sync_instruments(rows, NOW)
+        sync_instruments(rows, NOW)
         self.option.refresh_from_db()
         self.assertEqual(self.option.strike, 100)
+        self.assertFalse(self.option.active)
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.contract_id, self.option.pk)
+        self.assertEqual(
+            RadarInstrument.objects.get(
+                segment=self.option.segment,
+                security_id=self.option.security_id,
+                active=True,
+            ).strike,
+            89.75,
+        )
 
     def test_stale_master_missing_equity_rolls_back(self):
         with self.assertRaises(ValueError):

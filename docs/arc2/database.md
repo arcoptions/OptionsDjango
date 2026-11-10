@@ -102,6 +102,33 @@ Data that influences a decision should preserve:
 * Confirm App Service and VM code compatibility.
 * Advance the deployed commit marker only after migration success.
 
+## R11 Market Pulse database impact
+
+The first session-awareness slice has no migration. It reads attributed
+`EconomicEvent` rows with event type `MARKET_HOLIDAY` or
+`EXCHANGE_HOLIDAY` when available. A weekday without such evidence remains
+explicitly schedule-only rather than being recorded as a verified trading
+day.
+
+Migration `0040_marketbreadthsnapshot` adds one append-only historical breadth
+snapshot table. Each row retains:
+
+* Universe and calculation version
+* Deterministic input hash
+* Source and receipt timestamps
+* Active and historically covered instrument counts
+* Versioned metric payload
+* Explicit unavailable reasons
+
+The unique universe, version, and input-hash constraint makes reruns
+idempotent. The universe, version, and descending source-time index supports
+the single latest-snapshot Command Centre lookup. Minute bars remain immutable,
+and historical aggregation runs only through the offline
+`build_market_breadth` command.
+
+Breakout, technical-pattern, and event-reaction models remain deferred until
+their write paths, retention, indexes, and query volumes are measured.
+
 ## Planned work
 
 No ARC 2.0 schema is approved. The next database activity is read-only identity reconciliation. See [database impact analysis](./04-database-impact-analysis.md).

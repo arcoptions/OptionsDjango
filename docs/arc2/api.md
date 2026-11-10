@@ -139,3 +139,25 @@ status updates remain on protected POST or quote-refresh paths.
 
 Browser polling payload versioning and canonical instrument references are
 implemented locally. External ingestion retains its scoped integration contract.
+
+## R11 Market Pulse API impact
+
+The first Market Pulse slice adds server-rendered market-session context to
+the authenticated Command Centre. It does not add or change a JSON endpoint.
+
+The context contains:
+
+* One active state from Pre-Market, Opening Drive, Midday, Power Hour, and
+  After Hours
+* Indian timezone window labels
+* Scheduled market-open state
+* Calendar evidence state and source
+* An explicit warning when no attributed exchange-holiday record exists
+* Fresh quote breadth and an optional current offline historical-breadth
+  snapshot
+* Explicit unavailable reasons when complete-history coverage is below 80%
+
+The offline builder is a management command, not an HTTP endpoint. It previews
+by default and persists only with `--apply`. Any future client-facing Market
+Pulse endpoint must use the existing versioned contract policy before browser
+consumers depend on it.

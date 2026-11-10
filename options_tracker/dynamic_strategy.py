@@ -6,6 +6,7 @@ from statistics import median
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from .indicator_math import ema_latest
 from .models import IndexOptionCandle
 from .strategy_backtest import _completed_spot_bars
 
@@ -89,14 +90,6 @@ def nifty_expiry_sessions(session_dates):
     return expiry_dates
 
 
-def _ema(values, period):
-    average = values[0]
-    multiplier = 2 / (period + 1)
-    for value in values[1:]:
-        average += (value - average) * multiplier
-    return average
-
-
 def _true_range(bar, previous_close):
     return max(
         bar["high"] - bar["low"],
@@ -123,9 +116,9 @@ def price_action_setup(bars, config, is_expiry_day=False):
 
     previous = bars[:-1]
     closes = [bar["close"] for bar in bars]
-    fast_ema = _ema(closes, config.fast_ema_period)
-    slow_ema = _ema(closes, config.slow_ema_period)
-    previous_slow_ema = _ema(closes[:-1], config.slow_ema_period)
+    fast_ema = ema_latest(closes, config.fast_ema_period)
+    slow_ema = ema_latest(closes, config.slow_ema_period)
+    previous_slow_ema = ema_latest(closes[:-1], config.slow_ema_period)
     true_ranges = [
         _true_range(bar, prior["close"])
         for prior, bar in zip(previous, bars[1:])
@@ -234,10 +227,10 @@ def window_structure_setup(bars, config, is_expiry_day=False):
         return None
 
     closes = [bar["close"] for bar in bars]
-    fast_ema = _ema(closes, config.fast_ema_period)
-    slow_ema = _ema(closes, config.slow_ema_period)
-    previous_fast_ema = _ema(closes[:-1], config.fast_ema_period)
-    previous_slow_ema = _ema(closes[:-1], config.slow_ema_period)
+    fast_ema = ema_latest(closes, config.fast_ema_period)
+    slow_ema = ema_latest(closes, config.slow_ema_period)
+    previous_fast_ema = ema_latest(closes[:-1], config.fast_ema_period)
+    previous_slow_ema = ema_latest(closes[:-1], config.slow_ema_period)
     body_fraction = abs(current["close"] - current["open"]) / current_range
     range_atr = _true_range(current, previous[-1]["close"]) / atr
     close_location = (current["close"] - current["low"]) / current_range

@@ -111,7 +111,7 @@ def action_list(request):
         "options_tracker/action_list.html",
         {
             "title": "Action List",
-            **action_list_context(),
+            **action_list_context(request.GET),
         },
     )
 

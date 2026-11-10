@@ -1,0 +1,78 @@
+{% extends "options_tracker/dashboard_base.html" %}
+
+{% block title %}Personal Trading Desk | ARC Trading Journal{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Manual trading workflow</h2>
+  <p class="muted">One read-only view of planning, personal alerts, journal records, performance, and imported broker evidence. This desk cannot place or modify broker orders.</p>
+  <div class="grid">
+    <div class="stat"><div class="label">Planned / approved setups</div><div class="value">{{ planned_setup_count }}</div></div>
+    <div class="stat"><div class="label">Active personal alerts</div><div class="value">{{ active_alert_count }}</div></div>
+    <div class="stat"><div class="label">Triggered alerts</div><div class="value">{{ triggered_alert_count }}</div></div>
+    <div class="stat"><div class="label">Open execution records</div><div class="value">{{ open_trade_count }}</div></div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Continue your workflow</h2>
+  <div class="grid">
+    {% for label, url, detail in destinations %}
+    <div class="card">
+      <h3>{{ label }}</h3>
+      <p class="muted">{{ detail }}</p>
+      <a class="btn secondary" href="{{ url }}">Open {{ label }}</a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Planned and approved setups</h2>
+  <table>
+    <thead><tr><th>Instrument</th><th>Strategy</th><th>Status</th><th>Direction</th><th>Next action</th></tr></thead>
+    <tbody>
+    {% for opportunity in planned_setups %}
+      <tr><td>{% if opportunity.instrument %}{{ opportunity.instrument.canonical_symbol }}{% else %}Unmapped{% endif %}</td><td>{{ opportunity.strategy }}</td><td>{{ opportunity.status }}</td><td>{{ opportunity.direction|default:"-" }}</td><td>{{ opportunity.next_action|default:"Manual review" }}</td></tr>
+    {% empty %}
+      <tr><td colspan="5">No planned or approved setups.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Personal price alerts</h2>
+  <table>
+    <thead><tr><th>Symbol</th><th>Condition</th><th>Level</th><th>State</th><th>Expires</th></tr></thead>
+    <tbody>
+    {% for alert in active_alerts %}
+      <tr><td>{{ alert.instrument.symbol }}</td><td>{{ alert.direction }}</td><td>{{ alert.level }}</td><td>{% if alert.triggered_at %}Triggered{% else %}Watching{% endif %}</td><td>{{ alert.expires_at|date:"d M H:i" }}</td></tr>
+    {% empty %}
+      <tr><td colspan="5">No active personal price alerts.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Journal and reconciliation evidence</h2>
+  {% if open_trades %}
+  <table>
+    <thead><tr><th>Instrument</th><th>Mode</th><th>Quantity</th><th>Opened</th><th>Journal state</th></tr></thead>
+    <tbody>
+    {% for trade in open_trades %}
+      <tr><td>{{ trade.signal.option_symbol }}</td><td>{{ trade.execution_mode }}</td><td>{{ trade.quantity }}</td><td>{{ trade.opened_at|date:"d M H:i" }}</td><td>{% if trade.emotion %}Reflection recorded{% else %}Reflection pending{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">No open execution records.</p>
+  {% endif %}
+  {% if latest_statement %}
+    <p>Latest imported broker statement: {{ latest_statement.broker }} {{ latest_statement.period_label }}. Imported evidence remains separate from paper performance and is not treated as an automatic order reconciliation.</p>
+  {% else %}
+    <p class="muted">No approved broker statement has been imported. Reconciliation remains unavailable.</p>
+  {% endif %}
+</section>
+{% endblock %}

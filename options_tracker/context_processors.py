@@ -51,6 +51,7 @@ def layout_shell(request):
         {"area": "Stock Intelligence", "label": "Stock & Option Data", "url": reverse("stock_options"), "active": request.path.startswith(reverse("stock_options"))},
         {"area": "Market Scanner", "label": "Scanner Builder", "url": reverse("scanner_builder"), "active": request.path.startswith(reverse("scanner_builder"))},
         {"area": "Opportunity Inbox", "label": "Trading Workspace", "url": reverse("radar"), "active": request.path.startswith(reverse("radar"))},
+        {"area": "Trading Desk", "label": "Personal Desk", "url": reverse("personal_desk"), "active": request.path.startswith(reverse("personal_desk"))},
         {"area": "Trading Desk", "label": "NIFTY Execution", "url": reverse("nifty_live"), "active": request.path.startswith(reverse("nifty_live"))},
         {"area": "Trading Desk", "label": "F&O Research", "url": reverse("fno_desk"), "active": request.path.startswith(reverse("fno_desk"))},
         {"area": "Trading Desk", "label": "Trade Journal", "url": reverse("trade_journal"), "active": request.path.startswith(reverse("trade_journal"))},

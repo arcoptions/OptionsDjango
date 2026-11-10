@@ -119,6 +119,59 @@ checklist.
 * [ ] Move workers only after ownership and idempotency proof.
 * [ ] Retire duplicate identity fields only after verified backfill.
 
+## Expansion R10-R18
+
+The [master expansion plan](./MASTER_EXPANSION_PLAN.md) reconciles the new
+Market Pulse, breakout, technical, event, intelligence, and personal-desk
+requirements with existing ARC capabilities.
+
+* [x] Reconcile the R10 market-data and universe foundation with verified
+  activation evidence and explicit provider blockers.
+* [x] Add five evidence-aware Indian market-session states to the Command
+  Centre without claiming an unverified exchange holiday calendar.
+* [x] Add fresh-universe coverage, advance/decline percentages, opening gaps,
+  price distribution, and industry breadth.
+* [x] Add an idempotent offline F&O-universe snapshot for EMA breadth, Wilder
+  RSI distribution, complete-session volume surge, and 52-week context.
+* [x] Require 80% complete-history coverage and reject stale snapshots before
+  displaying historical breadth.
+* [ ] Add authoritative configurable NIFTY 50, NIFTY 100, and NIFTY 500
+  universe membership.
+* [x] Add S1 failed-break, S2 compression-breakout, and S3 trend-continuation
+  taxonomy to the unified Action List with transparent rank components.
+* [x] Keep radar setups manual-only with trigger, stop, analytical 2R target,
+  validity, and evidence reason.
+* [x] Add classification and active-state filters plus measured 30-day
+  lifecycle outcome cards with an explicit 30-trigger sample threshold.
+* [ ] Add broader breakout families and verified-history acceptance.
+* [x] Add deterministic stored-bar patterns, prior-structure
+  support/resistance, ATR-based analytical levels, and fail-closed
+  multi-timeframe agreement.
+* [x] Add an attributed stock event timeline and deterministic one-session
+  and five-session observed reactions over normalized stored evidence.
+* [ ] Activate event ingestion and an expected-results calendar after an
+  approved provider is available.
+* [x] Add staff-only Opportunity Inbox validation, complete derivative risk
+  planning, approval, and rejection with actor and reason audit.
+* [x] Keep execution outside the Opportunity Inbox and reject direct execution
+  requests without creating trade-execution records.
+* [x] Add provider-neutral suggested questions, credential-safe readiness,
+  traceable evidence generation, and fail-closed unavailable behavior.
+* [ ] Activate governed ARC Intelligence after approved Azure OpenAI
+  configuration.
+* [x] Add a staff-only, read-only Personal Trading Desk for plans,
+  user-scoped alerts, journal state, performance, and reconciliation evidence.
+* [x] Add the Personal Trading Desk to left navigation with an explicit request
+  query budget and no broker mutation path.
+* [ ] Complete broker reconciliation after approved statements are available.
+* [x] Add production-only daily Dhan Apps UI token freshness reminders with
+  quiet hours, successful-delivery deduplication, and retryable failures.
+* [x] Keep reminder content token-free and exclude staging from delivery.
+* [x] Complete automated R18 integration, performance, provider-health,
+  exact-commit CI, migration, dependency, source-scan, DAST, and smoke gates.
+* [ ] Complete restore approval, independent human penetration testing,
+  live-session acceptance, and approved production deployment gates.
+
 ## Legacy-gated
 
 * NIFTY automatic live order placement behind explicit `legacy_auto` mode.

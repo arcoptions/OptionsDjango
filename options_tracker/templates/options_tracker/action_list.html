@@ -7,7 +7,7 @@
   <div class="page-head" style="margin-bottom: 8px;">
     <div>
       <h1 class="page-title">Action List</h1>
-      <p class="page-subtitle">Current option-tracker plans, Telegram review items, and scanner triggers in one ranked queue.</p>
+      <p class="page-subtitle">Current option-tracker plans, classified ARC radar setups, Telegram review items, and scanner triggers in one ranked queue.</p>
     </div>
     <div class="row" style="align-items:center;">
       <span class="active-pill">{{ buy_count }} buy-ready</span>
@@ -22,14 +22,69 @@
   </p>
 </div>
 
+<div class="panel">
+  <h2>Breakout Intelligence filters</h2>
+  <form method="get" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+    <label>
+      Classification
+      <select name="breakout_classification">
+        <option value="">All action sources</option>
+        {% for option in breakout_classifications %}
+        <option value="{{ option.value }}" {% if breakout_filters.classification == option.value %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Radar state
+      <select name="breakout_state">
+        <option value="">Any active state</option>
+        {% for option in breakout_states %}
+        <option value="{{ option.value }}" {% if breakout_filters.state == option.value %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div style="align-self:end;">
+      <button class="btn" type="submit">Apply filters</button>
+      <a class="btn secondary" href="{% url 'action_list' %}">Clear</a>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Observed breakout outcomes</h2>
+  <p class="muted">
+    Persisted lifecycle evidence from the last {{ breakout_outcome_window_days }} days.
+    Failure rate means rejected, expired, or invalidated after a recorded trigger.
+    Rates remain insufficient until {{ breakout_min_outcome_sample }} triggered observations exist.
+  </p>
+  <div class="grid">
+    {% for outcome in breakout_outcomes %}
+    <article class="card">
+      <strong>{{ outcome.label }}</strong>
+      <p>
+        {{ outcome.observations }} observed · {{ outcome.triggered }} triggered ·
+        {{ outcome.qualified }} qualified
+      </p>
+      <p>
+        Failed after trigger: {{ outcome.failed_after_trigger }}
+        {% if outcome.failure_rate_percent is not None %}({{ outcome.failure_rate_percent }}%){% endif %}
+      </p>
+      <span class="active-pill">{{ outcome.sample_state }}</span>
+    </article>
+    {% empty %}
+    <p class="muted">No persisted breakout lifecycle evidence exists in the current window.</p>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom:16px;">
   <div class="card">
     <div class="muted">Buy-ready candidates</div>
     <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ buy_count }}</div>
   </div>
   <div class="card">
-    <div class="muted">Scanner triggers</div>
-    <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ triggered_count }}</div>
+    <div class="muted">ARC radar setups</div>
+    <div style="font-size: 28px; font-weight: 800; margin-top: 8px;">{{ breakout_count }}</div>
   </div>
   <div class="card">
     <div class="muted">Watch / review</div>
@@ -79,6 +134,7 @@
         <td>
           Score: {{ row.score }}<br>
           <span class="muted">{{ row.status }}</span>
+          {% if row.score_reason %}<br><span class="muted">{{ row.score_reason }}</span>{% endif %}
           {% if row.recommendation %}<br><span class="muted">{{ row.recommendation }}</span>{% endif %}
         </td>
         <td>{{ row.entry|default:"-" }}</td>

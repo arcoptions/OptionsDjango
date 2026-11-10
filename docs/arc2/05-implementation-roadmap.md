@@ -15,6 +15,11 @@ description: Incremental release plan, quality gates, rollback boundaries, and a
 * The [release dashboard](./release-dashboard.md) independently tracks
   implementation, testing, and deployment evidence.
 
+The historical Release 0 through Release 6 sequence remains the foundation.
+The [master expansion plan](./MASTER_EXPANSION_PLAN.md) defines the additive
+R10 through R18 program requested after activation hardening. The two sequences
+must not be treated as duplicate implementations.
+
 ## Release 0: audit and architecture baseline
 
 Status: complete in documentation, pending user review.

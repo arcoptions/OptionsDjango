@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone as dt_timezone
 import heapq
+import json
 import logging
 from math import isfinite
 import struct
+import tempfile
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
+import requests
 
 from .models import (
     RadarBar, RadarInstrument, RadarOpportunity, RadarOptionPoint, RadarQuote, RadarWatch, RadarWorker,
@@ -25,6 +30,7 @@ from .radar_sessions import continuous_timestamp
 LOGGER = logging.getLogger(__name__)
 SEGMENTS = {1: "NSE_EQ", 2: "NSE_FNO"}
 IST = ZoneInfo("Asia/Kolkata")
+DHAN_QUOTE_URL = "https://api.dhan.co/v2/marketfeed/quote"
 
 
 @dataclass(frozen=True)
@@ -98,6 +104,119 @@ def decode_packets(data: bytes, received_at: datetime) -> list[Tick]:
     return ticks
 
 
+def fetch_quote_snapshot(
+    instruments: list[RadarInstrument],
+    access_token: str,
+    client_id: str,
+    received_at: datetime,
+) -> list[Tick] | None:
+    """Fetch one rate-coordinated quote snapshot when the socket is silent."""
+    from .services import (
+        DHAN_LTP_RATE_LIMIT_SECONDS,
+        _acquire_dhan_ltp_slot,
+        _finish_dhan_ltp_request,
+    )
+
+    slot = _acquire_dhan_ltp_slot()
+    if not slot["acquired"]:
+        return None
+    payload: dict[str, list[int]] = {}
+    for instrument in instruments:
+        payload.setdefault(instrument.segment, []).append(int(instrument.security_id))
+    try:
+        response = requests.post(
+            DHAN_QUOTE_URL,
+            json=payload,
+            headers={
+                "access-token": access_token,
+                "client-id": client_id,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=20,
+        )
+        if response.status_code == 429:
+            try:
+                retry_after = int(response.headers.get("Retry-After", "0"))
+            except (TypeError, ValueError):
+                retry_after = 0
+            cooldown = max(DHAN_LTP_RATE_LIMIT_SECONDS, retry_after)
+            _finish_dhan_ltp_request(cooldown_seconds=cooldown)
+            raise ConnectionError(
+                f"Dhan quote rate limit active for {cooldown} seconds."
+            )
+        response.raise_for_status()
+        body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Dhan quote fallback returned invalid JSON.")
+    except (requests.RequestException, ValueError) as error:
+        _finish_dhan_ltp_request()
+        raise ConnectionError(
+            "Dhan quote fallback failed without exposing credentials."
+        ) from error
+    _finish_dhan_ltp_request()
+
+    by_identity = {
+        (instrument.segment, instrument.security_id): instrument
+        for instrument in instruments
+    }
+    ticks = []
+    invalid = 0
+    for segment, quotes in body.get("data", {}).items():
+        if not isinstance(quotes, dict):
+            invalid += 1
+            continue
+        for security_id, quote in quotes.items():
+            if (segment, str(security_id)) not in by_identity or not isinstance(quote, dict):
+                invalid += 1
+                continue
+            try:
+                source_at = timezone.make_aware(
+                    datetime.strptime(
+                        str(quote["last_trade_time"]),
+                        "%d/%m/%Y %H:%M:%S",
+                    ),
+                    IST,
+                )
+                depth = quote.get("depth") or {}
+                buys = depth.get("buy") or []
+                sells = depth.get("sell") or []
+                best_bid = next(
+                    (item for item in buys if float(item.get("price") or 0) > 0),
+                    {},
+                )
+                best_ask = next(
+                    (item for item in sells if float(item.get("price") or 0) > 0),
+                    {},
+                )
+                ohlc = quote.get("ohlc") or {}
+                ticks.append(Tick(
+                    segment=segment,
+                    security_id=str(security_id),
+                    source_at=source_at,
+                    received_at=received_at,
+                    last=float(quote["last_price"]),
+                    volume=int(quote.get("volume") or 0),
+                    bid=float(best_bid.get("price") or 0),
+                    ask=float(best_ask.get("price") or 0),
+                    bid_qty=int(best_bid.get("quantity") or 0),
+                    ask_qty=int(best_ask.get("quantity") or 0),
+                    oi=int(quote.get("oi") or 0) if segment == "NSE_FNO" else None,
+                    day_open=float(ohlc.get("open") or 0) or None,
+                    day_high=float(ohlc.get("high") or 0) or None,
+                    day_low=float(ohlc.get("low") or 0) or None,
+                    previous_close=float(ohlc.get("close") or 0) or None,
+                ))
+            except (KeyError, TypeError, ValueError):
+                invalid += 1
+    if invalid:
+        LOGGER.warning(
+            "Dhan quote fallback ignored %s malformed or unexpected records.",
+            invalid,
+        )
+    return ticks
+
+
 class TickBuffer:
     """Wait within the existing freshness budget; never publish future quotes."""
 
@@ -120,21 +239,41 @@ class TickBuffer:
         return ready
 
 
-def sync_instruments(rows: list[dict], now: datetime) -> dict:
+def sync_instruments(rows: Iterable[dict], now: datetime) -> dict:
     """Derive the stock F&O universe from active NSE OPTSTK master rows."""
     today = timezone.localdate(now)
     equities = {}
-    options = []
-    for row in rows:
-        if row.get("EXCH_ID") != "NSE":
-            continue
-        symbol = (row.get("UNDERLYING_SYMBOL") or "").strip().upper()
-        security_id = (row.get("SECURITY_ID") or "").strip()
-        if not symbol or not security_id:
-            continue
-        if row.get("INSTRUMENT") == "EQUITY" and row.get("SEGMENT") == "E":
-            equities[symbol] = row
-        if row.get("INSTRUMENT") == "OPTSTK":
+    symbols = set()
+    identities = set()
+    option_count = 0
+
+    def write_record(stream, record):
+        document = record.copy()
+        document["expiry"] = record["expiry"].isoformat() if record["expiry"] else None
+        document["refreshed_at"] = record["refreshed_at"].isoformat()
+        stream.write(json.dumps(document, separators=(",", ":")) + "\n")
+
+    def read_record(stream):
+        line = stream.readline()
+        if not line:
+            return None
+        record = json.loads(line)
+        record["expiry"] = datetime.fromisoformat(record["expiry"]).date() if record["expiry"] else None
+        record["refreshed_at"] = datetime.fromisoformat(record["refreshed_at"])
+        return record
+
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", newline="\n") as records:
+        for row in rows:
+            if row.get("EXCH_ID") != "NSE":
+                continue
+            symbol = (row.get("UNDERLYING_SYMBOL") or "").strip().upper()
+            security_id = (row.get("SECURITY_ID") or "").strip()
+            if not symbol or not security_id:
+                continue
+            if row.get("INSTRUMENT") == "EQUITY" and row.get("SEGMENT") == "E":
+                equities[symbol] = row
+            if row.get("INSTRUMENT") != "OPTSTK":
+                continue
             try:
                 expiry = datetime.fromisoformat((row.get("SM_EXPIRY_DATE") or "").strip()).date()
                 strike, lot = float(row["STRIKE_PRICE"]), float(row["LOT_SIZE"])
@@ -144,66 +283,92 @@ def sync_instruments(rows: list[dict], now: datetime) -> dict:
                 continue
             if not isfinite(strike) or strike <= 0 or not isfinite(lot) or lot < 1 or not lot.is_integer() or row.get("OPTION_TYPE") not in ["CE", "PE"]:
                 raise ValueError(f"Invalid option contract metadata for {symbol}.")
-            options.append({
+            identity = ("NSE_FNO", security_id)
+            if identity in identities:
+                raise ValueError("Duplicate master identities; registry unchanged.")
+            identities.add(identity)
+            symbols.add(symbol)
+            option_count += 1
+            write_record(records, {
                 "security_id": security_id, "segment": "NSE_FNO", "symbol": symbol,
                 "name": row.get("DISPLAY_NAME", ""), "kind": "OPTION",
                 "expiry": expiry, "strike": strike, "side": row["OPTION_TYPE"],
                 "lot_size": int(lot), "active": True, "refreshed_at": now,
             })
-    symbols = {row["symbol"] for row in options}
-    if not symbols or not symbols <= equities.keys():
-        raise ValueError("Master has no active stock options or is missing corresponding NSE equities; registry unchanged.")
-    records = options + [{
-        "security_id": equities[symbol]["SECURITY_ID"].strip(), "segment": "NSE_EQ",
-        "symbol": symbol, "name": equities[symbol].get("DISPLAY_NAME", symbol),
-        "kind": "EQUITY", "expiry": None, "strike": None, "side": "",
-        "lot_size": 1, "active": True, "refreshed_at": now,
-    } for symbol in sorted(symbols)]
-    identities = [(r["segment"], r["security_id"]) for r in records]
-    if len(identities) != len(set(identities)):
-        raise ValueError("Duplicate master identities; registry unchanged.")
-    instances = [RadarInstrument(**record) for record in records]
-    with transaction.atomic():
-        # Validate identities in one read, not 70,000 queries under SQLite's write lock.
-        fields = ("symbol", "kind", "expiry", "strike", "side")
-        existing = {(row.segment, row.security_id): row for row in
-                    RadarInstrument.objects.only("segment", "security_id", *fields)}
-        strike_adjustments = {}
-        for record in records:
-            old = existing.get((record["segment"], record["security_id"]))
-            if old is None:
-                continue
-            changed = {field for field in fields if getattr(old, field) != record[field]}
-            if not changed:
-                continue
-            if changed == {"strike"} and old.kind == record["kind"] == "OPTION":
-                strike_adjustments.setdefault(record["symbol"], []).append((old, record))
-                continue
-            raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
-        for symbol, adjustments in strike_adjustments.items():
-            matched = [
-                record for record in records
-                if record["kind"] == "OPTION" and record["symbol"] == symbol
-                and (record["segment"], record["security_id"]) in existing
-            ]
-            deltas = {round(record["strike"] - old.strike, 8) for old, record in adjustments}
-            contract_ids = [old.pk for old, _ in adjustments]
-            coordinated = (
-                len(adjustments) >= 2
-                and len(adjustments) == len(matched)
-                and {record["side"] for _, record in adjustments} == {"CE", "PE"}
-                and len(deltas) == 1
-                and 0 not in deltas
-            )
-            if not coordinated or RadarOpportunity.objects.filter(contract_id__in=contract_ids).exists():
-                raise ValueError("Dhan security ID identity changed; review archived contracts before syncing.")
-        RadarInstrument.objects.all().update(active=False)
-        RadarInstrument.objects.bulk_create(
-            instances, update_conflicts=True,
-            unique_fields=["segment", "security_id"],
-            update_fields=["name", "strike", "lot_size", "active", "refreshed_at"],
-        )
-    return {"underlyings": len(symbols), "options": len(options)}
+
+        if not symbols or not symbols <= equities.keys():
+            raise ValueError("Master has no active stock options or is missing corresponding NSE equities; registry unchanged.")
+        for symbol in sorted(symbols):
+            equity = equities[symbol]
+            security_id = equity["SECURITY_ID"].strip()
+            identity = ("NSE_EQ", security_id)
+            if identity in identities:
+                raise ValueError("Duplicate master identities; registry unchanged.")
+            identities.add(identity)
+            write_record(records, {
+                "security_id": security_id, "segment": "NSE_EQ", "symbol": symbol,
+                "name": equity.get("DISPLAY_NAME", symbol), "kind": "EQUITY",
+                "expiry": None, "strike": None, "side": "", "lot_size": 1,
+                "active": True, "refreshed_at": now,
+            })
+
+        records.seek(0)
+        created_identities = 0
+        identity_fields = ("segment", "security_id", "symbol", "kind", "expiry", "strike", "side")
+        with transaction.atomic():
+            RadarInstrument.objects.filter(active=True).update(active=False)
+            while True:
+                batch = []
+                for _ in range(500):
+                    record = read_record(records)
+                    if record is None:
+                        break
+                    batch.append(record)
+                if not batch:
+                    break
+
+                query = Q()
+                for segment in ("NSE_EQ", "NSE_FNO"):
+                    security_ids = [record["security_id"] for record in batch if record["segment"] == segment]
+                    if security_ids:
+                        query |= Q(segment=segment, security_id__in=security_ids)
+                existing = {}
+                for instrument in RadarInstrument.objects.filter(query).only(
+                    "pk", *identity_fields, "name", "lot_size", "active", "refreshed_at"
+                ).order_by("pk"):
+                    identity = tuple(getattr(instrument, field) for field in identity_fields)
+                    existing[identity] = instrument
+
+                to_update = []
+                to_create = []
+                for record in batch:
+                    identity = tuple(record[field] for field in identity_fields)
+                    instrument = existing.get(identity)
+                    if instrument is None:
+                        to_create.append(RadarInstrument(**record))
+                        continue
+                    instrument.name = record["name"]
+                    instrument.lot_size = record["lot_size"]
+                    instrument.active = True
+                    instrument.refreshed_at = now
+                    to_update.append(instrument)
+                if to_update:
+                    RadarInstrument.objects.bulk_update(
+                        to_update,
+                        ["name", "lot_size", "active", "refreshed_at"],
+                        batch_size=500,
+                    )
+                if to_create:
+                    RadarInstrument.objects.bulk_create(to_create, batch_size=500)
+                    created_identities += len(to_create)
+                if len(batch) < 500:
+                    break
+
+    return {
+        "underlyings": len(symbols),
+        "options": option_count,
+        "created_identities": created_identities,
+    }
 
 
 def subscriptions(now: datetime) -> list[RadarInstrument]:

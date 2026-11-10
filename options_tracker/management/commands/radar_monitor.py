@@ -64,10 +64,11 @@ def monitor_once(now):
     retry_due = bool(previous.get("delivery_error")) and due
     notify = (bool(failures) and (changed or retry_due)) or (not failures and bool(previous.get("signature")))
     notified = False
+    delivery_ready = health_notifications_enabled() and telegram_bot.configured()
     state = {"signature": signature, "checked_at": now.isoformat(),
              "attempted_at": previous.get("attempted_at"), "delivery_error": previous.get("delivery_error", ""),
              "warned_expiry": previous.get("warned_expiry")}
-    if notify and health_notifications_enabled():
+    if notify and delivery_ready:
         text = ("<b>ARC assistant needs attention</b>\n"+"\n".join(failures) if failures else
                 "<b>ARC assistant recovered</b>\nLocal worker/data readiness checks are passing.")
         ok, error = telegram_bot.send(text)
@@ -82,7 +83,7 @@ def monitor_once(now):
         state["delivery_error"] = ""
     expiry = upcoming_credential_expiry(now)
     warned = bool(expiry and state["warned_expiry"] != expiry.isoformat())
-    if warned and expiry is not None:
+    if warned and expiry is not None and delivery_ready:
         ok, error = telegram_bot.send(
             "<b>ARC Dhan credential renewal reminder</b>\n"
             f"The configured token expires {timezone.localtime(expiry):%d %b %Y %H:%M:%S %Z}.\n"
