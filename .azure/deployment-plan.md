@@ -5,7 +5,7 @@ description: Governed staging validation and production activation plan for the 
 
 ## Status
 
-Deployed
+Validated
 
 Generated: 2026-11-10
 
@@ -152,6 +152,7 @@ Validation completed against subscription
 |---|---|---|
 | Azure authentication | `az account show` returned the approved enabled subscription | Passed |
 | Supervisor-fix predeployment validation | Exact-commit CI run `42826935105`, both running App Services, and staging preview, worker, and credential isolation | Passed |
+| Temporal instrument identity validation | Exact-commit CI run `42836014532`, 629 non-browser tests, migration drift, and migration SQL review | Passed |
 | Existing resources | `az webapp list` returned both running Central India apps | Passed |
 | Staging execution safety | Staging `ARC_EXECUTION_MODE` is `preview`; no Dhan token app setting was returned | Passed |
 | Azure Policy | No resource-group policy assignment blocks the code deployment | Passed |
@@ -171,7 +172,7 @@ Validation completed against subscription
 | Staging isolation | No Dhan token setting was returned, production workers remained disabled, and Telegram reminder delivery remained unavailable | Passed |
 | Acceptance cleanup | The temporary staging superuser was deleted and its absence was verified | Passed |
 | Production restore readiness | PostgreSQL server `pg-options-2fa45de1` is Ready with 14-day point-in-time retention and an earliest restore time of `2026-10-29T19:48:23Z` | Passed |
-| Current candidate suite | 629 non-browser tests and 15 browser tests | Passed locally and in exact-commit CI run `42826935105` |
+| Current candidate suite | 630 non-browser tests and 15 browser tests | Passed locally; exact-commit CI pending for the streaming refresh fix |
 | Dhan continuity | Silent WebSocket activates a full-quote REST snapshot after 30 seconds behind a shared 1.1-second request gate and provider cooldown | Deployed; market-open freshness proof pending |
 | Azure OpenAI foundation | Deployed ARC returned `READY` through managed identity after local authentication was disabled | Passed in production |
 | Research evidence version | Prospective evidence advanced to `stock-trap-forward-v23` without rewriting v22 | Registered on the production VM |

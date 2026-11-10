@@ -133,6 +133,11 @@ def _post(url, payload, attempts=6):
 # instrument master
 
 
+def _master_rows():
+    with open(MASTER_CACHE, encoding="utf-8-sig", newline="") as handle:
+        yield from csv.DictReader(handle)
+
+
 def load_master(refresh=False):
     os.makedirs(os.path.dirname(MASTER_CACHE), exist_ok=True)
     stale = (
@@ -141,12 +146,20 @@ def load_master(refresh=False):
     )
     if refresh or stale:
         log("fetching Dhan scrip master")
-        response = requests.get(MASTER_URL, timeout=300)
-        response.raise_for_status()
-        with open(MASTER_CACHE, "w", encoding="utf-8", newline="") as handle:
-            handle.write(response.text)
-    with open(MASTER_CACHE, encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+        temporary = f"{MASTER_CACHE}.tmp"
+        response = requests.get(MASTER_URL, timeout=300, stream=True)
+        try:
+            response.raise_for_status()
+            with open(temporary, "wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        handle.write(chunk)
+            os.replace(temporary, MASTER_CACHE)
+        finally:
+            response.close()
+            if os.path.exists(temporary):
+                os.remove(temporary)
+    return _master_rows()
 
 
 def equity_ids(rows):

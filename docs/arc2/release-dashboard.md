@@ -38,7 +38,7 @@ Last evidence refresh: 2026-11-10.
 
 | Evidence | Current result |
 |---|---|
-| Current candidate tests | 644 passed: 629 non-browser and 15 browser tests |
+| Current candidate tests | 645 passed: 630 non-browser and 15 browser tests |
 | Exact-commit CI | Run `42826935105` passed for deployed supervisor fix `b65f211` |
 | Test files | 42 |
 | Test classes ending in `Tests` | 82 |
@@ -245,7 +245,7 @@ browser, staging, security, migration, backup, or production smoke evidence.
 
 | ID | Gate | Current state | Required evidence |
 |---|---|---|---|
-| G-01 | Complete automated suite | Passed | 629 non-browser and 15 browser tests passed; exact-commit CI run `42826935105` is green |
+| G-01 | Complete automated suite | Passed locally; CI pending | 630 non-browser and 15 browser tests passed; exact-commit CI is required for the streaming refresh fix |
 | G-02 | Requirements-to-tests matrix | Passed for implemented scope | Named automated evidence covers the implemented slice; provider-gated workflows remain explicit |
 | G-03 | Full route security assessment | Partial | Automated scans and route controls pass; independent human penetration testing remains |
 | G-04 | Dependency vulnerability assessment | Passed | Exact-commit dependency audit and Bandit source scan passed |

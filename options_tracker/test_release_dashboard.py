@@ -42,7 +42,7 @@ class ReleaseDashboardTests(TestCase):
 
         self.assertEqual(snapshot["release_counts"], {"complete": 2, "in_progress": 8, "blocked": 0})
         self.assertEqual(snapshot["gate_counts"], {"passed": 9, "remaining": 3, "blocked": 0})
-        self.assertEqual(snapshot["automated_tests"], 644)
+        self.assertEqual(snapshot["automated_tests"], 645)
 
     def test_snapshot_reports_persisted_activation_evidence(self):
         CanonicalInstrument.objects.create(

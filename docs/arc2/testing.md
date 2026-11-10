@@ -9,7 +9,7 @@ The application currently has:
 
 * 42 `test*.py` files.
 * 82 test classes ending in `Tests`.
-* 644 discovered `test_` methods.
+* 645 discovered `test_` methods.
 * GitHub Actions validation with `manage.py check`, `collectstatic`, and Django tests excluding the browser tag.
 * Playwright as a development dependency.
 

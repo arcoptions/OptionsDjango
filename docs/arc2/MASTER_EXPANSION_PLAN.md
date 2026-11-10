@@ -7,13 +7,13 @@ description: Current capability audit, gap matrix, provider dependencies, databa
 
 This plan reconciles the master expansion specification with the verified
 activation branch through deployed commit `b65f211`. The current expansion
-branch has 629 non-browser and 644 total passing tests. A rendered page
+branch has 630 non-browser and 645 total passing tests. A rendered page
 or HTTP 200 response is not accepted as functional evidence.
 
 The current baseline has:
 
-* 629 passing non-browser tests
-* 644 passing tests including browser-tagged journeys
+* 630 passing non-browser tests
+* 645 passing tests including browser-tagged journeys
 * 74,917 canonical instruments and 149,834 provider aliases in staging
 * 197 reviewed tracked stocks, of which 195 are active
 * 860 real Dhan equity candles for a bounded five-stock pilot

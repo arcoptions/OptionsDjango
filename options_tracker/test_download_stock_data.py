@@ -1,6 +1,8 @@
 import datetime as dt
 from io import StringIO
-from unittest.mock import patch
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -44,6 +46,27 @@ class DownloadStockDataCommandTests(TestCase):
                 "--days=-1",
                 stdout=StringIO(),
             )
+
+    @patch("options_tracker.stock_data.requests.get")
+    def test_master_download_and_rows_are_streamed(self, get):
+        response = Mock()
+        response.iter_content.return_value = [
+            b"EXCH_ID,SEGMENT,INSTRUMENT,UNDERLYING_SYMBOL,SECURITY_ID\n",
+            b"NSE,E,EQUITY,TEST,1\n",
+        ]
+        get.return_value = response
+
+        with TemporaryDirectory() as directory, patch.object(
+            stock_data,
+            "MASTER_CACHE",
+            str(Path(directory) / "master.csv"),
+        ):
+            rows = stock_data.load_master(refresh=True)
+            self.assertNotIsInstance(rows, list)
+            self.assertEqual(list(rows)[0]["SECURITY_ID"], "1")
+
+        get.assert_called_once_with(stock_data.MASTER_URL, timeout=300, stream=True)
+        response.close.assert_called_once_with()
 
     @patch("options_tracker.stock_data.load_master")
     def test_master_sync_resolves_current_dhan_symbol_alias(self, load_master):
